@@ -1,163 +1,177 @@
 # Real Sales CRM
 
-Sistema de CRM completo para corretores de imóveis desenvolvido com Next.js 14, TypeScript e PostgreSQL.
+Sistema de CRM completo para empresas imobiliárias, desenvolvido com Next.js 14, TypeScript e Neon Database.
 
 ## 🚀 Funcionalidades
 
-- **Dashboard** com métricas e visão geral
-- **Gestão de Clientes** completa
-- **Sistema de Tarefas** com prioridades e prazos
-- **Catálogo de Propriedades** 
-- **Pipeline de Vendas** visual
-- **Autenticação JWT** segura
-- **Interface responsiva** com Tailwind CSS
+- **Dashboard Completo**: Métricas e KPIs em tempo real
+- **Gestão de Clientes**: CRUD completo com histórico de interações
+- **Pipeline de Vendas**: Kanban board com drag & drop
+- **Gestão de Propriedades**: Catálogo completo de imóveis
+- **Sistema de Tarefas**: Organização e acompanhamento de atividades
+- **Gestão de Leads**: Captura e conversão de leads
+- **Autenticação Segura**: JWT + cookies httpOnly
+- **Responsive Design**: Interface adaptável para todos os dispositivos
 
 ## 🛠️ Tecnologias
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes, PostgreSQL (Neon)
-- **Autenticação**: JWT com bcryptjs
-- **UI**: shadcn/ui components
-- **Database**: Neon PostgreSQL
+- **Frontend**: Next.js 14, React 18, TypeScript
+- **Styling**: Tailwind CSS, shadcn/ui
+- **Backend**: Next.js API Routes
+- **Database**: Neon (PostgreSQL)
+- **Authentication**: JWT + bcryptjs
+- **Forms**: React Hook Form + Zod
+- **Charts**: Recharts
+- **Drag & Drop**: @hello-pangea/dnd
 
-## 📋 Pré-requisitos
+## 📦 Instalação
 
-- Node.js 18+ 
-- Conta no Neon (PostgreSQL)
-- npm ou yarn
-
-## ⚙️ Instalação
-
-1. **Clone o repositório**
+1. **Clone o repositório**:
 \`\`\`bash
-git clone <seu-repositorio>
-cd real-sales-crm
+git clone https://github.com/GustavoPizani/Real-sales.git
+cd Real-sales
 \`\`\`
 
-2. **Instale as dependências**
+2. **Instale as dependências**:
 \`\`\`bash
 npm install
-npm install bcryptjs jsonwebtoken @types/bcryptjs @types/jsonwebtoken
 \`\`\`
 
-3. **Configure as variáveis de ambiente**
+3. **Configure as variáveis de ambiente**:
 \`\`\`bash
 cp .env.example .env.local
 \`\`\`
 
 Edite o `.env.local` com suas configurações:
 \`\`\`env
-DATABASE_URL="sua-url-do-neon"
-JWT_SECRET="sua-chave-jwt-de-64-caracteres"
+DATABASE_URL="postgresql://username:password@host/database?sslmode=require"
+JWT_SECRET="your-super-secret-jwt-key"
 NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="sua-chave-nextauth"
+NEXTAUTH_SECRET="your-nextauth-secret"
 \`\`\`
 
-4. **Configure o banco de dados**
+4. **Configure o banco de dados**:
+- Crie uma conta no [Neon](https://neon.tech)
+- Execute os scripts SQL em `scripts/`
 
-No painel do Neon, execute os scripts SQL na ordem:
-- `scripts/001-create-database-schema.sql`
-- `scripts/002-seed-initial-data.sql`
-
-5. **Execute o projeto**
+5. **Execute o projeto**:
 \`\`\`bash
 npm run dev
 \`\`\`
 
-Acesse: http://localhost:3000
+## 🗄️ Estrutura do Banco
 
-## 🔐 Login Padrão
+O sistema utiliza as seguintes tabelas principais:
 
-- **Email**: admin@realsales.com
-- **Senha**: admin123
+- `users` - Usuários do sistema
+- `clients` - Clientes e prospects
+- `properties` - Propriedades/imóveis
+- `tasks` - Tarefas e atividades
+- `leads` - Leads capturados
+- `client_notes` - Notas dos clientes
 
-## 📁 Estrutura do Projeto
+## 🔐 Autenticação
 
-\`\`\`
-├── app/
-│   ├── api/                 # API Routes
-│   ├── dashboard/           # Dashboard principal
-│   ├── clients/            # Gestão de clientes
-│   ├── tasks/              # Sistema de tarefas
-│   ├── properties/         # Catálogo de propriedades
-│   ├── pipeline/           # Pipeline de vendas
-│   └── login/              # Página de login
-├── components/             # Componentes React
-├── contexts/              # Context API
-├── lib/                   # Utilitários e configurações
-└── scripts/               # Scripts SQL
-\`\`\`
+O sistema utiliza JWT tokens com cookies httpOnly para autenticação segura:
 
-## 🔧 Scripts Disponíveis
+- **Login**: `POST /api/auth/login`
+- **Logout**: Remoção do cookie
+- **Proteção**: Middleware automático nas rotas protegidas
 
-- `npm run dev` - Executa em modo desenvolvimento
-- `npm run build` - Build para produção
-- `npm run start` - Executa build de produção
-- `npm run lint` - Executa linting
+## 📱 API Endpoints
 
-## 📊 Funcionalidades Detalhadas
-
-### Dashboard
-- Métricas de vendas e clientes
-- Gráficos de performance
-- Tarefas pendentes
-- Atividades recentes
-
-### Gestão de Clientes
-- CRUD completo de clientes
-- Sistema de notas
-- Histórico de interações
-- Status e categorização
-
-### Sistema de Tarefas
-- Criação e atribuição de tarefas
-- Prioridades (baixa, média, alta)
-- Prazos e lembretes
-- Status de progresso
+### Clientes
+- `GET /api/clients` - Listar clientes
+- `POST /api/clients` - Criar cliente
+- `GET /api/clients/[id]` - Buscar cliente
+- `PUT /api/clients/[id]` - Atualizar cliente
+- `DELETE /api/clients/[id]` - Deletar cliente
 
 ### Propriedades
-- Catálogo completo de imóveis
-- Filtros avançados
-- Upload de imagens
-- Status de disponibilidade
+- `GET /api/properties` - Listar propriedades
+- `POST /api/properties` - Criar propriedade
+- `GET /api/properties/[id]` - Buscar propriedade
+- `PUT /api/properties/[id]` - Atualizar propriedade
 
-### Pipeline de Vendas
-- Visualização em kanban
-- Estágios personalizáveis
-- Arrastar e soltar
-- Métricas de conversão
+### Tarefas
+- `GET /api/tasks` - Listar tarefas
+- `POST /api/tasks` - Criar tarefa
+- `PUT /api/tasks/[id]` - Atualizar tarefa
+- `DELETE /api/tasks/[id]` - Deletar tarefa
 
-## 🔒 Segurança
-
-- Autenticação JWT
-- Senhas criptografadas com bcrypt
-- Validação de dados
-- Proteção de rotas
+### Leads
+- `GET /api/leads` - Listar leads
+- `POST /api/leads` - Criar lead
+- `POST /api/leads/[id]/convert` - Converter lead em cliente
 
 ## 🚀 Deploy
 
 ### Vercel (Recomendado)
 
-1. Conecte seu repositório no Vercel
-2. Configure as variáveis de ambiente
-3. Deploy automático
+1. **Conecte o repositório** na Vercel
+2. **Configure as variáveis de ambiente**:
+   - `DATABASE_URL`
+   - `JWT_SECRET`
+   - `NEXTAUTH_URL`
+   - `NEXTAUTH_SECRET`
+3. **Deploy automático** a cada push
 
 ### Outras Plataformas
 
-O projeto é compatível com qualquer plataforma que suporte Next.js.
+O projeto é compatível com qualquer plataforma que suporte Next.js:
+- Railway
+- Render
+- AWS Amplify
+- Netlify
 
-## 📝 Licença
+## 🔧 Desenvolvimento
 
-Este projeto está sob a licença MIT.
+### Scripts Disponíveis
+
+\`\`\`bash
+npm run dev          # Servidor de desenvolvimento
+npm run build        # Build de produção
+npm run start        # Servidor de produção
+npm run lint         # Linting
+npm run type-check   # Verificação de tipos
+\`\`\`
+
+### Estrutura de Pastas
+
+\`\`\`
+├── app/                 # App Router (Next.js 14)
+│   ├── api/            # API Routes
+│   ├── (dashboard)/    # Páginas do dashboard
+│   └── globals.css     # Estilos globais
+├── components/         # Componentes React
+│   ├── ui/            # Componentes base (shadcn/ui)
+│   └── ...            # Componentes específicos
+├── lib/               # Utilitários e configurações
+│   ├── db.ts          # Conexão com banco
+│   ├── auth.ts        # Autenticação
+│   └── utils.ts       # Funções utilitárias
+├── scripts/           # Scripts SQL
+└── types/             # Definições TypeScript
+\`\`\`
 
 ## 🤝 Contribuição
 
 1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
 ## 📞 Suporte
 
-Para dúvidas e suporte, abra uma issue no repositório.
+Para suporte, entre em contato:
+- Email: pizani@realsales.com.br
+- GitHub Issues: [Criar Issue](https://github.com/GustavoPizani/Real-sales/issues)
+
+---
+
+Desenvolvido com ❤️ por [Gustavo Pizani](https://github.com/GustavoPizani)

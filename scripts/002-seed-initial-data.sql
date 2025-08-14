@@ -1,40 +1,35 @@
--- Inserir usuário administrador padrão
--- Senha: admin123 (hash bcrypt)
-INSERT INTO users (name, email, password, role, active) 
+-- Insert admin user
+INSERT INTO users (id, name, email, password, role, active, created_at, updated_at) 
 VALUES (
-    'Admin', 
-    'admin@realsales.com', 
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', 
+    'user_admin_001',
+    'Gustavo Pizani',
+    'pizani@realsales.com.br',
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', -- RealSales2024!
     'admin',
-    true
+    true,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
 ) ON CONFLICT (email) DO NOTHING;
 
--- Inserir alguns clientes de exemplo
-INSERT INTO clients (name, email, phone, status) VALUES
-    ('João Silva', 'joao@email.com', '(11) 99999-1111', 'active'),
-    ('Maria Santos', 'maria@email.com', '(11) 99999-2222', 'active'),
-    ('Pedro Oliveira', 'pedro@email.com', '(11) 99999-3333', 'active'),
-    ('Ana Costa', 'ana@email.com', '(11) 99999-4444', 'active')
-ON CONFLICT (email) DO NOTHING;
+-- Insert sample properties
+INSERT INTO properties (id, name, type, status, price, location, description, features, images, created_at, updated_at) VALUES
+('prop_001', 'Residencial Vista Verde', 'apartment', 'available', 450000.00, 'Bairro Jardim das Flores, São Paulo - SP', 'Apartamento moderno com 3 quartos, 2 banheiros e varanda gourmet. Localizado em condomínio com área de lazer completa.', ARRAY['3 quartos', '2 banheiros', 'Varanda gourmet', 'Piscina', 'Academia', 'Playground'], ARRAY['/placeholder.jpg'], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('prop_002', 'Casa Moderna Alphaville', 'house', 'available', 850000.00, 'Alphaville, Barueri - SP', 'Casa térrea com 4 suítes, piscina e churrasqueira. Condomínio fechado com segurança 24h.', ARRAY['4 suítes', 'Piscina', 'Churrasqueira', 'Garagem para 4 carros', 'Jardim', 'Segurança 24h'], ARRAY['/placeholder.jpg'], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('prop_003', 'Loft Centro Histórico', 'apartment', 'sold', 320000.00, 'Centro Histórico, São Paulo - SP', 'Loft reformado no centro histórico, próximo ao metrô e principais atrações da cidade.', ARRAY['1 quarto', '1 banheiro', 'Cozinha americana', 'Próximo ao metrô', 'Centro histórico'], ARRAY['/placeholder.jpg'], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Inserir algumas propriedades de exemplo
-INSERT INTO properties (title, description, price, address, bedrooms, bathrooms, area, status) VALUES
-    ('Apartamento 2 Quartos - Vila Madalena', 'Lindo apartamento com 2 quartos, sala ampla e cozinha moderna', 450000.00, 'Rua Harmonia, 123 - Vila Madalena, São Paulo', 2, 1, 65.00, 'available'),
-    ('Casa 3 Quartos - Jardins', 'Casa espaçosa com jardim e garagem para 2 carros', 850000.00, 'Rua Augusta, 456 - Jardins, São Paulo', 3, 2, 120.00, 'available'),
-    ('Studio - Pinheiros', 'Studio moderno e bem localizado', 280000.00, 'Rua dos Pinheiros, 789 - Pinheiros, São Paulo', 1, 1, 35.00, 'available'),
-    ('Cobertura - Moema', 'Cobertura duplex com vista panorâmica', 1200000.00, 'Av. Ibirapuera, 321 - Moema, São Paulo', 4, 3, 180.00, 'sold')
-ON CONFLICT DO NOTHING;
+-- Insert sample clients
+INSERT INTO clients (id, name, email, phone, status, source, assigned_to, notes, created_at, updated_at) VALUES
+('client_001', 'Maria Silva Santos', 'maria.silva@email.com', '(11) 99999-1234', 'prospect', 'website', 'user_admin_001', 'Interessada em apartamento de 3 quartos na zona sul', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('client_002', 'João Pedro Oliveira', 'joao.pedro@email.com', '(11) 98888-5678', 'client', 'referral', 'user_admin_001', 'Cliente fechou compra do apartamento Vista Verde', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('client_003', 'Ana Carolina Lima', 'ana.lima@email.com', '(11) 97777-9012', 'lead', 'facebook_ads', 'user_admin_001', 'Lead gerado via Facebook Ads - campanha apartamentos', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Inserir algumas tarefas de exemplo
-INSERT INTO tasks (title, description, status, priority, due_date, client_id, user_id) VALUES 
-('Ligar para João Silva', 'Agendar visita ao apartamento na Vila Madalena', 'pending', 'high', '2024-01-20 10:00:00', 1, 1),
-('Preparar contrato', 'Elaborar contrato de compra e venda para Maria Santos', 'in_progress', 'medium', '2024-01-22 14:00:00', 2, 1),
-('Visita técnica', 'Acompanhar vistoria do imóvel com Pedro Oliveira', 'pending', 'medium', '2024-01-25 09:00:00', 3, 1),
-('Follow-up Ana Costa', 'Verificar interesse em outros imóveis', 'completed', 'low', '2024-01-18 16:00:00', 4, 1);
+-- Insert sample leads
+INSERT INTO leads (id, name, email, phone, source, status, interest, budget, assigned_to, created_at, updated_at) VALUES
+('lead_001', 'Carlos Eduardo Santos', 'carlos.santos@email.com', '(11) 96666-3456', 'google_ads', 'new', 'Apartamento 2 quartos', 400000.00, 'user_admin_001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('lead_002', 'Fernanda Costa', 'fernanda.costa@email.com', '(11) 95555-7890', 'website', 'contacted', 'Casa com piscina', 600000.00, 'user_admin_001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Inserir algumas notas de exemplo
-INSERT INTO client_notes (client_id, user_id, note) VALUES 
-(1, 1, 'Cliente muito interessado no apartamento da Vila Madalena. Tem condições de pagamento à vista.'),
-(2, 1, 'Maria precisa de financiamento. Já tem pré-aprovação do banco.'),
-(3, 1, 'Pedro está procurando casa com jardim para os filhos. Orçamento até R$ 900.000.'),
-(4, 1, 'Ana vendeu o apartamento atual e precisa de algo maior. Prazo até março.');
+-- Insert sample tasks
+INSERT INTO tasks (id, title, description, status, priority, assigned_to, client_id, due_date, created_at, updated_at) VALUES
+('task_001', 'Ligar para Maria Silva', 'Retornar ligação sobre apartamento de 3 quartos', 'pending', 'high', 'user_admin_001', 'client_001', CURRENT_TIMESTAMP + INTERVAL '1 day', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('task_002', 'Agendar visita - João Pedro', 'Agendar visita ao apartamento Vista Verde', 'completed', 'medium', 'user_admin_001', 'client_002', CURRENT_TIMESTAMP - INTERVAL '2 days', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('task_003', 'Follow-up Ana Carolina', 'Fazer follow-up do lead gerado via Facebook', 'in_progress', 'medium', 'user_admin_001', 'client_003', CURRENT_TIMESTAMP + INTERVAL '3 days', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

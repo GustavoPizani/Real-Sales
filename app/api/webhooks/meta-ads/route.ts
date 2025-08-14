@@ -1,45 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { neon } from '@neondatabase/serverless'
-
-const sql = neon(process.env.DATABASE_URL!)
+import { type NextRequest, NextResponse } from "next/server"
+import { executeQuery } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
-    
-    // Verificar se é um lead do Meta Ads
-    if (data.object === 'page' && data.entry) {
-      for (const entry of data.entry) {
-        if (entry.changes) {
-          for (const change of entry.changes) {
-            if (change.field === 'leadgen') {
-              const leadData = change.value
-              
-              // Extrair dados do lead
-              const { form_id, leadgen_id, created_time, field_data } = leadData
-              
-              // Processar field_data para extrair nome, email, etc.
-              const leadInfo: any = {}
-              field_data.forEach((field: any) => {
-                leadInfo[field.name] = field.values[0]
-              })
-              
-              // Criar lead no banco
-              await sql`
-                INSERT INTO leads (
-                  name, email, phone, source, 
-                  external_id, form_id, notes
-                )
-                VALUES (
-                  ${leadInfo.full_name || leadInfo.name}, 
-                  ${leadInfo.email}, 
-                  ${leadInfo.phone_number || leadInfo.phone}, 
-                  'meta_ads',
-                  ${leadgen_id},
-                  ${form_id},
-                  ${JSON.stringify(leadInfo)}
-                )
-              `
+    const body = await request.json()
+
+    // Verificar se é um webhook válido do Meta Ads
+    const { entry } = body
+
+    if (!entry || !Array.isArray(entry)) {
+      return NextResponse.json({ error: "Invalid webhook data" }, { status: 400 })
+    }
+
+    for (const item of entry) {
+      const { changes } = item
+
+      if (changes && Array.isArray(changes)) {
+        for (const change of changes) {
+          if (change.field === "leadgen") {
+            const { value } = change
+
+            if (value && value.leadgen_id) {
+              // Processar o lead do Meta Ads
+              await processMetaLead(value)
             }
           }
         }
@@ -48,24 +31,41 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Webhook error:', error)
-    return NextResponse.json(
-      { error: 'Erro no webhook' },
-      { status: 500 }
-    )
+    console.error("Error processing Meta Ads webhook:", error)
+    return NextResponse.json({ error: "Erro ao processar webhook" }, { status: 500 })
   }
 }
 
-// Verificação do webhook do Meta
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const mode = searchParams.get('hub.mode')
-  const token = searchParams.get('hub.verify_token')
-  const challenge = searchParams.get('hub.challenge')
+async function processMetaLead(leadData: any) {
+  try {
+    await executeQuery(async (sql) => {
+      return await sql`
+        INSERT INTO leads (name, email, phone, source, status, notes)
+        VALUES (
+          ${leadData.name || "Lead Meta Ads"},
+          ${leadData.email || null},
+          ${leadData.phone || null},
+          'meta_ads',
+          'new',
+          ${JSON.stringify(leadData)}
+        )
+      `
+    })
+  } catch (error) {
+    console.error("Error saving Meta lead:", error)
+  }
+}
 
-  if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+export async function GET(request: NextRequest) {
+  // Verificação do webhook do Meta
+  const { searchParams } = new URL(request.url)
+  const mode = searchParams.get("hub.mode")
+  const token = searchParams.get("hub.verify_token")
+  const challenge = searchParams.get("hub.challenge")
+
+  if (mode === "subscribe" && token === process.env.META_ADS_WEBHOOK_SECRET) {
     return new Response(challenge)
   }
 
-  return new Response('Forbidden', { status: 403 })
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 }

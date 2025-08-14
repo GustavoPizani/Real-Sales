@@ -1,32 +1,56 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { authenticateUser, generateToken } from "@/lib/auth"
+import type { LoginCredentials, ApiResponse } from "@/lib/types"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const body: LoginCredentials = await request.json()
+    const { email, password } = body
 
     if (!email || !password) {
-      return NextResponse.json({ error: "Email e senha são obrigatórios" }, { status: 400 })
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          error: "Email e senha são obrigatórios",
+        },
+        { status: 400 },
+      )
     }
 
     const user = await authenticateUser(email, password)
 
     if (!user) {
-      return NextResponse.json({ error: "Credenciais inválidas" }, { status: 401 })
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          error: "Credenciais inválidas",
+        },
+        { status: 401 },
+      )
     }
 
-    const token = generateToken(user)
-
-    const response = NextResponse.json({
-      success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+    const token = generateToken({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
     })
 
+    const response = NextResponse.json<ApiResponse>({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        token,
+      },
+      message: "Login realizado com sucesso",
+    })
+
+    // Set HTTP-only cookie
     response.cookies.set("auth-token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -37,6 +61,12 @@ export async function POST(request: NextRequest) {
     return response
   } catch (error) {
     console.error("Login error:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json<ApiResponse>(
+      {
+        success: false,
+        error: "Erro interno do servidor",
+      },
+      { status: 500 },
+    )
   }
 }

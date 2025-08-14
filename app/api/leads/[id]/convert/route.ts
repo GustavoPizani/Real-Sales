@@ -1,74 +1,49 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { neon } from '@neondatabase/serverless'
-import { getUserFromToken } from '@/lib/auth'
+import { type NextRequest, NextResponse } from "next/server"
+import { executeQuery } from "@/lib/db"
+import { getUserFromToken } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
-
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
-    
-    if (!token) {
-      return NextResponse.json({ error: 'Token não fornecido' }, { status: 401 })
-    }
-
-    const user = await getUserFromToken(token)
+    const user = await getUserFromToken(request)
     if (!user) {
-      return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    const leadId = parseInt(params.id)
+    const body = await request.json()
+    const { notes } = body
 
-    // Buscar o lead
-    const leads = await sql`
-      SELECT * FROM leads WHERE id = ${leadId}
-    `
+    const result = await executeQuery(async (sql) => {
+      // Buscar o lead
+      const leads = await sql`
+        SELECT * FROM leads WHERE id = ${params.id}
+      `
 
-    if (leads.length === 0) {
-      return NextResponse.json({ error: 'Lead não encontrado' }, { status: 404 })
-    }
+      if (leads.length === 0) {
+        throw new Error("Lead não encontrado")
+      }
 
-    const lead = leads[0]
+      const lead = leads[0]
 
-    // Verificar se já existe um cliente com este email
-    const existingClients = await sql`
-      SELECT id FROM clients WHERE email = ${lead.email}
-    `
+      // Criar cliente a partir do lead
+      const clients = await sql`
+        INSERT INTO clients (name, email, phone, source, assigned_to, notes, status)
+        VALUES (${lead.name}, ${lead.email}, ${lead.phone}, ${lead.source}, ${lead.assigned_to}, ${notes || lead.notes}, 'prospect')
+        RETURNING *
+      `
 
-    if (existingClients.length > 0) {
-      return NextResponse.json(
-        { error: 'Já existe um cliente com este email' },
-        { status: 409 }
-      )
-    }
+      // Marcar lead como convertido
+      await sql`
+        UPDATE leads 
+        SET status = 'converted', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${params.id}
+      `
 
-    // Criar cliente
-    const clientResult = await sql`
-      INSERT INTO clients (name, email, phone, status)
-      VALUES (${lead.name}, ${lead.email}, ${lead.phone}, 'active')
-      RETURNING id, name, email, phone, status, created_at
-    `
-
-    // Atualizar status do lead
-    await sql`
-      UPDATE leads 
-      SET status = 'converted', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${leadId}
-    `
-
-    return NextResponse.json({
-      message: 'Lead convertido com sucesso',
-      client: clientResult[0]
+      return clients[0]
     })
 
+    return NextResponse.json(result, { status: 201 })
   } catch (error) {
-    console.error('Error converting lead:', error)
-    return NextResponse.json(
-      { error: 'Erro ao converter lead' },
-      { status: 500 }
-    )
+    console.error("Error converting lead:", error)
+    return NextResponse.json({ error: "Erro ao converter lead" }, { status: 500 })
   }
 }

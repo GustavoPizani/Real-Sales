@@ -1,32 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { executeQuery } from "@/lib/db"
+import { getUserFromToken } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    const sql = getDb()
+    const user = await getUserFromToken(request)
+    if (!user) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
 
-    const properties = await sql`
-      SELECT 
-        id,
-        name,
-        description,
-        address,
-        city,
-        state,
-        zip_code,
-        price,
-        bedrooms,
-        bathrooms,
-        area,
-        property_type,
-        status,
-        images,
-        features,
-        created_at,
-        updated_at
-      FROM properties
-      ORDER BY created_at DESC
-    `
+    const properties = await executeQuery(async (sql) => {
+      return await sql`
+        SELECT 
+          id, name, description, address, city, state, zip_code,
+          price, bedrooms, bathrooms, area, property_type, status,
+          images, features, created_at, updated_at
+        FROM properties
+        ORDER BY created_at DESC
+      `
+    })
 
     return NextResponse.json(properties)
   } catch (error) {
@@ -37,9 +29,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const sql = getDb()
-    const body = await request.json()
+    const user = await getUserFromToken(request)
+    if (!user) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
 
+    const body = await request.json()
     const {
       name,
       description,
@@ -60,19 +55,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Campos obrigatórios: nome, endereço, cidade e preço" }, { status: 400 })
     }
 
-    const result = await sql`
-      INSERT INTO properties (
-        name, description, address, city, state, zip_code,
-        price, bedrooms, bathrooms, area, property_type,
-        features, images, status
-      )
-      VALUES (
-        ${name}, ${description}, ${address}, ${city}, ${state}, ${zip_code},
-        ${price}, ${bedrooms}, ${bathrooms}, ${area}, ${property_type},
-        ${JSON.stringify(features)}, ${JSON.stringify(images)}, 'available'
-      )
-      RETURNING *
-    `
+    const result = await executeQuery(async (sql) => {
+      return await sql`
+        INSERT INTO properties (
+          name, description, address, city, state, zip_code,
+          price, bedrooms, bathrooms, area, property_type,
+          features, images, status
+        )
+        VALUES (
+          ${name}, ${description || null}, ${address}, ${city}, 
+          ${state || null}, ${zip_code || null}, ${price}, 
+          ${bedrooms || null}, ${bathrooms || null}, ${area || null}, 
+          ${property_type || "house"}, ${JSON.stringify(features || [])}, 
+          ${JSON.stringify(images || [])}, 'available'
+        )
+        RETURNING *
+      `
+    })
 
     return NextResponse.json(result[0], { status: 201 })
   } catch (error) {

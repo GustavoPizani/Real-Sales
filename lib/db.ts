@@ -1,15 +1,23 @@
 import { neon } from "@neondatabase/serverless"
 
-// Função para obter a conexão do banco
-export function getDb() {
-  const databaseUrl = process.env.DATABASE_URL
+// Função que só executa em runtime, nunca durante build
+export async function createDbConnection() {
+  const databaseUrl = process.env.DATABASE_URL || process.env.STORAGE_URL
 
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL environment variable is not defined")
+    throw new Error("DATABASE_URL or STORAGE_URL environment variable is required")
   }
 
   return neon(databaseUrl)
 }
 
-// Exportar uma instância padrão apenas se DATABASE_URL estiver disponível
-export const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null
+// Helper para executar queries de forma segura
+export async function executeQuery(queryFn: (sql: any) => Promise<any>) {
+  try {
+    const sql = await createDbConnection()
+    return await queryFn(sql)
+  } catch (error) {
+    console.error("Database query error:", error)
+    throw error
+  }
+}
