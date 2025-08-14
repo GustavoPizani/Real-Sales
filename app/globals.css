@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 210 96% 8%; /* #010f27 */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 42 42% 47%; /* #aa8d44 */
+    --secondary-foreground: 210 40% 98%;
+    --tertiary: 210 95% 20%; /* #023863 */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 42 42% 47%; /* #aa8d44 */
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 42 42% 47%; /* #aa8d44 */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 210 96% 8%; /* #010f27 */
+    --foreground: 210 40% 98%;
+    --card: 210 95% 20%; /* #023863 */
+    --card-foreground: 210 40% 98%;
+    --popover: 210 95% 20%; /* #023863 */
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 96% 8%; /* #010f27 */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 42 42% 47%; /* #aa8d44 */
+    --secondary-foreground: 210 40% 98%;
+    --tertiary: 210 95% 20%; /* #023863 */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 42 42% 47%; /* #aa8d44 */
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 42 42% 47%; /* #aa8d44 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Classes customizadas para as cores específicas */
+.bg-primary-custom {
+  background-color: #010f27;
+}
+
+.bg-secondary-custom {
+  background-color: #aa8d44;
+}
+
+.bg-tertiary-custom {
+  background-color: #023863;
+}
+
+.text-primary-custom {
+  color: #010f27;
+}
+
+.text-secondary-custom {
+  color: #aa8d44;
+}
+
+.text-tertiary-custom {
+  color: #023863;
+}
+
+.border-secondary-custom {
+  border-color: #aa8d44;
+}
+
+.hover\:bg-secondary-custom:hover {
+  background-color: #aa8d44;
+}
+
+.hover\:bg-secondary-custom\/90:hover {
+  background-color: rgba(170, 141, 68, 0.9);
+}
