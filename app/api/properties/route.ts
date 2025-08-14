@@ -1,51 +1,82 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { verifyToken } from "@/lib/auth"
+import { getDb } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("auth-token")?.value
-    if (!token || !verifyToken(token)) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
+    const sql = getDb()
 
     const properties = await sql`
-      SELECT id, title, description, price, address, bedrooms, bathrooms, area, status, created_at, updated_at
+      SELECT 
+        id,
+        name,
+        description,
+        address,
+        city,
+        state,
+        zip_code,
+        price,
+        bedrooms,
+        bathrooms,
+        area,
+        property_type,
+        status,
+        images,
+        features,
+        created_at,
+        updated_at
       FROM properties
       ORDER BY created_at DESC
     `
 
-    return NextResponse.json({ properties })
+    return NextResponse.json(properties)
   } catch (error) {
     console.error("Error fetching properties:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Erro ao buscar propriedades" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get("auth-token")?.value
-    const user = token ? verifyToken(token) : null
+    const sql = getDb()
+    const body = await request.json()
 
-    if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
+    const {
+      name,
+      description,
+      address,
+      city,
+      state,
+      zip_code,
+      price,
+      bedrooms,
+      bathrooms,
+      area,
+      property_type,
+      features,
+      images,
+    } = body
 
-    const { title, description, price, address, bedrooms, bathrooms, area, status = "available" } = await request.json()
-
-    if (!title || !price || !address) {
-      return NextResponse.json({ error: "Título, preço e endereço são obrigatórios" }, { status: 400 })
+    if (!name || !address || !city || !price) {
+      return NextResponse.json({ error: "Campos obrigatórios: nome, endereço, cidade e preço" }, { status: 400 })
     }
 
     const result = await sql`
-      INSERT INTO properties (title, description, price, address, bedrooms, bathrooms, area, status)
-      VALUES (${title}, ${description}, ${price}, ${address}, ${bedrooms}, ${bathrooms}, ${area}, ${status})
-      RETURNING id, title, description, price, address, bedrooms, bathrooms, area, status, created_at, updated_at
+      INSERT INTO properties (
+        name, description, address, city, state, zip_code,
+        price, bedrooms, bathrooms, area, property_type,
+        features, images, status
+      )
+      VALUES (
+        ${name}, ${description}, ${address}, ${city}, ${state}, ${zip_code},
+        ${price}, ${bedrooms}, ${bathrooms}, ${area}, ${property_type},
+        ${JSON.stringify(features)}, ${JSON.stringify(images)}, 'available'
+      )
+      RETURNING *
     `
 
-    return NextResponse.json({ property: result[0] }, { status: 201 })
+    return NextResponse.json(result[0], { status: 201 })
   } catch (error) {
     console.error("Error creating property:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Erro ao criar propriedade" }, { status: 500 })
   }
 }

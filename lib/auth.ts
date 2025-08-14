@@ -1,22 +1,19 @@
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
-import { sql } from "./db"
+import { getDb } from "./db"
+import type { User } from "./types"
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret"
-
-export interface User {
-  id: number
-  name: string
-  email: string
-  role: string
-}
+const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production"
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   try {
+    const sql = getDb()
+
     const users = await sql`
-      SELECT id, name, email, password, role 
+      SELECT id, name, email, password, role, created_at
       FROM users 
-      WHERE email = ${email} AND active = true
+      WHERE email = ${email}
+      LIMIT 1
     `
 
     if (users.length === 0) {
@@ -35,6 +32,7 @@ export async function authenticateUser(email: string, password: string): Promise
       name: user.name,
       email: user.email,
       role: user.role,
+      createdAt: user.created_at,
     }
   } catch (error) {
     console.error("Authentication error:", error)
@@ -62,24 +60,6 @@ export function verifyToken(token: string): any {
   }
 }
 
-export async function getUserFromToken(request: Request): Promise<User | null> {
-  try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader) return null
-
-    const token = authHeader.replace("Bearer ", "")
-    const decoded = verifyToken(token)
-
-    if (!decoded) return null
-
-    const users = await sql`
-      SELECT id, name, email, role 
-      FROM users 
-      WHERE id = ${decoded.userId} AND active = true
-    `
-
-    return users.length > 0 ? users[0] : null
-  } catch (error) {
-    return null
-  }
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12)
 }

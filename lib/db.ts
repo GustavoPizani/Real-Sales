@@ -1,7 +1,15 @@
-import { neon } from '@neondatabase/serverless'
+import { neon } from "@neondatabase/serverless"
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not defined')
+// Função para obter a conexão do banco
+export function getDb() {
+  const databaseUrl = process.env.DATABASE_URL
+
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL environment variable is not defined")
+  }
+
+  return neon(databaseUrl)
 }
 
-export const sql = neon(process.env.DATABASE_URL)
+// Exportar uma instância padrão apenas se DATABASE_URL estiver disponível
+export const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null
