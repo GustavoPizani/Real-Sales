@@ -101,7 +101,39 @@ export interface ApiResponse<T = any> {
   message?: string
 }
 
-// Constants
+export interface ClientNote {
+  id: string
+  client_id: string
+  user_id: string
+  note: string
+  created_at: string
+  user_name: string
+}
+
+export interface ClientWonDetails {
+  id: string
+  client_id: string
+  property_id: string
+  property_title: string
+  sale_value: number
+  sale_date: string
+  created_at: string
+}
+
+export interface CreateTaskData {
+  title: string
+  description?: string
+  due_date: string
+  due_time: string
+  priority: "low" | "medium" | "high"
+  type: "call" | "visit" | "follow_up" | "meeting" | "other"
+  client_id?: string
+  property_id?: string
+  user_id: string
+  client_name?: string
+}
+
+// Constants - todas exportadas
 export const FUNNEL_STAGES = ["Contato", "Diagnóstico", "Agendado", "Visitado", "Proposta", "Contrato"] as const
 
 export const PROPERTY_TYPES = ["Apartamento", "Casa", "Cobertura", "Terreno", "Comercial"] as const
@@ -145,36 +177,3 @@ export const DEFAULT_LOST_REASONS = [
   "Localização não atende",
   "Outro",
 ] as const
-
-// Adicionar estas interfaces no início do arquivo
-export interface ClientNote {
-  id: string
-  client_id: string
-  user_id: string
-  note: string
-  created_at: string
-  user_name: string
-}
-
-export interface ClientWonDetails {
-  id: string
-  client_id: string
-  property_id: string
-  property_title: string
-  sale_value: number
-  sale_date: string
-  created_at: string
-}
-
-export interface CreateTaskData {
-  title: string
-  description?: string
-  due_date: string
-  due_time: string
-  priority: "low" | "medium" | "high"
-  type: "call" | "visit" | "follow_up" | "meeting" | "other"
-  client_id?: string
-  property_id?: string
-  user_id: string
-  client_name?: string
-}
