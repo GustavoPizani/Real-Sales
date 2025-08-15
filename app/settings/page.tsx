@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { User, Lock, Bell, Plus, Edit, AlertTriangle } from "lucide-react"
+import { User, Lock, Bell, Plus, Edit, AlertTriangle, Webhook } from "lucide-react"
 import { type LostReason, DEFAULT_LOST_REASONS } from "@/lib/types"
 
 // Mock data para motivos de perda
@@ -40,16 +40,38 @@ export default function SettingsPage() {
     newPassword: "",
     confirmPassword: "",
   })
+  const [integrationForm, setIntegrationForm] = useState({
+    webhook_site_url: "",
+    facebook_api_key: "",
+  })
   const [message, setMessage] = useState("")
 
   useEffect(() => {
-    if (user?.role === "admin") {
+    if (user?.role === "marketing_adm") {
       // Simular carregamento dos motivos de perda
       setTimeout(() => {
         setLostReasons(mockLostReasons)
       }, 500)
+
+      // Carregar configurações de integração
+      loadIntegrations()
     }
   }, [user])
+
+  const loadIntegrations = async () => {
+    try {
+      const response = await fetch("/api/integrations")
+      if (response.ok) {
+        const data = await response.json()
+        setIntegrationForm({
+          webhook_site_url: data.webhook_site_url || "",
+          facebook_api_key: data.facebook_api_key || "",
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao carregar integrações:", error)
+    }
+  }
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,6 +94,30 @@ export default function SettingsPage() {
       newPassword: "",
       confirmPassword: "",
     })
+    setTimeout(() => setMessage(""), 3000)
+  }
+
+  const handleIntegrationUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      const response = await fetch("/api/integrations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(integrationForm),
+      })
+
+      if (response.ok) {
+        setMessage("Configurações de integração salvas com sucesso!")
+      } else {
+        setMessage("Erro ao salvar configurações de integração.")
+      }
+    } catch (error) {
+      setMessage("Erro ao salvar configurações de integração.")
+    }
+
     setTimeout(() => setMessage(""), 3000)
   }
 
@@ -122,7 +168,7 @@ export default function SettingsPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
+        <h1 className="text-3xl font-bold text-primary-custom">Configurações</h1>
         <p className="text-gray-600">Gerencie suas preferências e configurações da conta</p>
       </div>
 
@@ -135,7 +181,7 @@ export default function SettingsPage() {
       {/* Perfil do Usuário */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-primary-custom">
             <User className="h-5 w-5" />
             Perfil do Usuário
           </CardTitle>
@@ -165,7 +211,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
+              <Button type="submit" className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                 Salvar Alterações
               </Button>
             </div>
@@ -176,7 +222,7 @@ export default function SettingsPage() {
       {/* Alterar Senha */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-primary-custom">
             <Lock className="h-5 w-5" />
             Segurança
           </CardTitle>
@@ -217,7 +263,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
+              <Button type="submit" className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                 Alterar Senha
               </Button>
             </div>
@@ -225,11 +271,55 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Motivos de Perda de Cliente - Apenas para Admin */}
-      {user?.role === "admin" && (
+      {/* Integrações - Apenas para Admin */}
+      {user?.role === "marketing_adm" && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-primary-custom">
+              <Webhook className="h-5 w-5" />
+              Integrações
+            </CardTitle>
+            <CardDescription>Configure webhooks e integrações externas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleIntegrationUpdate} className="space-y-4">
+              <div>
+                <Label htmlFor="webhook_site_url">URL do Webhook do Site</Label>
+                <Input
+                  id="webhook_site_url"
+                  type="url"
+                  value={integrationForm.webhook_site_url}
+                  onChange={(e) => setIntegrationForm((prev) => ({ ...prev, webhook_site_url: e.target.value }))}
+                  placeholder="https://seusite.com/webhook"
+                />
+                <p className="text-sm text-gray-500 mt-1">URL que receberá os leads do seu site</p>
+              </div>
+              <div>
+                <Label htmlFor="facebook_api_key">Chave da API do Facebook Lead Ads</Label>
+                <Input
+                  id="facebook_api_key"
+                  type="text"
+                  value={integrationForm.facebook_api_key}
+                  onChange={(e) => setIntegrationForm((prev) => ({ ...prev, facebook_api_key: e.target.value }))}
+                  placeholder="Token de verificação do Facebook"
+                />
+                <p className="text-sm text-gray-500 mt-1">Token para verificação dos webhooks do Facebook</p>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
+                  Salvar Integrações
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Motivos de Perda de Cliente - Apenas para Admin */}
+      {user?.role === "marketing_adm" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-primary-custom">
               <AlertTriangle className="h-5 w-5" />
               Motivos de Perda de Cliente
             </CardTitle>
@@ -242,7 +332,7 @@ export default function SettingsPage() {
               </p>
               <Dialog open={showAddReason} onOpenChange={setShowAddReason}>
                 <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-primary/90">
+                  <Button className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                     <Plus className="h-4 w-4 mr-2" />
                     Novo Motivo
                   </Button>
@@ -266,7 +356,7 @@ export default function SettingsPage() {
                       <Button type="button" variant="outline" onClick={() => setShowAddReason(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit" className="bg-primary hover:bg-primary/90">
+                      <Button type="submit" className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                         Adicionar
                       </Button>
                     </div>
@@ -286,31 +376,22 @@ export default function SettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Adicionando verificação de segurança aqui */}
-                  {lostReasons && lostReasons.length > 0 ? (
-                    lostReasons.map((reason) => (
-                      <TableRow key={reason.id}>
-                        <TableCell className="font-medium">{reason.reason}</TableCell>
-                        <TableCell>
-                          <Switch checked={reason.active} onCheckedChange={() => handleToggleReason(reason)} />
-                        </TableCell>
-                        <TableCell>{new Date(reason.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="ghost" onClick={() => openEditDialog(reason)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-gray-500">
-                        Nenhum motivo cadastrado
+                  {lostReasons.map((reason) => (
+                    <TableRow key={reason.id}>
+                      <TableCell className="font-medium">{reason.reason}</TableCell>
+                      <TableCell>
+                        <Switch checked={reason.active} onCheckedChange={() => handleToggleReason(reason)} />
+                      </TableCell>
+                      <TableCell>{new Date(reason.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => openEditDialog(reason)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -321,7 +402,7 @@ export default function SettingsPage() {
       {/* Notificações */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-primary-custom">
             <Bell className="h-5 w-5" />
             Configurações de Notificação
           </CardTitle>
@@ -387,7 +468,7 @@ export default function SettingsPage() {
               <Button type="button" variant="outline" onClick={() => setEditingReason(null)}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
+              <Button type="submit" className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                 Salvar Alterações
               </Button>
             </div>

@@ -1,166 +1,121 @@
-"use client";
+"use client"
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useAuth } from '@/contexts/auth-context';
-import { Button } from '@/components/ui/button';
-import { Home, Building, Kanban, Settings, LogOut, Bell, Users, Shield, CheckSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Logo } from './logo';
-import { useState } from 'react';
+import { useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  CheckSquare,
+  Settings,
+  TrendingUp,
+  Menu,
+  X,
+  RotateCcw,
+  Megaphone,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Pipeline', href: '/pipeline', icon: Kanban },
-  { name: 'Tarefas', href: '/tasks', icon: CheckSquare },
-  { name: 'Imóveis', href: '/properties', icon: Building },
-  { name: 'Usuários', href: '/users', icon: Users, roles: ['admin', 'diretor', 'gerente'] },
-  { name: 'Configurações', href: '/settings', icon: Settings },
-];
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Pipeline", href: "/pipeline", icon: TrendingUp },
+  { name: "Imóveis", href: "/properties", icon: Building2 },
+  { name: "Tarefas", href: "/tasks", icon: CheckSquare },
+  { name: "Usuários", href: "/users", icon: Users },
+  { name: "ADS", href: "/ads", icon: Megaphone },
+  { name: "Roleta", href: "/roleta", icon: RotateCcw },
+  { name: "Configurações", href: "/settings", icon: Settings },
+]
 
 export function Navigation() {
-  const pathname = usePathname();
-  const { user, logout } = useAuth();
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  const filteredNavigation = navigation.filter(item => {
-    if (!item.roles) return true;
-    if (user?.role === 'admin') return true;
-    return item.roles.includes(user?.role || 'corretor');
-  });
-
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return <Shield className="h-3 w-3" />;
-      case 'diretor':
-        return <div className="h-3 w-3 bg-purple-500 rounded-full" />;
-      case 'gerente':
-        return <div className="h-3 w-3 bg-blue-500 rounded-full" />;
-      case 'corretor':
-        return <div className="h-3 w-3 bg-green-500 rounded-full" />;
-      default:
-        return null;
-    }
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'Administrador';
-      case 'diretor':
-        return 'Diretor';
-      case 'gerente':
-        return 'Gerente';
-      case 'corretor':
-        return 'Corretor';
-      default:
-        return role;
-    }
-  };
+  const pathname = usePathname()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   return (
-    <div 
-      className={cn(
-        "bg-primary-custom text-white h-screen flex flex-col transition-all duration-300 ease-in-out fixed left-0 top-0 z-50",
-        isExpanded ? "w-64" : "w-16"
+    <>
+      {/* Mobile menu button */}
+      <button
+        type="button"
+        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-md bg-primary-custom text-white shadow-lg"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+      >
+        {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+      </button>
+
+      {/* Mobile overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
       )}
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
-    >
-      <div className="p-4 flex-shrink-0">
-        <div className="flex items-center justify-center">
-          <Logo 
-            size="sm" 
-            showText={isExpanded} 
-            className="text-white transition-all duration-300" 
-          />
-        </div>
-      </div>
-      
-      <nav className="flex-1 px-2 overflow-hidden">
-        <ul className="space-y-1">
-          {filteredNavigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
-            
-            return (
-              <li key={item.name}>
+
+      {/* Sidebar */}
+      <div
+        className={cn(
+          "fixed left-0 top-0 z-40 h-full w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:w-16 lg:hover:w-64 lg:transition-all lg:duration-300 group",
+          "sidebar-custom shadow-custom-lg",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        )}
+      >
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex h-16 items-center justify-center px-4 lg:px-2 border-b border-white border-opacity-20">
+            <div className="flex items-center space-x-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary-custom">
+                <Building2 className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-lg font-bold text-white lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                RealSales CRM
+              </span>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 space-y-1 px-2 py-4">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href
+              return (
                 <Link
+                  key={item.name}
                   href={item.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200",
-                    "hover:bg-secondary-custom hover:text-white group relative",
+                    "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all duration-200",
                     isActive
-                      ? "bg-secondary-custom text-white shadow-lg"
-                      : "text-gray-300"
+                      ? "bg-secondary-custom text-white shadow-md"
+                      : "text-gray-200 hover:bg-white hover:bg-opacity-10 hover:text-white",
                   )}
                 >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  <span 
+                  <item.icon
                     className={cn(
-                      "ml-3 transition-all duration-300 whitespace-nowrap",
-                      isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2"
+                      "mr-3 h-5 w-5 flex-shrink-0 transition-colors duration-200",
+                      isActive ? "text-white" : "text-gray-300 group-hover:text-white",
                     )}
-                  >
+                  />
+                  <span className="lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
                     {item.name}
                   </span>
-                  
-                  {!isExpanded && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-tertiary-custom text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      {item.name}
-                    </div>
-                  )}
                 </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+              )
+            })}
+          </nav>
 
-      <div className="p-3 border-t border-tertiary-custom flex-shrink-0">
-        <div className={cn(
-          "flex items-center mb-3 transition-all duration-300",
-          isExpanded ? "justify-between" : "justify-center"
-        )}>
-          <div className="flex items-center min-w-0">
-            <div className="w-8 h-8 bg-secondary-custom rounded-full flex items-center justify-center flex-shrink-0 relative">
-              <span className="text-sm font-medium text-white">
-                {user?.name?.charAt(0).toUpperCase()}
-              </span>
-              <div className="absolute -bottom-1 -right-1">
-                {getRoleIcon(user?.role || 'corretor')}
+          {/* User info */}
+          <div className="border-t border-white border-opacity-20 p-4">
+            <div className="flex items-center space-x-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary-custom">
+                <span className="text-sm font-medium text-white">JD</span>
+              </div>
+              <div className="lg:opacity-0 lg:group-hover:opacity-100 lg:transition-opacity lg:duration-300">
+                <p className="text-sm font-medium text-white">João Diretor</p>
+                <p className="text-xs text-gray-300">Administrador</p>
               </div>
             </div>
-            {isExpanded && (
-              <div className="ml-3 min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{user?.name}</p>
-                <p className="text-xs text-gray-400 truncate">
-                  {getRoleLabel(user?.role || 'corretor')}
-                </p>
-              </div>
-            )}
           </div>
-          
-          {isExpanded && (
-            <Button variant="ghost" size="sm" className="flex-shrink-0 text-white hover:bg-secondary-custom">
-              <Bell className="h-4 w-4" />
-            </Button>
-          )}
         </div>
-        
-        <Button
-          onClick={logout}
-          variant="ghost"
-          className={cn(
-            "w-full text-gray-300 hover:bg-secondary-custom hover:text-white transition-all duration-200",
-            isExpanded ? "justify-start" : "justify-center px-3"
-          )}
-        >
-          <LogOut className="h-4 w-4 flex-shrink-0" />
-          {isExpanded && <span className="ml-3">Sair</span>}
-        </Button>
       </div>
-    </div>
-  );
+    </>
+  )
 }

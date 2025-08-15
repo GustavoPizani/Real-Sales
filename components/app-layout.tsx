@@ -1,51 +1,48 @@
-"use client";
+"use client"
 
-import { useAuth } from '@/contexts/auth-context';
-import { Navigation } from '@/components/navigation';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import type React from "react"
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
+import { useAuth } from "@/contexts/auth-context"
+import { Navigation } from "./navigation"
+import { usePathname } from "next/navigation"
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+interface AppLayoutProps {
+  children: React.ReactNode
+}
 
-  // Páginas que não devem mostrar o sidebar
-  const publicPages = ['/login', '/'];
-  const isPublicPage = publicPages.includes(pathname);
+export function AppLayout({ children }: AppLayoutProps) {
+  const { user, loading } = useAuth()
+  const pathname = usePathname()
 
-  if (!mounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
+  // Don't show layout on login page
+  if (pathname === "/login") {
+    return <>{children}</>
   }
 
+  // Show loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-custom"></div>
       </div>
-    );
+    )
   }
 
-  // Se for página pública ou usuário não logado, não mostrar sidebar
-  if (isPublicPage || !user) {
-    return <>{children}</>;
+  // Redirect to login if not authenticated
+  if (!user) {
+    return <>{children}</>
   }
 
-  // Páginas autenticadas com sidebar
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="flex-1 ml-16 overflow-auto">
-        {children}
-      </main>
+
+      {/* Main Content */}
+      <div className="lg:ml-16 transition-all duration-300">
+        <main className="min-h-screen">
+          <div className="pt-16 lg:pt-0">{children}</div>
+        </main>
+      </div>
     </div>
-  );
+  )
 }

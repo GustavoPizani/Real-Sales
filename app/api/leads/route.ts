@@ -1,58 +1,79 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { executeQuery } from "@/lib/db"
-import { getUserFromToken } from "@/lib/auth"
+import { NextRequest, NextResponse } from 'next/server'
+import { neon } from '@neondatabase/serverless'
+import { getUserFromToken } from '@/lib/auth'
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request)
-    if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Token não fornecido' }, { status: 401 })
     }
 
-    const leads = await executeQuery(async (sql) => {
-      return await sql`
-        SELECT 
-          l.id, l.name, l.email, l.phone, l.source, l.status,
-          l.notes, l.assigned_to, l.created_at, l.updated_at,
-          u.name as assigned_user_name
-        FROM leads l
-        LEFT JOIN users u ON l.assigned_to = u.id
-        ORDER BY l.created_at DESC
-      `
-    })
+    const token = authHeader.substring(7)
+    const user = await getUserFromToken(token)
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+    }
 
-    return NextResponse.json(leads)
+    const leads = await sql`
+      SELECT id, name, email, phone, source, campaign, status, created_at, updated_at
+      FROM leads
+      ORDER BY created_at DESC
+    `
+
+    return NextResponse.json({ leads })
+
   } catch (error) {
-    console.error("Error fetching leads:", error)
-    return NextResponse.json({ error: "Erro ao buscar leads" }, { status: 500 })
+    console.error('Erro ao buscar leads:', error)
+    return NextResponse.json(
+      { error: 'Erro interno do servidor' },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request)
-    if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    const { name, email, phone, source, campaign } = await request.json()
+
+    if (!name || !email) {
+      return NextResponse.json(
+        { error: 'Nome e email são obrigatórios' },
+        { status: 400 }
+      )
     }
 
-    const body = await request.json()
-    const { name, email, phone, source, notes, assigned_to } = body
+    // Verificar se já existe um lead com este email
+    const existingLeads = await sql`
+      SELECT id FROM leads WHERE email = ${email}
+    `
 
-    if (!name || !source) {
-      return NextResponse.json({ error: "Nome e fonte são obrigatórios" }, { status: 400 })
+    if (existingLeads.length > 0) {
+      return NextResponse.json(
+        { error: 'Já existe um lead com este email' },
+        { status: 409 }
+      )
     }
 
-    const result = await executeQuery(async (sql) => {
-      return await sql`
-        INSERT INTO leads (name, email, phone, source, notes, assigned_to, status)
-        VALUES (${name}, ${email || null}, ${phone || null}, ${source}, ${notes || null}, ${assigned_to || user.id}, 'new')
-        RETURNING *
-      `
-    })
+    const result = await sql`
+      INSERT INTO leads (name, email, phone, source, campaign, status)
+      VALUES (${name}, ${email}, ${phone || ''}, ${source || 'manual'}, ${campaign || 'Não informado'}, 'new')
+      RETURNING id, name, email, phone, source, campaign, status, created_at
+    `
 
-    return NextResponse.json(result[0], { status: 201 })
+    return NextResponse.json({
+      success: true,
+      lead: result[0]
+    }, { status: 201 })
+
   } catch (error) {
-    console.error("Error creating lead:", error)
-    return NextResponse.json({ error: "Erro ao criar lead" }, { status: 500 })
+    console.error('Erro ao criar lead:', error)
+    return NextResponse.json(
+      { error: 'Erro interno do servidor' },
+      { status: 500 }
+    )
   }
 }

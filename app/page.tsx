@@ -1,26 +1,30 @@
-"use client";
+"use client"
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/auth-context';
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function HomePage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
+  const router = useRouter()
+  const { user, isLoading } = useAuth()
 
   useEffect(() => {
-    if (!loading) {
+    if (!isLoading) {
       if (user) {
-        router.push('/dashboard');
+        router.push("/dashboard")
       } else {
-        router.push('/login');
+        router.push("/login")
       }
     }
-  }, [user, loading, router]);
+  }, [user, isLoading, router])
 
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-custom"></div>
+      </div>
+    )
+  }
+
+  return null
 }

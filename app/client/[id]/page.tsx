@@ -1,1068 +1,937 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, MessageCircle, Building, Calendar, User, Plus, Trophy, X, RotateCcw, DollarSign, CalendarPlus, CheckSquare, Mail } from 'lucide-react';
-import { Client, ClientNote, Property, ClientWonDetails, LostReason, FUNNEL_STAGES, DEFAULT_LOST_REASONS, CreateTaskData, TASK_TYPES, TASK_PRIORITIES, TASK_TYPE_LABELS, TASK_PRIORITY_LABELS } from '@/lib/types';
-import { useTask } from '@/contexts/task-context';
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/contexts/auth-context"
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Edit,
+  UserPlus,
+  Building,
+  DollarSign,
+  FileText,
+  CheckSquare,
+  Clock,
+  AlertCircle,
+} from "lucide-react"
 
-// Mock data
-const mockClient: Client = {
-  id: '1',
-  full_name: 'Maria Silva',
-  phone: '(11) 99999-9999',
-  email: 'maria@email.com',
-  funnel_status: 'Contato',
-  notes: 'Interessada em apartamento 3 quartos',
-  created_at: '2024-01-15T10:00:00Z',
-  updated_at: '2024-01-15T10:00:00Z',
-  user_id: '1',
-  property_title: 'Apartamento 3 quartos Vila Madalena',
-  property_address: 'Rua Harmonia, 123 - Vila Madalena',
-  property_price: 850000,
-  assigned_user: { id: '1', name: 'João Corretor', email: 'joao@email.com', role: 'corretor', created_at: '2024-01-01T00:00:00Z' },
-  status: 'active'
-};
+interface Client {
+  id: number
+  name: string
+  email: string
+  phone: string
+  budget: string
+  preferences: string
+  status: string
+  assigned_to: string
+  manager_id?: number
+  director_id?: number
+  created_at: string
+  notes?: Array<{
+    id: number
+    content: string
+    created_at: string
+    created_by: string
+  }>
+}
 
-const mockNotes: ClientNote[] = [
-  {
-    id: '1',
-    client_id: '1',
-    user_id: '1',
-    note: 'Cliente muito interessado, quer agendar visita para o próximo sábado.',
-    created_at: '2024-01-16T14:30:00Z',
-    user_name: 'João Corretor'
-  },
-  {
-    id: '2',
-    client_id: '1',
-    user_id: '1',
-    note: 'Ligou perguntando sobre financiamento. Orientei sobre as opções disponíveis.',
-    created_at: '2024-01-17T09:15:00Z',
-    user_name: 'João Corretor'
-  }
-];
+interface Property {
+  id: number
+  title: string
+  type: string
+  price: number
+  location: string
+  bedrooms: number
+  bathrooms: number
+  area: number
+  description: string
+  status: string
+}
 
-const mockProperties: Property[] = [
-  {
-    id: '1',
-    title: 'Apartamento 3 quartos Vila Madalena',
-    description: 'Lindo apartamento com varanda',
-    address: 'Rua Harmonia, 123 - Vila Madalena',
-    price: 850000,
-    type: 'Apartamento',
-    status: 'Disponível',
-    created_at: '2024-01-01T00:00:00Z',
-    user_id: '1'
-  }
-];
+interface Task {
+  id: number
+  title: string
+  description: string
+  due_date: string
+  status: string
+  priority: string
+  assigned_to: string
+}
 
-const mockLostReasons: LostReason[] = DEFAULT_LOST_REASONS.map((reason, index) => ({
-  id: (index + 1).toString(),
-  reason,
-  active: true,
-  created_at: '2024-01-01T00:00:00Z'
-}));
+interface StaffUser {
+  id: number
+  name: string
+  role: string
+}
 
-export default function ClientDetailsPage() {
-  const params = useParams();
-  const router = useRouter();
-  const clientId = params.id as string;
-  const { createTask } = useTask();
-  
-  const [client, setClient] = useState<Client | null>(null);
-  const [notes, setNotes] = useState<ClientNote[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [lostReasons, setLostReasons] = useState<LostReason[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newNote, setNewNote] = useState('');
-  const [isAddingNote, setIsAddingNote] = useState(false);
-  const [editingClient, setEditingClient] = useState(false);
-  const [showWonDialog, setShowWonDialog] = useState(false);
-  const [showLostDialog, setShowLostDialog] = useState(false);
-  const [showAddSaleDialog, setShowAddSaleDialog] = useState(false);
-  const [showTaskDialog, setShowTaskDialog] = useState(false);
-  
-  const [clientForm, setClientForm] = useState({
-    full_name: '',
-    phone: '',
-    email: '',
-    funnel_status: 'Contato',
-    notes: ''
-  });
+export default function ClientDetail() {
+  const params = useParams()
+  const router = useRouter()
+  const { user } = useAuth()
+  const [client, setClient] = useState<Client | null>(null)
+  const [interestedProperty, setInterestedProperty] = useState<Property | null>(null)
+  const [clientTasks, setClientTasks] = useState<Task[]>([])
+  const [users, setUsers] = useState<StaffUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  const [wonForm, setWonForm] = useState({
-    property_id: '',
-    sale_value: '',
-    sale_date: new Date().toISOString().split('T')[0]
-  });
+  // Modal states
+  const [isEditClientOpen, setIsEditClientOpen] = useState(false)
+  const [isEditPropertyOpen, setIsEditPropertyOpen] = useState(false)
+  const [isAssignClientOpen, setIsAssignClientOpen] = useState(false)
+  const [isAddNoteOpen, setIsAddNoteOpen] = useState(false)
 
-  const [lostForm, setLostForm] = useState({
-    reason: ''
-  });
+  // Form states
+  const [editClientData, setEditClientData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    budget: "",
+    preferences: "",
+    status: "",
+  })
 
-  const [taskForm, setTaskForm] = useState<CreateTaskData>({
-    title: '',
-    description: '',
-    due_date: new Date().toISOString().split('T')[0],
-    due_time: '09:00',
-    priority: 'medium',
-    type: 'call',
-    client_id: clientId,
-    property_id: '',
-    user_id: '1'
-  });
+  const [editPropertyData, setEditPropertyData] = useState({
+    title: "",
+    type: "",
+    price: "",
+    location: "",
+    bedrooms: "",
+    bathrooms: "",
+    area: "",
+    description: "",
+  })
+
+  const [assignData, setAssignData] = useState({
+    assigned_to: "",
+    manager_id: "",
+    director_id: "",
+  })
+
+  const [newNote, setNewNote] = useState("")
 
   useEffect(() => {
-    // Simular carregamento de dados
-    setTimeout(() => {
-      setClient(mockClient);
-      setNotes(mockNotes);
-      setProperties(mockProperties);
-      setLostReasons(mockLostReasons);
-      
-      if (mockClient) {
-        setClientForm({
-          full_name: mockClient.full_name,
-          phone: mockClient.phone || '',
-          email: mockClient.email || '',
-          funnel_status: mockClient.funnel_status,
-          notes: mockClient.notes || ''
-        });
+    if (params.id) {
+      fetchClientData()
+      fetchUsers()
+    }
+  }, [params.id])
+
+  const fetchClientData = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/clients/${params.id}`)
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError("Cliente não encontrado")
+        } else {
+          setError("Erro ao carregar dados do cliente")
+        }
+        return
       }
-      
-      setLoading(false);
-    }, 1000);
-  }, [clientId]);
 
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNote.trim()) return;
+      const data = await response.json()
+      setClient(data.client)
 
-    setIsAddingNote(true);
-    
-    const note: ClientNote = {
-      id: Date.now().toString(),
-      client_id: clientId,
-      user_id: '1',
-      note: newNote,
-      created_at: new Date().toISOString(),
-      user_name: 'João Corretor'
-    };
-    
-    setNotes(prev => [note, ...prev]);
-    setNewNote('');
-    setIsAddingNote(false);
-  };
+      // Set edit form data
+      setEditClientData({
+        name: data.client.name || "",
+        email: data.client.email || "",
+        phone: data.client.phone || "",
+        budget: data.client.budget || "",
+        preferences: data.client.preferences || "",
+        status: data.client.status || "",
+      })
 
-  const handleUpdateClient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (client) {
-      const updatedClient = {
-        ...client,
-        ...clientForm
-      };
-      setClient(updatedClient);
+      setAssignData({
+        assigned_to: data.client.assigned_to || "",
+        manager_id: data.client.manager_id?.toString() || "",
+        director_id: data.client.director_id?.toString() || "",
+      })
+
+      // Fetch interested property if exists
+      if (data.client.interested_property_id) {
+        fetchInterestedProperty(data.client.interested_property_id)
+      }
+
+      // Fetch client tasks
+      fetchClientTasks()
+    } catch (error) {
+      console.error("Error fetching client:", error)
+      setError("Erro ao carregar dados do cliente")
+    } finally {
+      setLoading(false)
     }
-    
-    setEditingClient(false);
-  };
+  }
 
-  const handleMarkAsWon = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (client) {
-      const wonDetails: ClientWonDetails = {
-        id: Date.now().toString(),
-        client_id: clientId,
-        property_id: wonForm.property_id,
-        property_title: properties.find(p => p.id === wonForm.property_id)?.title || '',
-        sale_value: parseFloat(wonForm.sale_value),
-        sale_date: wonForm.sale_date,
-        created_at: new Date().toISOString()
-      };
-      
-      const updatedClient = {
-        ...client,
-        status: 'won' as const,
-        won_details: [wonDetails]
-      };
-      
-      setClient(updatedClient);
-      setShowWonDialog(false);
-      setWonForm({
-        property_id: '',
-        sale_value: '',
-        sale_date: new Date().toISOString().split('T')[0]
-      });
+  const fetchInterestedProperty = async (propertyId: number) => {
+    try {
+      const response = await fetch(`/api/properties/${propertyId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setInterestedProperty(data.property)
+        setEditPropertyData({
+          title: data.property.title || "",
+          type: data.property.type || "",
+          price: data.property.price?.toString() || "",
+          location: data.property.location || "",
+          bedrooms: data.property.bedrooms?.toString() || "",
+          bathrooms: data.property.bathrooms?.toString() || "",
+          area: data.property.area?.toString() || "",
+          description: data.property.description || "",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching interested property:", error)
     }
-  };
+  }
 
-  const handleMarkAsLost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (client) {
-      const updatedClient = {
-        ...client,
-        status: 'lost' as const,
-        lost_reason: lostForm.reason
-      };
-      
-      setClient(updatedClient);
-      setShowLostDialog(false);
-      setLostForm({ reason: '' });
+  const fetchClientTasks = async () => {
+    try {
+      const response = await fetch(`/api/tasks?client_id=${params.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setClientTasks(data.tasks || [])
+      }
+    } catch (error) {
+      console.error("Error fetching client tasks:", error)
     }
-  };
+  }
 
-  const handleReactivateClient = async () => {
-    if (client) {
-      const updatedClient = {
-        ...client,
-        status: 'active' as const,
-        lost_reason: undefined
-      };
-      
-      setClient(updatedClient);
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch("/api/users")
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data.users || [])
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error)
     }
-  };
+  }
 
-  const handleAddSale = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (client && client.won_details) {
-      const newSale: ClientWonDetails = {
-        id: Date.now().toString(),
-        client_id: clientId,
-        property_id: wonForm.property_id,
-        property_title: properties.find(p => p.id === wonForm.property_id)?.title || '',
-        sale_value: parseFloat(wonForm.sale_value),
-        sale_date: wonForm.sale_date,
-        created_at: new Date().toISOString()
-      };
-      
-      const updatedClient = {
-        ...client,
-        won_details: [...client.won_details, newSale]
-      };
-      
-      setClient(updatedClient);
-      setShowAddSaleDialog(false);
-      setWonForm({
-        property_id: '',
-        sale_value: '',
-        sale_date: new Date().toISOString().split('T')[0]
-      });
+  const handleEditClient = async () => {
+    try {
+      const response = await fetch(`/api/clients/${params.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(editClientData),
+      })
+
+      if (response.ok) {
+        setIsEditClientOpen(false)
+        fetchClientData()
+      }
+    } catch (error) {
+      console.error("Error updating client:", error)
     }
-  };
+  }
 
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const taskData = {
-      ...taskForm,
-      client_id: clientId,
-      client_name: client?.full_name
-    };
-    
-    await createTask(taskData);
-    setShowTaskDialog(false);
-    setTaskForm({
-      title: '',
-      description: '',
-      due_date: new Date().toISOString().split('T')[0],
-      due_time: '09:00',
-      priority: 'medium',
-      type: 'call',
-      client_id: clientId,
-      property_id: '',
-      user_id: '1'
-    });
-    
-    // Mostrar feedback de sucesso
-    alert('Tarefa criada com sucesso!');
-  };
+  const handleEditProperty = async () => {
+    if (!interestedProperty) return
 
-  const openWhatsApp = (phone: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    window.open(`https://wa.me/${cleanPhone}`, '_blank');
-  };
+    try {
+      const response = await fetch(`/api/properties/${interestedProperty.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...editPropertyData,
+          price: Number.parseFloat(editPropertyData.price),
+          bedrooms: Number.parseInt(editPropertyData.bedrooms),
+          bathrooms: Number.parseInt(editPropertyData.bathrooms),
+          area: Number.parseFloat(editPropertyData.area),
+        }),
+      })
 
-  const handleScheduleGoogleCalendar = () => {
-    if (!client) return;
-    
-    const eventTitle = `Visita ao ${client.property_title || 'imóvel'}`;
-    const eventDescription = `Visita agendada com ${client.full_name}`;
-    const eventLocation = client.property_address || '';
-    
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(14, 0, 0, 0);
-    
-    const startTime = tomorrow.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const endTime = new Date(tomorrow.getTime() + 60 * 60 * 1000)
-      .toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    
-    const attendees = [client.email].filter(Boolean).join(',');
-    
-    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}&dates=${startTime}/${endTime}&details=${encodeURIComponent(eventDescription)}&location=${encodeURIComponent(eventLocation)}&add=${encodeURIComponent(attendees)}`;
-    
-    window.open(googleCalendarUrl, '_blank');
-  };
-
-  const getStatusColor = (status: string) => {
-    const colors = {
-      'Contato': 'bg-blue-100 text-blue-800',
-      'Diagnóstico': 'bg-yellow-100 text-yellow-800',
-      'Agendado': 'bg-purple-100 text-purple-800',
-      'Visitado': 'bg-orange-100 text-orange-800',
-      'Proposta': 'bg-indigo-100 text-indigo-800',
-      'Contrato': 'bg-green-100 text-green-800',
-      'Ganho': 'bg-emerald-100 text-emerald-800',
-      'Perdido': 'bg-red-100 text-red-800'
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getClientStatusBadge = () => {
-    if (client?.status === 'won') {
-      return <Badge className="bg-emerald-100 text-emerald-800">Cliente Ganho</Badge>;
-    } else if (client?.status === 'lost') {
-      return <Badge className="bg-red-100 text-red-800">Cliente Perdido</Badge>;
+      if (response.ok) {
+        setIsEditPropertyOpen(false)
+        fetchInterestedProperty(interestedProperty.id)
+      }
+    } catch (error) {
+      console.error("Error updating property:", error)
     }
-    return <Badge className={getStatusColor(client?.funnel_status || '')}>
-      {client?.funnel_status}
-    </Badge>;
-  };
+  }
 
-  const getTaskIcon = (type: string) => {
-    switch (type) {
-      case 'visit':
-        return <Building className="h-4 w-4" />;
-      case 'call':
-        return <MessageCircle className="h-4 w-4" />;
-      case 'follow_up':
-        return <Mail className="h-4 w-4" />;
-      case 'meeting':
-        return <User className="h-4 w-4" />;
+  const handleAssignClient = async () => {
+    try {
+      const response = await fetch(`/api/clients/${params.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assigned_to: assignData.assigned_to,
+          manager_id: assignData.manager_id ? Number.parseInt(assignData.manager_id) : null,
+          director_id: assignData.director_id ? Number.parseInt(assignData.director_id) : null,
+        }),
+      })
+
+      if (response.ok) {
+        setIsAssignClientOpen(false)
+        fetchClientData()
+      }
+    } catch (error) {
+      console.error("Error assigning client:", error)
+    }
+  }
+
+  const handleAddNote = async () => {
+    try {
+      const response = await fetch(`/api/clients/${params.id}/notes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: newNote,
+          created_by: user?.name || "Sistema",
+        }),
+      })
+
+      if (response.ok) {
+        setIsAddNoteOpen(false)
+        setNewNote("")
+        fetchClientData()
+      }
+    } catch (error) {
+      console.error("Error adding note:", error)
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      lead: { color: "bg-blue-100 text-blue-800", label: "Lead" },
+      cliente: { color: "bg-green-100 text-green-800", label: "Cliente" },
+      inativo: { color: "bg-gray-100 text-gray-800", label: "Inativo" },
+      visitado: { color: "bg-orange-100 text-orange-800", label: "Visitado" },
+    }
+
+    const config = statusConfig[status as keyof typeof statusConfig] || {
+      color: "bg-gray-100 text-gray-800",
+      label: status,
+    }
+
+    return <Badge className={config.color}>{config.label}</Badge>
+  }
+
+  const getPriorityIcon = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      case "medium":
+        return <Clock className="h-4 w-4 text-yellow-500" />
+      case "low":
+        return <CheckSquare className="h-4 w-4 text-green-500" />
       default:
-        return <CheckSquare className="h-4 w-4" />;
+        return <Clock className="h-4 w-4 text-gray-500" />
     }
-  };
+  }
+
+  const getUserName = (userId: number) => {
+    const foundUser = users.find((u) => u.id === userId)
+    return foundUser?.name || "Não atribuído"
+  }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-custom"></div>
       </div>
-    );
+    )
   }
 
-  if (!client) {
+  if (error || !client) {
     return (
-      <div className="p-6">
+      <div className="flex flex-col items-center justify-center min-h-screen">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Cliente não encontrado</h1>
-          <Button onClick={() => router.push('/pipeline')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar ao Pipeline
+          <h1 className="text-2xl font-bold text-red-600 mb-4">{error || "Cliente não encontrado"}</h1>
+          <Button onClick={() => router.push("/dashboard")} variant="outline">
+            Voltar ao Dashboard
           </Button>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/pipeline')}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar ao Pipeline
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{client.full_name}</h1>
-            <p className="text-gray-600">Detalhes e histórico do cliente</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold text-primary-custom">{client.name}</h1>
+          <p className="text-gray-600 mt-2">Detalhes do cliente</p>
         </div>
-        <div className="flex gap-2">
-          {client.phone && (
-            <Button
-              variant="outline"
-              onClick={() => openWhatsApp(client.phone!)}
-            >
-              <MessageCircle className="h-4 w-4 mr-2" />
-              WhatsApp
-            </Button>
-          )}
-          
-          {/* Botões de ação baseados no status */}
-          {client.status === 'lost' ? (
-            <Button
-              onClick={handleReactivateClient}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reativar Cliente
-            </Button>
-          ) : client.status === 'won' ? (
-            <Dialog open={showAddSaleDialog} onOpenChange={setShowAddSaleDialog}>
-              <DialogTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Venda
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Adicionar Nova Venda</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleAddSale} className="space-y-4">
-                  <div>
-                    <Label htmlFor="add_property">Imóvel Vendido *</Label>
-                    <Select
-                      value={wonForm.property_id}
-                      onValueChange={(value) => setWonForm(prev => ({ ...prev, property_id: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o imóvel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {properties.map((property) => (
-                          <SelectItem key={property.id} value={property.id}>
-                            {property.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="add_sale_value">Valor da Venda (R$) *</Label>
-                    <Input
-                      id="add_sale_value"
-                      type="number"
-                      step="0.01"
-                      value={wonForm.sale_value}
-                      onChange={(e) => setWonForm(prev => ({ ...prev, sale_value: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="add_sale_date">Data da Venda *</Label>
-                    <Input
-                      id="add_sale_date"
-                      type="date"
-                      value={wonForm.sale_date}
-                      onChange={(e) => setWonForm(prev => ({ ...prev, sale_date: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setShowAddSaleDialog(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" className="bg-green-600 hover:bg-green-700">
-                      Adicionar Venda
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          ) : (
-            <>
-              <Dialog open={showWonDialog} onOpenChange={setShowWonDialog}>
-                <DialogTrigger asChild>
-                  <Button className="bg-green-600 hover:bg-green-700">
-                    <Trophy className="h-4 w-4 mr-2" />
-                    Cliente Ganho
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Marcar Cliente como Ganho</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleMarkAsWon} className="space-y-4">
-                    <div>
-                      <Label htmlFor="property">Imóvel Vendido *</Label>
-                      <Select
-                        value={wonForm.property_id}
-                        onValueChange={(value) => setWonForm(prev => ({ ...prev, property_id: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o imóvel" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {properties.map((property) => (
-                            <SelectItem key={property.id} value={property.id}>
-                              {property.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="sale_value">Valor da Venda (R$) *</Label>
-                      <Input
-                        id="sale_value"
-                        type="number"
-                        step="0.01"
-                        value={wonForm.sale_value}
-                        onChange={(e) => setWonForm(prev => ({ ...prev, sale_value: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="sale_date">Data da Venda *</Label>
-                      <Input
-                        id="sale_date"
-                        type="date"
-                        value={wonForm.sale_date}
-                        onChange={(e) => setWonForm(prev => ({ ...prev, sale_date: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setShowWonDialog(false)}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" className="bg-green-600 hover:bg-green-700">
-                        Confirmar Venda
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={showLostDialog} onOpenChange={setShowLostDialog}>
-                <DialogTrigger asChild>
-                  <Button variant="destructive">
-                    <X className="h-4 w-4 mr-2" />
-                    Cliente Perdido
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Marcar Cliente como Perdido</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleMarkAsLost} className="space-y-4">
-                    <div>
-                      <Label htmlFor="lost_reason">Motivo da Perda *</Label>
-                      <Select
-                        value={lostForm.reason}
-                        onValueChange={(value) => setLostForm(prev => ({ ...prev, reason: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o motivo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {lostReasons.filter(r => r.active).map((reason) => (
-                            <SelectItem key={reason.id} value={reason.reason}>
-                              {reason.reason}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setShowLostDialog(false)}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" variant="destructive">
-                        Confirmar Perda
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
-          
-          <Button
-            onClick={() => setEditingClient(!editingClient)}
-            className="bg-primary hover:bg-primary/90"
-          >
-            {editingClient ? 'Cancelar' : 'Editar Cliente'}
-          </Button>
-        </div>
+        <Button onClick={() => router.push("/dashboard")} variant="outline">
+          Voltar
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Informações do Cliente */}
+        {/* Left Column - Client Info */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Client Information */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Informações do Cliente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {editingClient ? (
-                <form onSubmit={handleUpdateClient} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="full_name">Nome Completo</Label>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-primary-custom">Informações do Cliente</CardTitle>
+                <CardDescription>Dados pessoais e de contato</CardDescription>
+              </div>
+              <Dialog open={isEditClientOpen} onOpenChange={setIsEditClientOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Editar Cliente
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Editar Cliente</DialogTitle>
+                    <DialogDescription>Atualize as informações do cliente.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-name" className="text-right">
+                        Nome
+                      </Label>
                       <Input
-                        id="full_name"
-                        value={clientForm.full_name}
-                        onChange={(e) => setClientForm(prev => ({ ...prev, full_name: e.target.value }))}
+                        id="edit-name"
+                        value={editClientData.name}
+                        onChange={(e) => setEditClientData({ ...editClientData, name: e.target.value })}
+                        className="col-span-3"
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="funnel_status">Status</Label>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-email" className="text-right">
+                        Email
+                      </Label>
+                      <Input
+                        id="edit-email"
+                        type="email"
+                        value={editClientData.email}
+                        onChange={(e) => setEditClientData({ ...editClientData, email: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-phone" className="text-right">
+                        Telefone
+                      </Label>
+                      <Input
+                        id="edit-phone"
+                        value={editClientData.phone}
+                        onChange={(e) => setEditClientData({ ...editClientData, phone: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-budget" className="text-right">
+                        Orçamento
+                      </Label>
+                      <Input
+                        id="edit-budget"
+                        value={editClientData.budget}
+                        onChange={(e) => setEditClientData({ ...editClientData, budget: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-status" className="text-right">
+                        Status
+                      </Label>
                       <Select
-                        value={clientForm.funnel_status}
-                        onValueChange={(value) => setClientForm(prev => ({ ...prev, funnel_status: value }))}
-                        disabled={client.status === 'won' || client.status === 'lost'}
+                        value={editClientData.status}
+                        onValueChange={(value) => setEditClientData({ ...editClientData, status: value })}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
                         <SelectContent>
-                          {FUNNEL_STAGES.map((stage) => (
-                            <SelectItem key={stage} value={stage}>
-                              {stage}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="lead">Lead</SelectItem>
+                          <SelectItem value="cliente">Cliente</SelectItem>
+                          <SelectItem value="visitado">Visitado</SelectItem>
+                          <SelectItem value="inativo">Inativo</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone">Telefone</Label>
-                      <Input
-                        id="phone"
-                        value={clientForm.phone}
-                        onChange={(e) => setClientForm(prev => ({ ...prev, phone: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="email">E-mail</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={clientForm.email}
-                        onChange={(e) => setClientForm(prev => ({ ...prev, email: e.target.value }))}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="edit-preferences" className="text-right">
+                        Preferências
+                      </Label>
+                      <Textarea
+                        id="edit-preferences"
+                        value={editClientData.preferences}
+                        onChange={(e) => setEditClientData({ ...editClientData, preferences: e.target.value })}
+                        className="col-span-3"
                       />
                     </div>
                   </div>
-                  
+                  <DialogFooter>
+                    <Button onClick={handleEditClient}>Salvar Alterações</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center space-x-3">
+                  <Building className="h-5 w-5 text-gray-400" />
                   <div>
-                    <Label htmlFor="notes">Observações</Label>
-                    <Textarea
-                      id="notes"
-                      value={clientForm.notes}
-                      onChange={(e) => setClientForm(prev => ({ ...prev, notes: e.target.value }))}
-                    />
+                    <p className="text-sm text-gray-500">Nome</p>
+                    <p className="font-medium">{client.name}</p>
                   </div>
-                  
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setEditingClient(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" className="bg-primary hover:bg-primary/90">
-                      Salvar Alterações
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Nome Completo</Label>
-                      <p className="font-medium">{client.full_name}</p>
-                    </div>
-                    <div>
-                      <Label>Status</Label>
-                      {getClientStatusBadge()}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Telefone</Label>
-                      <div className="flex items-center gap-2">
-                        <p>{client.phone || 'Não informado'}</p>
-                        {client.phone && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openWhatsApp(client.phone!)}
-                          >
-                            <MessageCircle className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <Label>E-mail</Label>
-                      <p>{client.email || 'Não informado'}</p>
-                    </div>
-                  </div>
-                  
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Mail className="h-5 w-5 text-gray-400" />
                   <div>
-                    <Label>Corretor Responsável</Label>
-                    <p className="font-medium">{client.assigned_user?.name}</p>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="font-medium">{client.email}</p>
                   </div>
-                  
-                  {client.notes && (
-                    <div>
-                      <Label>Observações Iniciais</Label>
-                      <p className="text-sm bg-gray-50 p-3 rounded-md">{client.notes}</p>
-                    </div>
-                  )}
-
-                  {/* Motivo da perda */}
-                  {client.status === 'lost' && client.lost_reason && (
-                    <div>
-                      <Label>Motivo da Perda</Label>
-                      <Badge variant="destructive">{client.lost_reason}</Badge>
-                    </div>
-                  )}
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Phone className="h-5 w-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm text-gray-500">Telefone</p>
+                    <p className="font-medium">{client.phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <DollarSign className="h-5 w-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm text-gray-500">Orçamento</p>
+                    <p className="font-medium">{client.budget}</p>
+                  </div>
+                </div>
+              </div>
+              {client.preferences && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-2">Preferências</p>
+                  <p className="text-sm bg-gray-50 p-3 rounded-lg">{client.preferences}</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Vendas Realizadas */}
-          {client.status === 'won' && client.won_details && client.won_details.length > 0 && (
+          {/* Interested Property */}
+          {interestedProperty && (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Vendas Realizadas
-                </CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-primary-custom">Imóvel de Interesse</CardTitle>
+                  <CardDescription>Propriedade que o cliente demonstrou interesse</CardDescription>
+                </div>
+                <Dialog open={isEditPropertyOpen} onOpenChange={setIsEditPropertyOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar Imóvel
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Editar Imóvel</DialogTitle>
+                      <DialogDescription>Atualize as informações do imóvel.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4 max-h-96 overflow-y-auto">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-title" className="text-right">
+                          Título
+                        </Label>
+                        <Input
+                          id="edit-property-title"
+                          value={editPropertyData.title}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, title: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-type" className="text-right">
+                          Tipo
+                        </Label>
+                        <Select
+                          value={editPropertyData.type}
+                          onValueChange={(value) => setEditPropertyData({ ...editPropertyData, type: value })}
+                        >
+                          <SelectTrigger className="col-span-3">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="apartamento">Apartamento</SelectItem>
+                            <SelectItem value="casa">Casa</SelectItem>
+                            <SelectItem value="terreno">Terreno</SelectItem>
+                            <SelectItem value="comercial">Comercial</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-price" className="text-right">
+                          Preço
+                        </Label>
+                        <Input
+                          id="edit-property-price"
+                          type="number"
+                          value={editPropertyData.price}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, price: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-location" className="text-right">
+                          Localização
+                        </Label>
+                        <Input
+                          id="edit-property-location"
+                          value={editPropertyData.location}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, location: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-bedrooms" className="text-right">
+                          Quartos
+                        </Label>
+                        <Input
+                          id="edit-property-bedrooms"
+                          type="number"
+                          value={editPropertyData.bedrooms}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, bedrooms: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-bathrooms" className="text-right">
+                          Banheiros
+                        </Label>
+                        <Input
+                          id="edit-property-bathrooms"
+                          type="number"
+                          value={editPropertyData.bathrooms}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, bathrooms: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-area" className="text-right">
+                          Área (m²)
+                        </Label>
+                        <Input
+                          id="edit-property-area"
+                          type="number"
+                          value={editPropertyData.area}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, area: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="edit-property-description" className="text-right">
+                          Descrição
+                        </Label>
+                        <Textarea
+                          id="edit-property-description"
+                          value={editPropertyData.description}
+                          onChange={(e) => setEditPropertyData({ ...editPropertyData, description: e.target.value })}
+                          className="col-span-3"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={handleEditProperty}>Salvar Alterações</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {client.won_details.map((sale) => (
-                    <div key={sale.id} className="bg-green-50 p-4 rounded-lg">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">{sale.property_title}</h4>
-                          <p className="text-sm text-gray-600">
-                            Vendido em {new Date(sale.sale_date).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-green-600">
-                            R$ {sale.sale_value.toLocaleString('pt-BR')}
-                          </p>
-                        </div>
-                      </div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">{interestedProperty.title}</h3>
+                    <Badge className="bg-secondary-custom text-white">
+                      R$ {interestedProperty.price?.toLocaleString("pt-BR")}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Tipo</p>
+                      <p className="font-medium capitalize">{interestedProperty.type}</p>
                     </div>
-                  ))}
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Total de Vendas:</span>
-                      <span className="text-xl font-bold text-green-600">
-                        R$ {client.won_details.reduce((total, sale) => total + sale.sale_value, 0).toLocaleString('pt-BR')}
-                      </span>
+                    <div>
+                      <p className="text-gray-500">Quartos</p>
+                      <p className="font-medium">{interestedProperty.bedrooms}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Banheiros</p>
+                      <p className="font-medium">{interestedProperty.bathrooms}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Área</p>
+                      <p className="font-medium">{interestedProperty.area}m²</p>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Imóvel de Interesse */}
-          {client.property_title && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building className="h-5 w-5" />
-                  Imóvel de Interesse
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <h3 className="font-medium">{client.property_title}</h3>
-                  {client.property_address && (
-                    <p className="text-sm text-gray-600">{client.property_address}</p>
-                  )}
-                  {client.property_price && (
-                    <p className="text-lg font-semibold text-green-600">
-                      R$ {client.property_price.toLocaleString('pt-BR')}
-                    </p>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="h-4 w-4 text-gray-400" />
+                    <p className="text-sm">{interestedProperty.location}</p>
+                  </div>
+                  {interestedProperty.description && (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-2">Descrição</p>
+                      <p className="text-sm bg-gray-50 p-3 rounded-lg">{interestedProperty.description}</p>
+                    </div>
                   )}
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Histórico de Interações */}
+          {/* Tasks */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Histórico de Interações
-              </CardTitle>
-              <CardDescription>
-                Todas as anotações e interações com este cliente
-              </CardDescription>
+              <CardTitle className="text-primary-custom">Tarefas Relacionadas</CardTitle>
+              <CardDescription>Tarefas associadas a este cliente</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* Formulário para nova nota */}
-                {client.status !== 'lost' && (
-                  <>
-                    <form onSubmit={handleAddNote} className="space-y-3">
+                {clientTasks.map((task) => (
+                  <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      {getPriorityIcon(task.priority)}
                       <div>
-                        <Label htmlFor="new_note">Nova Anotação</Label>
-                        <Textarea
-                          id="new_note"
-                          value={newNote}
-                          onChange={(e) => setNewNote(e.target.value)}
-                          placeholder="Adicione uma nova anotação sobre este cliente..."
-                          rows={3}
-                        />
+                        <p className="font-medium">{task.title}</p>
+                        <p className="text-sm text-gray-500">{task.description}</p>
+                        <p className="text-xs text-gray-400">
+                          Vencimento: {new Date(task.due_date).toLocaleDateString("pt-BR")}
+                        </p>
                       </div>
-                      <Button
-                        type="submit"
-                        disabled={!newNote.trim() || isAddingNote}
-                        className="bg-primary hover:bg-primary/90"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        {isAddingNote ? 'Adicionando...' : 'Adicionar Anotação'}
-                      </Button>
-                    </form>
-
-                    <Separator />
-                  </>
+                    </div>
+                    {getStatusBadge(task.status)}
+                  </div>
+                ))}
+                {clientTasks.length === 0 && (
+                  <p className="text-gray-500 text-center py-4">Nenhuma tarefa encontrada</p>
                 )}
-
-                {/* Lista de notas */}
-                <div className="space-y-4">
-                  {notes.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">
-                      Nenhuma anotação registrada ainda.
-                    </p>
-                  ) : (
-                    notes.map((note) => (
-                      <div key={note.id} className="bg-gray-50 p-4 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="font-medium text-sm">{note.user_name}</span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.created_at).toLocaleString('pt-BR')}
-                          </span>
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap">{note.note}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Sidebar com informações adicionais */}
+        {/* Right Column - Summary and Actions */}
         <div className="space-y-6">
+          {/* Summary */}
           <Card>
-            <CardHeader>
-              <CardTitle>Informações Gerais</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-primary-custom">Resumo</CardTitle>
+              <Dialog open={isAssignClientOpen} onOpenChange={setIsAssignClientOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Atribuir Cliente
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Atribuir Cliente</DialogTitle>
+                    <DialogDescription>Defina os responsáveis pelo cliente.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="assign-corretor" className="text-right">
+                        Corretor
+                      </Label>
+                      <Select
+                        value={assignData.assigned_to}
+                        onValueChange={(value) => setAssignData({ ...assignData, assigned_to: value })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Selecione o corretor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users
+                            .filter((u) => u.role === "corretor")
+                            .map((user) => (
+                              <SelectItem key={user.id} value={user.name}>
+                                {user.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="assign-manager" className="text-right">
+                        Gerente
+                      </Label>
+                      <Select
+                        value={assignData.manager_id}
+                        onValueChange={(value) => setAssignData({ ...assignData, manager_id: value })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Selecione o gerente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users
+                            .filter((u) => u.role === "gerente")
+                            .map((user) => (
+                              <SelectItem key={user.id} value={user.id.toString()}>
+                                {user.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="assign-director" className="text-right">
+                        Diretor
+                      </Label>
+                      <Select
+                        value={assignData.director_id}
+                        onValueChange={(value) => setAssignData({ ...assignData, director_id: value })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Selecione o diretor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users
+                            .filter((u) => u.role === "diretor")
+                            .map((user) => (
+                              <SelectItem key={user.id} value={user.id.toString()}>
+                                {user.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={handleAssignClient}>Atribuir</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>Data de Cadastro</Label>
-                <p className="text-sm">
-                  {new Date(client.created_at).toLocaleDateString('pt-BR')}
-                </p>
+                <p className="text-sm text-gray-500">Status Atual</p>
+                {getStatusBadge(client.status)}
               </div>
+
               <div>
-                <Label>Última Atualização</Label>
-                <p className="text-sm">
-                  {new Date(client.updated_at).toLocaleDateString('pt-BR')}
-                </p>
-              </div>
-              <div>
-                <Label>Total de Anotações</Label>
-                <p className="text-sm font-medium">{notes.length}</p>
-              </div>
-              {client.status === 'won' && client.won_details && (
-                <div>
-                  <Label>Total de Vendas</Label>
-                  <p className="text-sm font-medium">{client.won_details.length}</p>
+                <p className="text-sm text-gray-500">Corretor Responsável</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Building className="h-4 w-4 text-gray-400" />
+                  <p className="font-medium">{client.assigned_to || "Não atribuído"}</p>
                 </div>
-              )}
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Gerente Responsável</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Building className="h-4 w-4 text-gray-400" />
+                  <p className="font-medium">{client.manager_id ? getUserName(client.manager_id) : "Não atribuído"}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Diretor Responsável</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Building className="h-4 w-4 text-gray-400" />
+                  <p className="font-medium">
+                    {client.director_id ? getUserName(client.director_id) : "Não atribuído"}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Anotações</p>
+                <p className="text-2xl font-bold text-primary-custom">{client.notes?.length || 0}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Tarefas Pendentes</p>
+                <p className="text-2xl font-bold text-secondary-custom">
+                  {clientTasks.filter((task) => task.status === "pendente").length}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Cliente desde</p>
+                <p className="font-medium">{new Date(client.created_at).toLocaleDateString("pt-BR")}</p>
+              </div>
             </CardContent>
           </Card>
 
+          {/* Notes */}
           <Card>
-            <CardHeader>
-              <CardTitle>Ações Rápidas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {client.phone && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => openWhatsApp(client.phone!)}
-                >
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Enviar WhatsApp
-                </Button>
-              )}
-              {client.email && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => window.open(`mailto:${client.email}`, '_self')}
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Enviar E-mail
-                </Button>
-              )}
-              <Dialog open={showTaskDialog} onOpenChange={setShowTaskDialog}>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-primary-custom">Anotações</CardTitle>
+              <Dialog open={isAddNoteOpen} onOpenChange={setIsAddNoteOpen}>
                 <DialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                  >
-                    <CheckSquare className="h-4 w-4 mr-2" />
-                    Criar Tarefa
+                  <Button variant="outline" size="sm">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Adicionar
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-[425px]">
                   <DialogHeader>
-                    <DialogTitle>Criar Nova Tarefa</DialogTitle>
+                    <DialogTitle>Nova Anotação</DialogTitle>
+                    <DialogDescription>Adicione uma nova anotação sobre o cliente.</DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleCreateTask} className="space-y-4">
-                    <div>
-                      <Label htmlFor="task_title">Título *</Label>
-                      <Input
-                        id="task_title"
-                        value={taskForm.title}
-                        onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
-                        placeholder={`Tarefa para ${client.full_name}`}
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="task_description">Descrição</Label>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="note-content" className="text-right">
+                        Conteúdo
+                      </Label>
                       <Textarea
-                        id="task_description"
-                        value={taskForm.description}
-                        onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
-                        placeholder="Detalhes sobre a tarefa..."
-                        rows={3}
+                        id="note-content"
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        className="col-span-3"
+                        rows={4}
                       />
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="task_date">Data *</Label>
-                        <Input
-                          id="task_date"
-                          type="date"
-                          value={taskForm.due_date}
-                          onChange={(e) => setTaskForm(prev => ({ ...prev, due_date: e.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="task_time">Horário *</Label>
-                        <Input
-                          id="task_time"
-                          type="time"
-                          value={taskForm.due_time}
-                          onChange={(e) => setTaskForm(prev => ({ ...prev, due_time: e.target.value }))}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="task_type">Tipo *</Label>
-                        <Select
-                          value={taskForm.type}
-                          onValueChange={(value: any) => setTaskForm(prev => ({ ...prev, type: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TASK_TYPES.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                <div className="flex items-center gap-2">
-                                  {getTaskIcon(type)}
-                                  {TASK_TYPE_LABELS[type]}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="task_priority">Prioridade *</Label>
-                        <Select
-                          value={taskForm.priority}
-                          onValueChange={(value: any) => setTaskForm(prev => ({ ...prev, priority: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TASK_PRIORITIES.map((priority) => (
-                              <SelectItem key={priority} value={priority}>
-                                {TASK_PRIORITY_LABELS[priority]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setShowTaskDialog(false)}>
-                        Cancelar
-                      </Button>
-                      <Button type="submit" className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
-                        Criar Tarefa
-                      </Button>
-                    </div>
-                  </form>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={handleAddNote}>Adicionar Anotação</Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={handleScheduleGoogleCalendar}
-              >
-                <CalendarPlus className="h-4 w-4 mr-2" />
-                Agendar no Google
-              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {client.notes?.map((note) => (
+                  <div key={note.id} className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm">{note.content}</p>
+                    <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                      <span>{note.created_by}</span>
+                      <span>{new Date(note.created_at).toLocaleDateString("pt-BR")}</span>
+                    </div>
+                  </div>
+                ))}
+                {(!client.notes || client.notes.length === 0) && (
+                  <p className="text-gray-500 text-center py-4">Nenhuma anotação encontrada</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
     </div>
-  );
+  )
 }

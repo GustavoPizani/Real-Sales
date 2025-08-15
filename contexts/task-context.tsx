@@ -1,206 +1,149 @@
-"use client";
+"use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Task, CreateTaskData } from '@/lib/types';
+import { createContext, useContext, useState, type ReactNode } from "react"
 
-interface TaskContextType {
-  tasks: Task[];
-  loading: boolean;
-  createTask: (taskData: CreateTaskData) => Promise<Task>;
-  updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
-  deleteTask: (taskId: string) => Promise<void>;
-  completeTask: (taskId: string) => Promise<void>;
-  getTodayTasks: () => Task[];
-  getOverdueTasks: () => Task[];
-  getUpcomingTasks: () => Task[];
-  refreshTasks: () => Promise<void>;
+export interface Task {
+  id: string
+  title: string
+  description?: string
+  due_date: string
+  due_time: string
+  status: "pending" | "completed" | "cancelled"
+  priority: "low" | "medium" | "high"
+  type: "call" | "visit" | "follow_up" | "meeting" | "other"
+  client_id?: string
+  client_name?: string
+  user_id: string
+  created_at: string
+  updated_at: string
 }
 
-const TaskContext = createContext<TaskContextType | undefined>(undefined);
+interface TaskContextType {
+  tasks: Task[]
+  addTask: (task: Omit<Task, "id" | "created_at" | "updated_at">) => void
+  updateTask: (id: string, updates: Partial<Task>) => void
+  deleteTask: (id: string) => void
+  getTodayTasks: () => Task[]
+  getUpcomingTasks: () => Task[]
+  getOverdueTasks: () => Task[]
+  getTasksByClient: (clientId: string) => Task[]
+}
 
-// Mock data para tarefas
+const TaskContext = createContext<TaskContextType | undefined>(undefined)
+
+// Mock tasks para teste
 const mockTasks: Task[] = [
   {
-    id: '1',
-    title: 'Visita - Apartamento Vila Madalena',
-    description: 'Mostrar apartamento para cliente interessado',
-    due_date: new Date().toISOString().split('T')[0],
-    due_time: '14:00',
-    status: 'pending',
-    priority: 'high',
-    type: 'visit',
-    client_id: '1',
-    client_name: 'Carlos Oliveira',
-    property_title: 'Apartamento 3 quartos Vila Madalena',
-    user_id: '1',
-    created_at: '2024-01-15T10:00:00Z',
-    updated_at: '2024-01-15T10:00:00Z'
+    id: "1",
+    title: "Ligar para João Silva",
+    description: "Agendar segunda visita",
+    due_date: "2024-01-22",
+    due_time: "09:00",
+    status: "pending",
+    priority: "high",
+    type: "call",
+    client_id: "1",
+    client_name: "João Silva",
+    user_id: "4",
+    created_at: "2024-01-20T00:00:00Z",
+    updated_at: "2024-01-20T00:00:00Z",
   },
   {
-    id: '2',
-    title: 'Ligação de follow-up',
-    description: 'Entrar em contato para saber sobre decisão',
-    due_date: new Date().toISOString().split('T')[0],
-    due_time: '16:30',
-    status: 'pending',
-    priority: 'medium',
-    type: 'follow_up',
-    client_id: '2',
-    client_name: 'Fernanda Lima',
-    user_id: '1',
-    created_at: '2024-01-15T09:00:00Z',
-    updated_at: '2024-01-15T09:00:00Z'
+    id: "2",
+    title: "Visita com Maria Santos",
+    description: "Mostrar casa nos Jardins",
+    due_date: "2024-01-22",
+    due_time: "14:00",
+    status: "pending",
+    priority: "medium",
+    type: "visit",
+    client_id: "2",
+    client_name: "Maria Santos",
+    user_id: "5",
+    created_at: "2024-01-20T00:00:00Z",
+    updated_at: "2024-01-20T00:00:00Z",
   },
   {
-    id: '3',
-    title: 'Apresentação de proposta',
-    description: 'Apresentar proposta final para cliente',
-    due_date: new Date().toISOString().split('T')[0],
-    due_time: '18:00',
-    status: 'pending',
-    priority: 'high',
-    type: 'meeting',
-    client_id: '3',
-    client_name: 'Roberto Silva',
-    user_id: '1',
-    created_at: '2024-01-15T08:00:00Z',
-    updated_at: '2024-01-15T08:00:00Z'
+    id: "3",
+    title: "Follow-up Pedro Costa",
+    description: "Verificar interesse na cobertura",
+    due_date: "2024-01-23",
+    due_time: "10:30",
+    status: "pending",
+    priority: "low",
+    type: "follow_up",
+    client_id: "3",
+    client_name: "Pedro Costa",
+    user_id: "4",
+    created_at: "2024-01-21T00:00:00Z",
+    updated_at: "2024-01-21T00:00:00Z",
   },
-  {
-    id: '4',
-    title: 'Ligação para cliente atrasado',
-    description: 'Cliente não compareceu na visita agendada',
-    due_date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    due_time: '10:00',
-    status: 'pending',
-    priority: 'high',
-    type: 'call',
-    client_id: '4',
-    client_name: 'Ana Santos',
-    user_id: '1',
-    created_at: '2024-01-14T08:00:00Z',
-    updated_at: '2024-01-14T08:00:00Z'
-  },
-  {
-    id: '5',
-    title: 'Reunião com equipe',
-    description: 'Reunião semanal de vendas',
-    due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    due_time: '09:00',
-    status: 'pending',
-    priority: 'medium',
-    type: 'meeting',
-    user_id: '1',
-    created_at: '2024-01-15T07:00:00Z',
-    updated_at: '2024-01-15T07:00:00Z'
-  }
-];
+]
 
-export function TaskProvider({ children }: { children: React.ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+export function TaskProvider({ children }: { children: ReactNode }) {
+  const [tasks, setTasks] = useState<Task[]>(mockTasks)
 
-  useEffect(() => {
-    // Simular carregamento inicial
-    setTimeout(() => {
-      setTasks(mockTasks);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  const createTask = async (taskData: CreateTaskData): Promise<Task> => {
+  const addTask = (taskData: Omit<Task, "id" | "created_at" | "updated_at">) => {
     const newTask: Task = {
-      id: Date.now().toString(),
       ...taskData,
-      status: 'pending',
+      id: Date.now().toString(),
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+      updated_at: new Date().toISOString(),
+    }
+    setTasks((prev) => [newTask, ...prev])
+  }
 
-    setTasks(prev => [...prev, newTask]);
-    return newTask;
-  };
+  const updateTask = (id: string, updates: Partial<Task>) => {
+    setTasks((prev) =>
+      prev.map((task) => (task.id === id ? { ...task, ...updates, updated_at: new Date().toISOString() } : task)),
+    )
+  }
 
-  const updateTask = async (taskId: string, updates: Partial<Task>) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId 
-          ? { ...task, ...updates, updated_at: new Date().toISOString() }
-          : task
-      )
-    );
-  };
-
-  const deleteTask = async (taskId: string) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId));
-  };
-
-  const completeTask = async (taskId: string) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId 
-          ? { 
-              ...task, 
-              status: 'completed' as const, 
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }
-          : task
-      )
-    );
-  };
+  const deleteTask = (id: string) => {
+    setTasks((prev) => prev.filter((task) => task.id !== id))
+  }
 
   const getTodayTasks = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return tasks.filter(task => 
-      task.due_date === today && task.status === 'pending'
-    ).sort((a, b) => a.due_time.localeCompare(b.due_time));
-  };
-
-  const getOverdueTasks = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return tasks.filter(task => 
-      task.due_date < today && task.status === 'pending'
-    ).sort((a, b) => b.due_date.localeCompare(a.due_date));
-  };
+    const today = new Date().toISOString().split("T")[0]
+    return tasks.filter((task) => task.due_date === today && task.status === "pending")
+  }
 
   const getUpcomingTasks = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return tasks.filter(task => 
-      task.due_date > today && task.status === 'pending'
-    ).sort((a, b) => a.due_date.localeCompare(b.due_date));
-  };
+    const today = new Date().toISOString().split("T")[0]
+    return tasks.filter((task) => task.due_date > today && task.status === "pending")
+  }
 
-  const refreshTasks = async () => {
-    setLoading(true);
-    // Simular refresh
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
-  };
+  const getOverdueTasks = () => {
+    const today = new Date().toISOString().split("T")[0]
+    return tasks.filter((task) => task.due_date < today && task.status === "pending")
+  }
+
+  const getTasksByClient = (clientId: string) => {
+    return tasks.filter((task) => task.client_id === clientId)
+  }
 
   return (
-    <TaskContext.Provider value={{
-      tasks,
-      loading,
-      createTask,
-      updateTask,
-      deleteTask,
-      completeTask,
-      getTodayTasks,
-      getOverdueTasks,
-      getUpcomingTasks,
-      refreshTasks
-    }}>
+    <TaskContext.Provider
+      value={{
+        tasks,
+        addTask,
+        updateTask,
+        deleteTask,
+        getTodayTasks,
+        getUpcomingTasks,
+        getOverdueTasks,
+        getTasksByClient,
+      }}
+    >
       {children}
     </TaskContext.Provider>
-  );
+  )
 }
 
 export function useTask() {
-  const context = useContext(TaskContext);
+  const context = useContext(TaskContext)
   if (context === undefined) {
-    throw new Error('useTask must be used within a TaskProvider');
+    throw new Error("useTask must be used within a TaskProvider")
   }
-  return context;
+  return context
 }

@@ -1,670 +1,334 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Search, Edit, Trash2, Building, MapPin, DollarSign, Eye } from 'lucide-react';
-import { Property, PROPERTY_TYPES, PROPERTY_STATUS } from '@/lib/types';
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Search, Plus, Filter, MapPin, Bed, Bath, Square } from "lucide-react"
 
-// Mock data
-const mockProperties: Property[] = [
-  {
-    id: '1',
-    title: 'Apartamento 3 quartos Vila Madalena',
-    description: 'Lindo apartamento com varanda gourmet, 2 vagas de garagem',
-    address: 'Rua Harmonia, 123 - Vila Madalena, São Paulo',
-    price: 850000,
-    type: 'Apartamento',
-    status: 'Disponível',
-    created_at: '2024-01-01T00:00:00Z',
-    user_id: '1'
-  },
-  {
-    id: '2',
-    title: 'Casa 4 quartos Jardins',
-    description: 'Casa térrea com quintal e piscina',
-    address: 'Rua Augusta, 456 - Jardins, São Paulo',
-    price: 1200000,
-    type: 'Casa',
-    status: 'Reservado',
-    created_at: '2024-01-02T00:00:00Z',
-    user_id: '1'
-  },
-  {
-    id: '3',
-    title: 'Cobertura Duplex Moema',
-    description: 'Cobertura com terraço e churrasqueira',
-    address: 'Av. Ibirapuera, 789 - Moema, São Paulo',
-    price: 2500000,
-    type: 'Cobertura',
-    status: 'Vendido',
-    created_at: '2024-01-03T00:00:00Z',
-    user_id: '1'
-  }
-];
+interface Property {
+  id: string
+  title: string
+  description: string
+  price: number
+  type: string
+  status: string
+  address: string
+  bedrooms: number
+  bathrooms: number
+  area: number
+  images: string[]
+  typologies: any[]
+  developer_name: string
+  partnership_manager: string
+  created_at: string
+}
 
 export default function PropertiesPage() {
-  const router = useRouter();
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [filteredProperties, setFilteredProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [showAddProperty, setShowAddProperty] = useState(false);
-  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
-  const [propertyForm, setPropertyForm] = useState({
-    title: '',
-    description: '',
-    address: '',
-    price: '',
-    type: '',
-    status: 'Disponível'
-  });
+  const [properties, setProperties] = useState<Property[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [typeFilter, setTypeFilter] = useState("all")
 
   useEffect(() => {
-    // Simular carregamento
-    setTimeout(() => {
-      setProperties(mockProperties);
-      setLoading(false);
-    }, 1000);
-  }, []);
+    fetchProperties()
+  }, [])
 
-  useEffect(() => {
-    filterProperties();
-  }, [properties, searchTerm, typeFilter, statusFilter]);
+  const fetchProperties = async () => {
+    try {
+      const response = await fetch("/api/properties")
+      if (response.ok) {
+        const data = await response.json()
+        setProperties(data)
+      }
+    } catch (error) {
+      console.error("Erro ao carregar propriedades:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const filterProperties = () => {
-    let filtered = properties;
+  const filteredProperties = properties.filter((property) => {
+    const matchesSearch =
+      property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      property.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      property.developer_name?.toLowerCase().includes(searchTerm.toLowerCase())
 
-    if (searchTerm) {
-      filtered = filtered.filter(property =>
-        property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    const matchesStatus = statusFilter === "all" || property.status === statusFilter
+    const matchesType = typeFilter === "all" || property.type === typeFilter
+
+    return matchesSearch && matchesStatus && matchesType
+  })
+
+  const getStatusBadge = (status: string) => {
+    const statusMap = {
+      available: { label: "Disponível", variant: "default" as const },
+      sold: { label: "Vendido", variant: "secondary" as const },
+      reserved: { label: "Reservado", variant: "outline" as const },
+      construction: { label: "Em Construção", variant: "destructive" as const },
     }
 
-    if (typeFilter && typeFilter !== "__clear_type__") {
-      filtered = filtered.filter(property => property.type === typeFilter);
+    const statusInfo = statusMap[status as keyof typeof statusMap] || statusMap.available
+    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+  }
+
+  const getTypeBadge = (type: string) => {
+    const typeMap = {
+      apartamento: "Apartamento",
+      casa: "Casa",
+      cobertura: "Cobertura",
+      terreno: "Terreno",
+      comercial: "Comercial",
+      empreendimento: "Empreendimento",
     }
 
-    if (statusFilter && statusFilter !== "__clear_status__") {
-      filtered = filtered.filter(property => property.status === statusFilter);
-    }
+    return typeMap[type as keyof typeof typeMap] || type
+  }
 
-    setFilteredProperties(filtered);
-  };
-
-  const handleAddProperty = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const property: Property = {
-      id: Date.now().toString(),
-      title: propertyForm.title,
-      description: propertyForm.description,
-      address: propertyForm.address,
-      price: propertyForm.price ? parseFloat(propertyForm.price) : undefined,
-      type: propertyForm.type,
-      status: propertyForm.status as Property['status'],
-      created_at: new Date().toISOString(),
-      user_id: '1'
-    };
-    
-    setProperties(prev => [...prev, property]);
-    resetForm();
-    setShowAddProperty(false);
-  };
-
-  const handleEditProperty = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!editingProperty) return;
-
-    const updatedProperty: Property = {
-      ...editingProperty,
-      title: propertyForm.title,
-      description: propertyForm.description,
-      address: propertyForm.address,
-      price: propertyForm.price ? parseFloat(propertyForm.price) : undefined,
-      type: propertyForm.type,
-      status: propertyForm.status as Property['status']
-    };
-    
-    setProperties(prev => 
-      prev.map(property => 
-        property.id === editingProperty.id ? updatedProperty : property
-      )
-    );
-    resetForm();
-    setEditingProperty(null);
-  };
-
-  const handleDeleteProperty = async (propertyId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este imóvel?')) return;
-    setProperties(prev => prev.filter(property => property.id !== propertyId));
-  };
-
-  const resetForm = () => {
-    setPropertyForm({
-      title: '',
-      description: '',
-      address: '',
-      price: '',
-      type: '',
-      status: 'Disponível'
-    });
-  };
-
-  const openEditDialog = (property: Property) => {
-    setEditingProperty(property);
-    setPropertyForm({
-      title: property.title,
-      description: property.description || '',
-      address: property.address || '',
-      price: property.price?.toString() || '',
-      type: property.type,
-      status: property.status
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    const colors = {
-      'Disponível': 'bg-green-100 text-green-800',
-      'Reservado': 'bg-yellow-100 text-yellow-800',
-      'Vendido': 'bg-red-100 text-red-800'
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(price)
+  }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
+      <div className="container mx-auto py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Propriedades</h1>
+            <p className="text-muted-foreground">Gerencie seu portfólio de imóveis</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <div className="h-48 bg-gray-200 rounded-t-lg"></div>
+              <CardContent className="p-4">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded mb-4"></div>
+                <div className="flex justify-between">
+                  <div className="h-3 bg-gray-200 rounded w-20"></div>
+                  <div className="h-3 bg-gray-200 rounded w-16"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto py-6">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
-          <p className="text-gray-600">Gerencie seu portfólio de imóveis</p>
+          <h1 className="text-3xl font-bold">Propriedades</h1>
+          <p className="text-muted-foreground">Gerencie seu portfólio de imóveis</p>
         </div>
-        
-        <Dialog open={showAddProperty} onOpenChange={setShowAddProperty}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90">
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Imóvel
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Adicionar Novo Imóvel</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleAddProperty} className="space-y-4">
-              <div>
-                <Label htmlFor="title">Título *</Label>
-                <Input
-                  id="title"
-                  value={propertyForm.title}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="Ex: Apartamento 3 quartos no Itaim Bibi"
-                  required
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="description">Descrição</Label>
-                <Textarea
-                  id="description"
-                  value={propertyForm.description}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Descreva as características do imóvel..."
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="address">Endereço</Label>
-                <Input
-                  id="address"
-                  value={propertyForm.address}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="Rua, número, bairro, cidade"
-                />
-              </div>
-              
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="price">Preço (R$)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    value={propertyForm.price}
-                    onChange={(e) => setPropertyForm(prev => ({ ...prev, price: e.target.value }))}
-                    placeholder="850000.00"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="type">Tipo *</Label>
-                  <Select
-                    value={propertyForm.type}
-                    onValueChange={(value) => setPropertyForm(prev => ({ ...prev, type: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROPERTY_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={propertyForm.status}
-                    onValueChange={(value) => setPropertyForm(prev => ({ ...prev, status: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROPERTY_STATUS.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowAddProperty(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90">
-                  Adicionar Imóvel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total de Imóveis</p>
-                <p className="text-2xl font-bold">{properties.length}</p>
-              </div>
-              <Building className="h-8 w-8 text-primary" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Disponíveis</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {properties.filter(p => p.status === 'Disponível').length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                <div className="h-4 w-4 bg-green-600 rounded-full"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Reservados</p>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {properties.filter(p => p.status === 'Reservado').length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                <div className="h-4 w-4 bg-yellow-600 rounded-full"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Vendidos</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {properties.filter(p => p.status === 'Vendido').length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
-                <div className="h-4 w-4 bg-red-600 rounded-full"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/properties/new">
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Imóvel
+          </Button>
+        </Link>
       </div>
 
       {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtros</CardTitle>
-          <CardDescription>
-            Use os filtros abaixo para encontrar imóveis específicos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Buscar por título, endereço ou descrição..."
+                  placeholder="Buscar por título, endereço ou construtora..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
             </div>
-            <div className="w-48">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {typeFilter && (
-                    <SelectItem value="__clear_type__">Todos os tipos</SelectItem>
-                  )}
-                  {PROPERTY_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-48">
+
+            <div className="flex gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por status" />
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusFilter && (
-                    <SelectItem value="__clear_status__">Todos os status</SelectItem>
-                  )}
-                  {PROPERTY_STATUS.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="all">Todos os Status</SelectItem>
+                  <SelectItem value="available">Disponível</SelectItem>
+                  <SelectItem value="sold">Vendido</SelectItem>
+                  <SelectItem value="reserved">Reservado</SelectItem>
+                  <SelectItem value="construction">Em Construção</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Tipos</SelectItem>
+                  <SelectItem value="apartamento">Apartamento</SelectItem>
+                  <SelectItem value="casa">Casa</SelectItem>
+                  <SelectItem value="cobertura">Cobertura</SelectItem>
+                  <SelectItem value="terreno">Terreno</SelectItem>
+                  <SelectItem value="comercial">Comercial</SelectItem>
+                  <SelectItem value="empreendimento">Empreendimento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {(searchTerm || (typeFilter && typeFilter !== "__clear_type__") || (statusFilter && statusFilter !== "__clear_status__")) && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchTerm('');
-                  setTypeFilter('');
-                  setStatusFilter('');
-                }}
-              >
-                Limpar Filtros
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabela de Imóveis */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Lista de Imóveis ({filteredProperties.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Imóvel</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Endereço</TableHead>
-                  <TableHead>Preço</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProperties.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      {searchTerm || typeFilter || statusFilter
-                        ? 'Nenhum imóvel encontrado com os filtros aplicados.'
-                        : 'Nenhum imóvel cadastrado ainda.'
-                      }
-                    </TableCell>
-                  </TableRow>
+      {/* Lista de Propriedades */}
+      {filteredProperties.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="text-muted-foreground">
+              <Filter className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium mb-2">Nenhuma propriedade encontrada</h3>
+              <p>Tente ajustar os filtros ou adicione uma nova propriedade.</p>
+            </div>
+            <Link href="/properties/new" className="mt-4 inline-block">
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Primeira Propriedade
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProperties.map((property) => (
+            <Card key={property.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <div className="relative">
+                {property.images && property.images.length > 0 ? (
+                  <img
+                    src={property.images[0] || "/placeholder.svg"}
+                    alt={property.title}
+                    className="w-full h-48 object-cover"
+                  />
                 ) : (
-                  filteredProperties.map((property) => (
-                    <TableRow 
-                      key={property.id} 
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => router.push(`/property/${property.id}`)}
-                    >
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{property.title}</p>
-                          {property.description && (
-                            <p className="text-sm text-gray-600 truncate max-w-xs">
-                              {property.description}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{property.type}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {property.address ? (
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3 text-gray-400" />
-                            <span className="text-sm truncate max-w-xs">
-                              {property.address}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">Não informado</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {property.price ? (
-                          <div className="flex items-center gap-1">
-                            <DollarSign className="h-3 w-3 text-green-600" />
-                            <span className="text-sm font-medium text-green-600">
-                              R$ {property.price.toLocaleString('pt-BR')}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">A consultar</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(property.status)}>
-                          {property.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/property/${property.id}`);
-                            }}
-                            title="Ver detalhes"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditDialog(property);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteProperty(property.id);
-                            }}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                    <span className="text-gray-400">Sem imagem</span>
+                  </div>
                 )}
-              </TableBody>
-            </Table>
+                <div className="absolute top-2 right-2">{getStatusBadge(property.status)}</div>
+              </div>
+
+              <CardContent className="p-4">
+                <div className="mb-2">
+                  <h3 className="font-semibold text-lg truncate">{property.title}</h3>
+                  <Badge variant="outline" className="text-xs">
+                    {getTypeBadge(property.type)}
+                  </Badge>
+                </div>
+
+                {property.address && (
+                  <div className="flex items-center text-sm text-muted-foreground mb-2">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    <span className="truncate">{property.address}</span>
+                  </div>
+                )}
+
+                {property.developer_name && (
+                  <div className="text-sm text-muted-foreground mb-3">
+                    <strong>Construtora:</strong> {property.developer_name}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
+                  <div className="flex items-center gap-3">
+                    {property.bedrooms > 0 && (
+                      <div className="flex items-center">
+                        <Bed className="h-3 w-3 mr-1" />
+                        {property.bedrooms}
+                      </div>
+                    )}
+                    {property.bathrooms > 0 && (
+                      <div className="flex items-center">
+                        <Bath className="h-3 w-3 mr-1" />
+                        {property.bathrooms}
+                      </div>
+                    )}
+                    {property.area > 0 && (
+                      <div className="flex items-center">
+                        <Square className="h-3 w-3 mr-1" />
+                        {property.area}m²
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {property.typologies && property.typologies.length > 0 && (
+                  <div className="mb-3">
+                    <div className="text-sm font-medium mb-1">Tipologias:</div>
+                    <div className="text-sm text-muted-foreground">
+                      {property.typologies.map((typ: any, index: number) => (
+                        <div key={index} className="flex justify-between">
+                          <span>{typ.name}</span>
+                          <span>{formatPrice(typ.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <Link href={`/properties/${property.id}`}>
+                    <Button variant="outline" size="sm">
+                      Ver Detalhes
+                    </Button>
+                  </Link>
+
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(property.created_at).toLocaleDateString("pt-BR")}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Estatísticas */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <div className="text-2xl font-bold">{properties.length}</div>
+              <div className="text-sm text-muted-foreground">Total</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-green-600">
+                {properties.filter((p) => p.status === "available").length}
+              </div>
+              <div className="text-sm text-muted-foreground">Disponíveis</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-blue-600">
+                {properties.filter((p) => p.status === "reserved").length}
+              </div>
+              <div className="text-sm text-muted-foreground">Reservados</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-gray-600">
+                {properties.filter((p) => p.status === "sold").length}
+              </div>
+              <div className="text-sm text-muted-foreground">Vendidos</div>
+            </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Modal de Edição */}
-      <Dialog open={!!editingProperty} onOpenChange={() => setEditingProperty(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Editar Imóvel</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleEditProperty} className="space-y-4">
-            <div>
-              <Label htmlFor="edit_title">Título *</Label>
-              <Input
-                id="edit_title"
-                value={propertyForm.title}
-                onChange={(e) => setPropertyForm(prev => ({ ...prev, title: e.target.value }))}
-                required
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="edit_description">Descrição</Label>
-              <Textarea
-                id="edit_description"
-                value={propertyForm.description}
-                onChange={(e) => setPropertyForm(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Descreva as características do imóvel..."
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="edit_address">Endereço</Label>
-              <Input
-                id="edit_address"
-                value={propertyForm.address}
-                onChange={(e) => setPropertyForm(prev => ({ ...prev, address: e.target.value }))}
-                placeholder="Rua, número, bairro, cidade"
-              />
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="edit_price">Preço (R$)</Label>
-                <Input
-                  id="edit_price"
-                  type="number"
-                  step="0.01"
-                  value={propertyForm.price}
-                  onChange={(e) => setPropertyForm(prev => ({ ...prev, price: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit_type">Tipo *</Label>
-                <Select
-                  value={propertyForm.type}
-                  onValueChange={(value) => setPropertyForm(prev => ({ ...prev, type: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROPERTY_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edit_status">Status</Label>
-                <Select
-                  value={propertyForm.status}
-                  onValueChange={(value) => setPropertyForm(prev => ({ ...prev, status: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROPERTY_STATUS.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditingProperty(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
-                Salvar Alterações
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
-  );
+  )
 }

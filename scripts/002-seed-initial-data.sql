@@ -1,50 +1,107 @@
--- Insert admin user
-INSERT INTO users (name, email, password, role, created_at, updated_at) 
+-- Inserir usuário administrador padrão
+-- Senha: admin123 (hash bcrypt)
+INSERT INTO users (name, email, password_hash, role) 
 VALUES (
-  'Gustavo Pizani',
-  'pizani@realsales.com.br',
-  '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9S2', -- RealSales2024!
-  'admin',
-  NOW(),
-  NOW()
+    'Administrador', 
+    'admin@realsales.com', 
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', 
+    'admin'
 ) ON CONFLICT (email) DO NOTHING;
 
--- Insert default lost reasons
-INSERT INTO lost_reasons (reason, active, created_at) VALUES
-  ('Preço muito alto', true, NOW()),
-  ('Não gostou do imóvel', true, NOW()),
-  ('Mudou de ideia', true, NOW()),
-  ('Comprou com outro corretor', true, NOW()),
-  ('Não conseguiu financiamento', true, NOW()),
-  ('Problemas pessoais', true, NOW()),
-  ('Localização não atende', true, NOW()),
-  ('Outro', true, NOW())
+-- Inserir usuário corretor
+INSERT INTO users (name, email, password_hash, role) 
+VALUES (
+    'João Corretor', 
+    'joao@realsales.com', 
+    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm', 
+    'user'
+) ON CONFLICT (email) DO NOTHING;
+
+-- Inserir alguns clientes de exemplo
+INSERT INTO clients (name, email, phone, status) VALUES
+    ('João Silva', 'joao.silva@email.com', '(11) 99999-1111', 'active'),
+    ('Maria Santos', 'maria.santos@email.com', '(11) 99999-2222', 'active'),
+    ('Pedro Oliveira', 'pedro.oliveira@email.com', '(11) 99999-3333', 'inactive'),
+    ('Ana Costa', 'ana.costa@email.com', '(11) 99999-4444', 'active'),
+    ('Carlos Ferreira', 'carlos.ferreira@email.com', '(11) 99999-5555', 'active')
+ON CONFLICT (email) DO NOTHING;
+
+-- Inserir algumas propriedades de exemplo
+INSERT INTO properties (title, description, price, type, status, address, bedrooms, bathrooms, area) VALUES
+    ('Apartamento Moderno Centro', 'Lindo apartamento no centro da cidade com 2 quartos', 350000.00, 'apartamento', 'available', 'Rua das Flores, 123 - Centro, São Paulo', 2, 1, 65.5),
+    ('Casa Espaçosa Jardins', 'Casa térrea com quintal amplo nos Jardins', 480000.00, 'casa', 'available', 'Av. Principal, 456 - Jardins, São Paulo', 3, 2, 120.0),
+    ('Cobertura Luxo Moema', 'Cobertura duplex com vista panorâmica', 950000.00, 'cobertura', 'sold', 'Rua Nobre, 789 - Moema, São Paulo', 4, 3, 180.0),
+    ('Apartamento Compacto Vila Madalena', 'Apartamento studio moderno e funcional', 280000.00, 'apartamento', 'available', 'Rua Harmonia, 321 - Vila Madalena, São Paulo', 1, 1, 35.0),
+    ('Casa Familiar Perdizes', 'Casa de 3 quartos ideal para família', 650000.00, 'casa', 'available', 'Rua Monte Alegre, 654 - Perdizes, São Paulo', 3, 2, 140.0)
 ON CONFLICT DO NOTHING;
 
--- Insert sample properties
-INSERT INTO properties (id, name, type, status, price, location, description, features, images, created_at, updated_at) VALUES
-('prop_001', 'Residencial Vista Verde', 'apartment', 'available', 450000.00, 'Bairro Jardim das Flores, São Paulo - SP', 'Apartamento moderno com 3 quartos, 2 banheiros e varanda gourmet. Localizado em condomínio com área de lazer completa.', ARRAY['3 quartos', '2 banheiros', 'Varanda gourmet', 'Piscina', 'Academia', 'Playground'], ARRAY['/placeholder.jpg'], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('prop_002', 'Casa Moderna Alphaville', 'house', 'available', 850000.00, 'Alphaville, Barueri - SP', 'Casa térrea com 4 suítes, piscina e churrasqueira. Condomínio fechado com segurança 24h.', ARRAY['4 suítes', 'Piscina', 'Churrasqueira', 'Garagem para 4 carros', 'Jardim', 'Segurança 24h'], ARRAY['/placeholder.jpg'], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('prop_003', 'Loft Centro Histórico', 'apartment', 'sold', 320000.00, 'Centro Histórico, São Paulo - SP', 'Loft reformado no centro histórico, próximo ao metrô e principais atrações da cidade.', ARRAY['1 quarto', '1 banheiro', 'Cozinha americana', 'Próximo ao metrô', 'Centro histórico'], ARRAY['/placeholder.jpg'], CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('prop_004', 'Casa Residencial Premium', 'house', 'available', 750000.00, 'Condomínio Alphaville, Barueri - SP', 'Casa em condomínio fechado com segurança 24h', ARRAY['3 quartos', '2 banheiros', '2 vagas', 'Quintal', 'Churrasqueira'], ARRAY['/placeholder.jpg'], NOW(), NOW())
-ON CONFLICT DO NOTHING;
+-- Inserir algumas tarefas de exemplo (usando subquery para pegar IDs dos usuários e clientes)
+INSERT INTO tasks (title, description, status, priority, due_date, client_id, assigned_to, created_by)
+SELECT 
+    'Ligar para ' || c.name,
+    'Fazer contato inicial com o cliente ' || c.name,
+    'pending',
+    'high',
+    CURRENT_TIMESTAMP + INTERVAL '1 day',
+    c.id,
+    u.id,
+    u.id
+FROM clients c, users u 
+WHERE c.email = 'joao.silva@email.com' AND u.email = 'admin@realsales.com'
+LIMIT 1;
 
--- Insert sample clients
-INSERT INTO clients (id, name, email, phone, status, source, assigned_to, notes, created_at, updated_at) VALUES
-('client_001', 'Maria Silva Santos', 'maria.silva@email.com', '(11) 99999-1234', 'prospect', 'website', 'user_admin_001', 'Interessada em apartamento de 3 quartos na zona sul', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('client_002', 'João Pedro Oliveira', 'joao.pedro@email.com', '(11) 98888-5678', 'client', 'referral', 'user_admin_001', 'Cliente fechou compra do apartamento Vista Verde', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('client_003', 'Ana Carolina Lima', 'ana.lima@email.com', '(11) 97777-9012', 'lead', 'facebook_ads', 'user_admin_001', 'Lead gerado via Facebook Ads - campanha apartamentos', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('client_004', 'Maria Silva', 'maria.silva@email.com', '(11) 99999-1234', 'prospect', 'website', 1, 'Interessada em apartamento de 2 quartos', NOW(), NOW()),
-('client_005', 'João Santos', 'joao.santos@email.com', '(11) 88888-5678', 'client', 'referral', 1, 'Cliente já fechou negócio anteriormente', NOW(), NOW())
-ON CONFLICT DO NOTHING;
+INSERT INTO tasks (title, description, status, priority, due_date, client_id, assigned_to, created_by)
+SELECT 
+    'Enviar proposta para ' || c.name,
+    'Preparar e enviar proposta comercial personalizada',
+    'in_progress',
+    'medium',
+    CURRENT_TIMESTAMP + INTERVAL '3 days',
+    c.id,
+    u.id,
+    u.id
+FROM clients c, users u 
+WHERE c.email = 'maria.santos@email.com' AND u.email = 'admin@realsales.com'
+LIMIT 1;
 
--- Insert sample leads
-INSERT INTO leads (id, name, email, phone, source, status, interest, budget, assigned_to, created_at, updated_at) VALUES
-('lead_001', 'Carlos Eduardo Santos', 'carlos.santos@email.com', '(11) 96666-3456', 'google_ads', 'new', 'Apartamento 2 quartos', 400000.00, 'user_admin_001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('lead_002', 'Fernanda Costa', 'fernanda.costa@email.com', '(11) 95555-7890', 'website', 'contacted', 'Casa com piscina', 600000.00, 'user_admin_001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO tasks (title, description, status, priority, due_date, client_id, assigned_to, created_by)
+SELECT 
+    'Agendar visita com ' || c.name,
+    'Agendar visita aos imóveis selecionados',
+    'pending',
+    'high',
+    CURRENT_TIMESTAMP + INTERVAL '2 days',
+    c.id,
+    u.id,
+    u.id
+FROM clients c, users u 
+WHERE c.email = 'ana.costa@email.com' AND u.email = 'admin@realsales.com'
+LIMIT 1;
 
--- Insert sample tasks
-INSERT INTO tasks (id, title, description, status, priority, assigned_to, client_id, due_date, created_at, updated_at) VALUES
-('task_001', 'Ligar para Maria Silva', 'Retornar ligação sobre apartamento de 3 quartos', 'pending', 'high', 'user_admin_001', 'client_001', CURRENT_TIMESTAMP + INTERVAL '1 day', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('task_002', 'Agendar visita - João Pedro', 'Agendar visita ao apartamento Vista Verde', 'completed', 'medium', 'user_admin_001', 'client_002', CURRENT_TIMESTAMP - INTERVAL '2 days', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('task_003', 'Follow-up Ana Carolina', 'Fazer follow-up do lead gerado via Facebook', 'in_progress', 'medium', 'user_admin_001', 'client_003', CURRENT_TIMESTAMP + INTERVAL '3 days', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- Inserir algumas notas de exemplo
+INSERT INTO client_notes (client_id, user_id, note)
+SELECT 
+    c.id,
+    u.id,
+    'Cliente muito interessado em apartamentos na região central. Orçamento até R$ 400.000.'
+FROM clients c, users u 
+WHERE c.email = 'joao.silva@email.com' AND u.email = 'admin@realsales.com'
+LIMIT 1;
+
+INSERT INTO client_notes (client_id, user_id, note)
+SELECT 
+    c.id,
+    u.id,
+    'Procura casa com quintal para os filhos. Preferência por bairros familiares.'
+FROM clients c, users u 
+WHERE c.email = 'maria.santos@email.com' AND u.email = 'admin@realsales.com'
+LIMIT 1;
+
+INSERT INTO client_notes (client_id, user_id, note)
+SELECT 
+    c.id,
+    u.id,
+    'Investidora experiente. Interessada em imóveis para locação.'
+FROM clients c, users u 
+WHERE c.email = 'ana.costa@email.com' AND u.email = 'admin@realsales.com'
+LIMIT 1;
