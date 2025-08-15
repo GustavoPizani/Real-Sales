@@ -1,23 +1,35 @@
 import { neon } from "@neondatabase/serverless"
 
-// Função que só executa em runtime, nunca durante build
-export async function createDbConnection() {
-  const databaseUrl = process.env.DATABASE_URL || process.env.STORAGE_URL
+let sql: any = null
 
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL or STORAGE_URL environment variable is required")
+function getDb() {
+  if (!sql) {
+    const databaseUrl = process.env.DATABASE_URL
+    if (!databaseUrl) {
+      throw new Error("DATABASE_URL is not defined")
+    }
+    sql = neon(databaseUrl)
   }
-
-  return neon(databaseUrl)
+  return sql
 }
 
-// Helper para executar queries de forma segura
-export async function executeQuery(queryFn: (sql: any) => Promise<any>) {
+export async function executeQuery(query: string, params: any[] = []): Promise<any[]> {
   try {
-    const sql = await createDbConnection()
-    return await queryFn(sql)
+    const db = getDb()
+    const result = await db(query, params)
+    return result
   } catch (error) {
     console.error("Database query error:", error)
     throw error
+  }
+}
+
+export async function testConnection(): Promise<boolean> {
+  try {
+    const result = await executeQuery("SELECT 1 as test")
+    return result.length > 0
+  } catch (error) {
+    console.error("Database connection test failed:", error)
+    return false
   }
 }

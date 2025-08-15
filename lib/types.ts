@@ -65,6 +65,13 @@ export interface Lead {
   updated_at: string
 }
 
+export interface LostReason {
+  id: string
+  reason: string
+  active: boolean
+  created_at: string
+}
+
 export interface AuthUser {
   id: string
   name: string
@@ -83,3 +90,48 @@ export interface ApiResponse<T = any> {
   error?: string
   message?: string
 }
+
+// Constants
+export const FUNNEL_STAGES = ["Contato", "Diagnóstico", "Agendado", "Visitado", "Proposta", "Contrato"] as const
+
+export const PROPERTY_TYPES = ["Apartamento", "Casa", "Cobertura", "Terreno", "Comercial"] as const
+
+export const PROPERTY_STATUS = ["Disponível", "Reservado", "Vendido"] as const
+
+export const USER_ROLES = ["admin", "diretor", "gerente", "corretor"] as const
+
+export const USER_ROLE_LABELS = {
+  admin: "Administrador",
+  diretor: "Diretor",
+  gerente: "Gerente",
+  corretor: "Corretor",
+} as const
+
+export const TASK_TYPES = ["call", "visit", "follow_up", "meeting", "other"] as const
+
+export const TASK_TYPE_LABELS = {
+  call: "Ligação",
+  visit: "Visita",
+  follow_up: "Follow-up",
+  meeting: "Reunião",
+  other: "Outro",
+} as const
+
+export const TASK_PRIORITIES = ["low", "medium", "high"] as const
+
+export const TASK_PRIORITY_LABELS = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+} as const
+
+export const DEFAULT_LOST_REASONS = [
+  "Preço muito alto",
+  "Não gostou do imóvel",
+  "Mudou de ideia",
+  "Comprou com outro corretor",
+  "Não conseguiu financiamento",
+  "Problemas pessoais",
+  "Localização não atende",
+  "Outro",
+] as const

@@ -40,40 +40,18 @@ export function verifyToken(token: string): AuthUser | null {
   }
 }
 
-export async function authenticateUser(email: string, password: string): Promise<User | null> {
+export async function getUserFromToken(request: Request): Promise<AuthUser | null> {
   try {
-    const result = await executeQuery(async (sql) => {
-      return await sql`
-        SELECT id, name, email, password, role, created_at, updated_at
-        FROM users 
-        WHERE email = ${email} AND active = true
-      `
-    })
-
-    if (!result || result.length === 0) {
-      return null
-    }
-
-    const user = result[0]
-    const isValidPassword = await verifyPassword(password, user.password)
-
-    if (!isValidPassword) {
-      return null
-    }
-
-    // Remove password from returned user object
-    const { password: _, ...userWithoutPassword } = user
-    return userWithoutPassword as User
-  } catch (error) {
-    console.error("Authentication error:", error)
-    return null
-  }
-}
-
-export async function getCurrentUser(): Promise<AuthUser | null> {
-  try {
+    const authHeader = request.headers.get("authorization")
     const cookieStore = cookies()
-    const token = cookieStore.get("auth-token")?.value
+
+    let token: string | null = null
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7)
+    } else {
+      token = cookieStore.get("auth-token")?.value || null
+    }
 
     if (!token) {
       return null
@@ -81,7 +59,60 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     return verifyToken(token)
   } catch (error) {
-    console.error("Get current user error:", error)
+    console.error("Error getting user from token:", error)
+    return null
+  }
+}
+
+export async function authenticateUser(email: string, password: string): Promise<User | null> {
+  try {
+    const users = await executeQuery("SELECT * FROM users WHERE email = $1", [email])
+
+    if (users.length === 0) {
+      return null
+    }
+
+    const user = users[0]
+    const isValid = await verifyPassword(password, user.password)
+
+    if (!isValid) {
+      return null
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+    }
+  } catch (error) {
+    console.error("Authentication error:", error)
+    return null
+  }
+}
+
+export async function createUser(userData: {
+  name: string
+  email: string
+  password: string
+  role: string
+}): Promise<User | null> {
+  try {
+    const hashedPassword = await hashPassword(userData.password)
+
+    const result = await executeQuery(
+      `INSERT INTO users (name, email, password, role, created_at, updated_at) 
+       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
+       RETURNING id, name, email, role, created_at, updated_at`,
+      [userData.name, userData.email, hashedPassword, userData.role],
+    )
+
+    return result[0] || null
+  } catch (error) {
+    console.error("Error creating user:", error)
     return null
   }
 }
