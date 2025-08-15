@@ -2,52 +2,62 @@ export interface User {
   id: string
   name: string
   email: string
-  role: "admin" | "agent" | "manager"
+  role: "admin" | "diretor" | "gerente" | "corretor"
   avatar?: string
+  manager_id?: string
   created_at: string
-  updated_at: string
+  updated_at?: string
 }
 
 export interface Client {
   id: string
-  name: string
-  email: string
-  phone: string
-  status: "lead" | "prospect" | "client" | "inactive"
-  source: string
-  assigned_to: string
+  full_name: string
+  phone?: string
+  email?: string
+  funnel_status: "Contato" | "Diagnóstico" | "Agendado" | "Visitado" | "Proposta" | "Contrato"
+  notes?: string
   created_at: string
   updated_at: string
-  notes?: string
-  tags?: string[]
+  user_id: string
+  property_title?: string
+  property_address?: string
+  property_price?: number
+  assigned_user?: User
+  status?: "active" | "won" | "lost"
+  won_details?: ClientWonDetails[]
+  lost_reason?: string
+  property_of_interest_id?: string
 }
 
 export interface Property {
   id: string
-  name: string
-  type: "apartment" | "house" | "commercial" | "land"
-  status: "available" | "sold" | "reserved" | "construction"
-  price: number
-  location: string
-  description: string
-  features: string[]
-  images: string[]
+  title: string
+  description?: string
+  address?: string
+  price?: number
+  type: string
+  status: "Disponível" | "Reservado" | "Vendido"
   created_at: string
-  updated_at: string
+  updated_at?: string
+  user_id: string
 }
 
 export interface Task {
   id: string
   title: string
-  description: string
-  status: "pending" | "in_progress" | "completed" | "cancelled"
-  priority: "low" | "medium" | "high" | "urgent"
-  assigned_to: string
+  description?: string
+  status: "pending" | "completed"
+  priority: "low" | "medium" | "high"
+  due_date: string
+  due_time: string
+  type: "call" | "visit" | "follow_up" | "meeting" | "other"
   client_id?: string
   property_id?: string
-  due_date: string
+  user_id: string
+  client_name?: string
+  property_title?: string
   created_at: string
-  updated_at: string
+  updated_at?: string
 }
 
 export interface Lead {
@@ -135,3 +145,36 @@ export const DEFAULT_LOST_REASONS = [
   "Localização não atende",
   "Outro",
 ] as const
+
+// Adicionar estas interfaces no início do arquivo
+export interface ClientNote {
+  id: string
+  client_id: string
+  user_id: string
+  note: string
+  created_at: string
+  user_name: string
+}
+
+export interface ClientWonDetails {
+  id: string
+  client_id: string
+  property_id: string
+  property_title: string
+  sale_value: number
+  sale_date: string
+  created_at: string
+}
+
+export interface CreateTaskData {
+  title: string
+  description?: string
+  due_date: string
+  due_time: string
+  priority: "low" | "medium" | "high"
+  type: "call" | "visit" | "follow_up" | "meeting" | "other"
+  client_id?: string
+  property_id?: string
+  user_id: string
+  client_name?: string
+}

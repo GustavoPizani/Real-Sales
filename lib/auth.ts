@@ -66,7 +66,9 @@ export async function getUserFromToken(request: Request): Promise<AuthUser | nul
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   try {
-    const users = await executeQuery("SELECT * FROM users WHERE email = $1", [email])
+    const users = await executeQuery(async (sql) => {
+      return await sql`SELECT * FROM users WHERE email = ${email}`
+    })
 
     if (users.length === 0) {
       return null
@@ -103,12 +105,13 @@ export async function createUser(userData: {
   try {
     const hashedPassword = await hashPassword(userData.password)
 
-    const result = await executeQuery(
-      `INSERT INTO users (name, email, password, role, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
-       RETURNING id, name, email, role, created_at, updated_at`,
-      [userData.name, userData.email, hashedPassword, userData.role],
-    )
+    const result = await executeQuery(async (sql) => {
+      return await sql`
+        INSERT INTO users (name, email, password, role, created_at, updated_at) 
+        VALUES (${userData.name}, ${userData.email}, ${hashedPassword}, ${userData.role}, NOW(), NOW()) 
+        RETURNING id, name, email, role, created_at, updated_at
+      `
+    })
 
     return result[0] || null
   } catch (error) {
