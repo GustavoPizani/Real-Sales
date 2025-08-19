@@ -1,3 +1,7 @@
+// app/lib/types.ts
+
+// --- INTERFACES DE DADOS ---
+
 export interface User {
   id: string
   name: string
@@ -109,6 +113,8 @@ export interface LostReason {
   created_at: string
 }
 
+// --- INTERFACES DE FORMULÁRIO/API ---
+
 export interface LoginCredentials {
   email: string
   password: string
@@ -158,6 +164,9 @@ export interface CreateTaskData {
   user_id?: string
 }
 
+
+// --- CONSTANTES E ENUMS ---
+
 export const FUNNEL_STAGES = ["Contato", "Diagnóstico", "Agendado", "Visitado", "Proposta", "Contrato"] as const
 
 export const PROPERTY_TYPES = ["Apartamento", "Casa", "Cobertura", "Terreno", "Comercial"] as const
@@ -202,7 +211,9 @@ export const DEFAULT_LOST_REASONS = [
   "Outro",
 ] as const
 
-// Hierarquia de permissões
+
+// --- PERMISSÕES E HIERARQUIA ---
+
 export const ROLE_HIERARCHY = {
   marketing_adm: 4,
   diretor: 3,
