@@ -1,44 +1,51 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+// app/api/dashboard/stats/route.ts
 
-export async function GET(request: NextRequest) {
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
+import { startOfMonth, endOfMonth } from 'date-fns'
+
+export async function GET() {
   try {
-    // Get total clients
-    const clientsResult = await query("SELECT COUNT(*) as count FROM clients")
-    const totalClients = clientsResult[0]?.count || 0
+    const now = new Date();
+    const startDate = startOfMonth(now);
+    const endDate = endOfMonth(now);
 
-    // Get total properties
-    const propertiesResult = await query("SELECT COUNT(*) as count FROM properties")
-    const totalProperties = propertiesResult[0]?.count || 0
+    // Total de Clientes Ativos
+    const activeClients = await prisma.cliente.count({
+      where: {
+        status: {
+          notIn: ['Ganho', 'Perdido'],
+        },
+      },
+    });
 
-    // Get total tasks
-    const tasksResult = await query("SELECT COUNT(*) as count FROM tasks WHERE status != ?", ["completed"])
-    const totalTasks = tasksResult[0]?.count || 0
+    // Total de Imóveis Ativos
+    const totalProperties = await prisma.imovel.count({
+      where: {
+        status: {
+          in: ['Disponivel', 'Reservado'], // Note que o Enum usa 'Disponivel'
+        },
+      },
+    });
 
-    // Get completed tasks
-    const completedTasksResult = await query("SELECT COUNT(*) as count FROM tasks WHERE status = ?", ["completed"])
-    const completedTasks = completedTasksResult[0]?.count || 0
+    // Total de Clientes (geral)
+    const totalClients = await prisma.cliente.count();
 
-    // Get active clients (not in final status)
-    const activeClientsResult = await query("SELECT COUNT(*) as count FROM clients WHERE funnel_status NOT IN (?, ?)", [
-      "Contrato",
-      "Cancelado",
-    ])
-    const activeClients = activeClientsResult[0]?.count || 0
-
-    // Calculate conversion rate
-    const conversionRate = totalClients > 0 ? Math.round((activeClients / totalClients) * 100) : 0
+    // Taxa de Conversão (simples, pode ser aprimorada)
+    const conversionRate = totalClients > 0 ? (await prisma.cliente.count({ where: { status: 'Ganho' } }) / totalClients) * 100 : 0;
 
     return NextResponse.json({
       totalClients,
-      totalProperties,
-      totalTasks,
-      completedTasks,
       activeClients,
-      conversionRate,
-    })
+      totalProperties,
+      conversionRate: parseFloat(conversionRate.toFixed(2)),
+    });
+
   } catch (error) {
-    console.error("Error fetching dashboard stats:", error)
-    return NextResponse.json({ error: "Failed to fetch dashboard stats" }, { status: 500 })
+    console.error('Erro ao buscar estatísticas do dashboard:', error);
+    return NextResponse.json(
+      { error: 'Erro interno do servidor ao buscar estatísticas.' },
+      { status: 500 }
+    );
   }
 }

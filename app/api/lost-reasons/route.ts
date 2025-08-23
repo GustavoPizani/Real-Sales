@@ -1,25 +1,26 @@
-// app/api/lost-reasons/route.ts
-
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
-    // Busca todos os motivos de perda no banco de dados
-    const reasons = await prisma.lostReason.findMany({
-      orderBy: {
-        created_at: 'desc',
-      },
-    });
+    const reasons = await prisma.lostReason.findMany({ orderBy: { created_at: 'asc' } });
     return NextResponse.json({ reasons });
   } catch (error) {
-    console.error('Erro ao buscar motivos de perda:', error);
-    return NextResponse.json(
-      { error: 'Erro interno do servidor.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }
 
-// Você pode adicionar aqui as funções POST, PATCH, DELETE no futuro
-// para criar, editar e deletar motivos pelo formulário.
+export async function POST(request: Request) {
+  try {
+    const { reason } = await request.json();
+    if (!reason) {
+      return NextResponse.json({ error: 'Descrição do motivo é obrigatória' }, { status: 400 });
+    }
+    const newReason = await prisma.lostReason.create({
+      data: { reason },
+    });
+    return NextResponse.json(newReason, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+  }
+}

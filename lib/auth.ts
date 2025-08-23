@@ -1,11 +1,10 @@
-// app/lib/auth.ts
+// lib/auth.ts
 
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import prisma from '@/lib/prisma' // Importa a instância única do Prisma
+import prisma from '@/lib/prisma'
 import { NextRequest } from 'next/server'
 
-// A interface pode vir do seu types.ts ou ser definida aqui
 export interface User {
   id: string
   name: string
@@ -38,47 +37,60 @@ export function generateToken(user: User): string {
 
 export async function verifyToken(token: string): Promise<User | null> {
   if (!process.env.JWT_SECRET) {
-    console.error('A variável de ambiente JWT_SECRET não está definida.')
+    console.error('[AUTH] ERRO: A variável de ambiente JWT_SECRET não está definida no backend.')
     return null
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET) as any
-
-    // Usando Prisma para buscar o usuário de forma segura
-    const user = await prisma.usuario.findUnique({
+    const decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
+    
+    const userFromDb = await prisma.usuario.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, name: true, email: true, role: true },
-    })
+      select: { id: true, nome: true, email: true, role: true }, // Busca o campo 'nome'
+    });
 
-    return user
-  } catch {
+    if (!userFromDb) {
+      console.log(`[AUTH] Token decodificado com sucesso para userId ${decoded.userId}, mas usuário não foi encontrado no banco.`);
+      return null;
+    }
+
+    // CORREÇÃO AQUI: Mapeia 'nome' do banco para 'name' no objeto final
+    const user: User = {
+        id: userFromDb.id,
+        name: userFromDb.nome,
+        email: userFromDb.email,
+        role: userFromDb.role
+    };
+
+    return user;
+
+  } catch (error: any) {
+    console.error('[AUTH] ERRO ao verificar o token JWT:', error.message);
     return null
   }
 }
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   try {
-    // Usando Prisma para buscar o usuário pelo email
-    const user = await prisma.usuario.findUnique({
+    const userFromDb = await prisma.usuario.findUnique({
       where: { email },
     })
 
-    if (!user || !user.passwordHash) {
-      return null // Usuário não encontrado ou não tem senha
+    if (!userFromDb || !userFromDb.passwordHash) {
+      return null
     }
 
-    const isValidPassword = await verifyPassword(password, user.passwordHash)
+    const isValidPassword = await verifyPassword(password, userFromDb.passwordHash)
 
     if (!isValidPassword) {
       return null
     }
 
-    // Retorna o usuário sem a senha
+    // CORREÇÃO AQUI: Mapeia 'nome' do banco para 'name' no objeto final
     return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      id: userFromDb.id,
+      name: userFromDb.nome,
+      email: userFromDb.email,
+      role: userFromDb.role,
     }
   } catch (error) {
     console.error('Authentication error:', error)
@@ -86,7 +98,6 @@ export async function authenticateUser(email: string, password: string): Promise
   }
 }
 
-// Esta é a função que estava faltando no seu deploy!
 export async function getUserFromToken(request: NextRequest): Promise<User | null> {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {

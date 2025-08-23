@@ -33,51 +33,51 @@ import {
   AlertCircle,
 } from "lucide-react"
 
-interface Client {
-  id: number
-  name: string
-  email: string
-  phone: string
-  budget: string
-  preferences: string
-  status: string
-  assigned_to: string
-  manager_id?: number
-  director_id?: number
-  created_at: string
-  notes?: Array<{
-    id: number
-    content: string
-    created_at: string
-    created_by: string
-  }>
+interface Note {
+  id: string
+  content: string
+  createdAt: string
+  createdBy: string
 }
 
-interface Property {
-  id: number
-  title: string
-  type: string
-  price: number
-  location: string
-  bedrooms: number
-  bathrooms: number
-  area: number
-  description: string
-  status: string
+interface Client {
+  id: string
+  nomeCompleto: string
+  email: string | null
+  telefone: string | null
+  budget: number | null
+  preferences: string | null
+  currentFunnelStage: string
+  corretorId: string
+  corretor: StaffUser
+  imovelDeInteresseId: string | null
+  createdAt: string
+  notas: Note[]
 }
 
 interface Task {
-  id: number
+  id: string
   title: string
-  description: string
-  due_date: string
-  status: string
-  priority: string
-  assigned_to: string
+  descricao: string | null
+  dataHora: string
+  concluida: boolean
+  // priority: string; // Campo não existe no schema
+}
+
+interface Property {
+  id: string
+  titulo: string
+  tipo: string | null
+  preco: number | null
+  endereco: string | null
+  quartos: number | null
+  banheiros: number | null
+  area: number | null
+  descricao: string | null
 }
 
 interface StaffUser {
-  id: number
+  id: string
   name: string
   role: string
 }
@@ -103,10 +103,10 @@ export default function ClientDetail() {
   const [editClientData, setEditClientData] = useState({
     name: "",
     email: "",
-    phone: "",
-    budget: "",
+    phone: "", // Corresponde a 'telefone'
+    budget: "", // Corresponde a 'budget' (Float)
     preferences: "",
-    status: "",
+    status: "", // Corresponde a 'currentFunnelStage'
   })
 
   const [editPropertyData, setEditPropertyData] = useState({
@@ -121,9 +121,9 @@ export default function ClientDetail() {
   })
 
   const [assignData, setAssignData] = useState({
-    assigned_to: "",
-    manager_id: "",
-    director_id: "",
+    assigned_to: "", // corretorId
+    manager_id: "", // Não é editável diretamente aqui
+    director_id: "", // Não é editável diretamente aqui
   })
 
   const [newNote, setNewNote] = useState("")
@@ -131,9 +131,8 @@ export default function ClientDetail() {
   useEffect(() => {
     if (params.id) {
       fetchClientData()
-      fetchUsers()
     }
-  }, [params.id])
+  }, [params.id]) // Removido fetchUsers daqui para evitar chamadas desnecessárias
 
   const fetchClientData = async () => {
     try {
@@ -150,31 +149,28 @@ export default function ClientDetail() {
       }
 
       const data = await response.json()
+      console.log("Client data from API:", data)
       setClient(data.client)
+      setInterestedProperty(data.interestedProperty)
+      setClientTasks(data.clientTasks || [])
+      fetchUsers() // Fetch users after we know we need them
 
       // Set edit form data
       setEditClientData({
-        name: data.client.name || "",
+        name: data.client.nomeCompleto || "",
         email: data.client.email || "",
-        phone: data.client.phone || "",
-        budget: data.client.budget || "",
+        phone: data.client.telefone || "",
+        budget: data.client.budget?.toString() || "",
         preferences: data.client.preferences || "",
-        status: data.client.status || "",
+        status: data.client.currentFunnelStage || "",
       })
 
       setAssignData({
-        assigned_to: data.client.assigned_to || "",
-        manager_id: data.client.manager_id?.toString() || "",
-        director_id: data.client.director_id?.toString() || "",
+        assigned_to: data.client.corretorId || "",
+        manager_id: data.client.corretor?.superior?.id?.toString() || "",
+        director_id: "", // Lógica de diretor precisa ser definida
       })
 
-      // Fetch interested property if exists
-      if (data.client.interested_property_id) {
-        fetchInterestedProperty(data.client.interested_property_id)
-      }
-
-      // Fetch client tasks
-      fetchClientTasks()
     } catch (error) {
       console.error("Error fetching client:", error)
       setError("Erro ao carregar dados do cliente")
@@ -183,46 +179,12 @@ export default function ClientDetail() {
     }
   }
 
-  const fetchInterestedProperty = async (propertyId: number) => {
-    try {
-      const response = await fetch(`/api/properties/${propertyId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setInterestedProperty(data.property)
-        setEditPropertyData({
-          title: data.property.title || "",
-          type: data.property.type || "",
-          price: data.property.price?.toString() || "",
-          location: data.property.location || "",
-          bedrooms: data.property.bedrooms?.toString() || "",
-          bathrooms: data.property.bathrooms?.toString() || "",
-          area: data.property.area?.toString() || "",
-          description: data.property.description || "",
-        })
-      }
-    } catch (error) {
-      console.error("Error fetching interested property:", error)
-    }
-  }
-
-  const fetchClientTasks = async () => {
-    try {
-      const response = await fetch(`/api/tasks?client_id=${params.id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setClientTasks(data.tasks || [])
-      }
-    } catch (error) {
-      console.error("Error fetching client tasks:", error)
-    }
-  }
-
   const fetchUsers = async () => {
     try {
       const response = await fetch("/api/users")
       if (response.ok) {
         const data = await response.json()
-        setUsers(data.users || [])
+        setUsers(data || []) // API de usuários parece retornar um array diretamente
       }
     } catch (error) {
       console.error("Error fetching users:", error)
@@ -232,7 +194,7 @@ export default function ClientDetail() {
   const handleEditClient = async () => {
     try {
       const response = await fetch(`/api/clients/${params.id}`, {
-        method: "PUT",
+        method: "PUT", // ou PATCH
         headers: {
           "Content-Type": "application/json",
         },
@@ -253,15 +215,15 @@ export default function ClientDetail() {
 
     try {
       const response = await fetch(`/api/properties/${interestedProperty.id}`, {
-        method: "PUT",
+        method: "PUT", // ou PATCH
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           ...editPropertyData,
-          price: Number.parseFloat(editPropertyData.price),
-          bedrooms: Number.parseInt(editPropertyData.bedrooms),
-          bathrooms: Number.parseInt(editPropertyData.bathrooms),
+          preco: Number.parseFloat(editPropertyData.price),
+          quartos: Number.parseInt(editPropertyData.bedrooms),
+          banheiros: Number.parseInt(editPropertyData.bathrooms),
           area: Number.parseFloat(editPropertyData.area),
         }),
       })
@@ -278,14 +240,12 @@ export default function ClientDetail() {
   const handleAssignClient = async () => {
     try {
       const response = await fetch(`/api/clients/${params.id}`, {
-        method: "PUT",
+        method: "PUT", // ou PATCH
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           assigned_to: assignData.assigned_to,
-          manager_id: assignData.manager_id ? Number.parseInt(assignData.manager_id) : null,
-          director_id: assignData.director_id ? Number.parseInt(assignData.director_id) : null,
         }),
       })
 
@@ -307,7 +267,7 @@ export default function ClientDetail() {
         },
         body: JSON.stringify({
           content: newNote,
-          created_by: user?.name || "Sistema",
+          createdBy: user?.name || "Sistema",
         }),
       })
 
@@ -338,19 +298,16 @@ export default function ClientDetail() {
   }
 
   const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return <AlertCircle className="h-4 w-4 text-red-500" />
-      case "medium":
-        return <Clock className="h-4 w-4 text-yellow-500" />
-      case "low":
-        return <CheckSquare className="h-4 w-4 text-green-500" />
-      default:
-        return <Clock className="h-4 w-4 text-gray-500" />
-    }
+    // A lógica de prioridade não está no schema de Tarefa.
+    // Este é um exemplo de como poderia ser, mas o schema precisa ser atualizado.
+    if (priority === "high") return <AlertCircle className="h-4 w-4 text-red-500" />
+    if (priority === "medium") return <Clock className="h-4 w-4 text-yellow-500" />
+    return <CheckSquare className="h-4 w-4 text-green-500" />
   }
 
-  const getUserName = (userId: number) => {
+  const getUserName = (userId: string | null | undefined) => {
+    if (!userId) return "Não atribuído"
+    // A interface StaffUser foi corrigida para ter id como string
     const foundUser = users.find((u) => u.id === userId)
     return foundUser?.name || "Não atribuído"
   }
@@ -381,7 +338,7 @@ export default function ClientDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-primary-custom">{client.name}</h1>
+          <h1 className="text-3xl font-bold text-primary-custom">{client.nomeCompleto}</h1>
           <p className="text-gray-600 mt-2">Detalhes do cliente</p>
         </div>
         <Button onClick={() => router.push("/dashboard")} variant="outline">
@@ -507,28 +464,28 @@ export default function ClientDetail() {
                   <Mail className="h-5 w-5 text-gray-400" />
                   <div>
                     <p className="text-sm text-gray-500">Email</p>
-                    <p className="font-medium">{client.email}</p>
+                    <p className="font-medium">{client.email || "N/A"}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Phone className="h-5 w-5 text-gray-400" />
                   <div>
                     <p className="text-sm text-gray-500">Telefone</p>
-                    <p className="font-medium">{client.phone}</p>
+                    <p className="font-medium">{client.telefone || "N/A"}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <DollarSign className="h-5 w-5 text-gray-400" />
                   <div>
                     <p className="text-sm text-gray-500">Orçamento</p>
-                    <p className="font-medium">{client.budget}</p>
+                    <p className="font-medium">{client.budget ? `R$ ${client.budget.toLocaleString("pt-BR")}` : "N/A"}</p>
                   </div>
                 </div>
               </div>
               {client.preferences && (
                 <div>
                   <p className="text-sm text-gray-500 mb-2">Preferências</p>
-                  <p className="text-sm bg-gray-50 p-3 rounded-lg">{client.preferences}</p>
+                  <p className="text-sm bg-gray-50 p-3 rounded-lg">{client.preferences || "N/A"}</p>
                 </div>
               )}
             </CardContent>
@@ -561,7 +518,7 @@ export default function ClientDetail() {
                         </Label>
                         <Input
                           id="edit-property-title"
-                          value={editPropertyData.title}
+                          value={editPropertyData.title || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, title: e.target.value })}
                           className="col-span-3"
                         />
@@ -592,7 +549,7 @@ export default function ClientDetail() {
                         <Input
                           id="edit-property-price"
                           type="number"
-                          value={editPropertyData.price}
+                          value={editPropertyData.price || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, price: e.target.value })}
                           className="col-span-3"
                         />
@@ -603,7 +560,7 @@ export default function ClientDetail() {
                         </Label>
                         <Input
                           id="edit-property-location"
-                          value={editPropertyData.location}
+                          value={editPropertyData.location || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, location: e.target.value })}
                           className="col-span-3"
                         />
@@ -615,7 +572,7 @@ export default function ClientDetail() {
                         <Input
                           id="edit-property-bedrooms"
                           type="number"
-                          value={editPropertyData.bedrooms}
+                          value={editPropertyData.bedrooms || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, bedrooms: e.target.value })}
                           className="col-span-3"
                         />
@@ -627,7 +584,7 @@ export default function ClientDetail() {
                         <Input
                           id="edit-property-bathrooms"
                           type="number"
-                          value={editPropertyData.bathrooms}
+                          value={editPropertyData.bathrooms || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, bathrooms: e.target.value })}
                           className="col-span-3"
                         />
@@ -639,7 +596,7 @@ export default function ClientDetail() {
                         <Input
                           id="edit-property-area"
                           type="number"
-                          value={editPropertyData.area}
+                          value={editPropertyData.area || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, area: e.target.value })}
                           className="col-span-3"
                         />
@@ -650,7 +607,7 @@ export default function ClientDetail() {
                         </Label>
                         <Textarea
                           id="edit-property-description"
-                          value={editPropertyData.description}
+                          value={editPropertyData.description || ""}
                           onChange={(e) => setEditPropertyData({ ...editPropertyData, description: e.target.value })}
                           className="col-span-3"
                         />
@@ -665,23 +622,23 @@ export default function ClientDetail() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">{interestedProperty.title}</h3>
+                    <h3 className="text-lg font-semibold">{interestedProperty.titulo}</h3>
                     <Badge className="bg-secondary-custom text-white">
-                      R$ {interestedProperty.price?.toLocaleString("pt-BR")}
+                      R$ {interestedProperty.preco?.toLocaleString("pt-BR")}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <p className="text-gray-500">Tipo</p>
-                      <p className="font-medium capitalize">{interestedProperty.type}</p>
+                      <p className="font-medium capitalize">{interestedProperty.tipo}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Quartos</p>
-                      <p className="font-medium">{interestedProperty.bedrooms}</p>
+                      <p className="font-medium">{interestedProperty.quartos}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Banheiros</p>
-                      <p className="font-medium">{interestedProperty.bathrooms}</p>
+                      <p className="font-medium">{interestedProperty.banheiros}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Área</p>
@@ -690,7 +647,7 @@ export default function ClientDetail() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <MapPin className="h-4 w-4 text-gray-400" />
-                    <p className="text-sm">{interestedProperty.location}</p>
+                    <p className="text-sm">{interestedProperty.endereco}</p>
                   </div>
                   {interestedProperty.description && (
                     <div>
@@ -714,16 +671,16 @@ export default function ClientDetail() {
                 {clientTasks.map((task) => (
                   <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center space-x-3">
-                      {getPriorityIcon(task.priority)}
+                      {getPriorityIcon(task.concluida ? 'low' : 'medium')}
                       <div>
                         <p className="font-medium">{task.title}</p>
-                        <p className="text-sm text-gray-500">{task.description}</p>
+                        <p className="text-sm text-gray-500">{task.descricao}</p>
                         <p className="text-xs text-gray-400">
-                          Vencimento: {new Date(task.due_date).toLocaleDateString("pt-BR")}
+                          Vencimento: {new Date(task.dataHora).toLocaleDateString("pt-BR")}
                         </p>
                       </div>
                     </div>
-                    {getStatusBadge(task.status)}
+                    {getStatusBadge(task.concluida ? 'concluída' : 'pendente')}
                   </div>
                 ))}
                 {clientTasks.length === 0 && (
@@ -768,7 +725,7 @@ export default function ClientDetail() {
                           {users
                             .filter((u) => u.role === "corretor")
                             .map((user) => (
-                              <SelectItem key={user.id} value={user.name}>
+                              <SelectItem key={user.id} value={user.id}>
                                 {user.name}
                               </SelectItem>
                             ))}
@@ -829,14 +786,14 @@ export default function ClientDetail() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm text-gray-500">Status Atual</p>
-                {getStatusBadge(client.status)}
+                {getStatusBadge(client.currentFunnelStage)}
               </div>
 
               <div>
                 <p className="text-sm text-gray-500">Corretor Responsável</p>
                 <div className="flex items-center space-x-2 mt-1">
                   <Building className="h-4 w-4 text-gray-400" />
-                  <p className="font-medium">{client.assigned_to || "Não atribuído"}</p>
+                  <p className="font-medium">{client.corretor?.nome || "Não atribuído"}</p>
                 </div>
               </div>
 
@@ -844,7 +801,7 @@ export default function ClientDetail() {
                 <p className="text-sm text-gray-500">Gerente Responsável</p>
                 <div className="flex items-center space-x-2 mt-1">
                   <Building className="h-4 w-4 text-gray-400" />
-                  <p className="font-medium">{client.manager_id ? getUserName(client.manager_id) : "Não atribuído"}</p>
+                  <p className="font-medium">{client.corretor?.superior?.nome || "Não atribuído"}</p>
                 </div>
               </div>
 
@@ -853,20 +810,20 @@ export default function ClientDetail() {
                 <div className="flex items-center space-x-2 mt-1">
                   <Building className="h-4 w-4 text-gray-400" />
                   <p className="font-medium">
-                    {client.director_id ? getUserName(client.director_id) : "Não atribuído"}
+                    {"Não implementado"}
                   </p>
                 </div>
               </div>
 
               <div>
                 <p className="text-sm text-gray-500">Anotações</p>
-                <p className="text-2xl font-bold text-primary-custom">{client.notes?.length || 0}</p>
+                <p className="text-2xl font-bold text-primary-custom">{client.notas?.length || 0}</p>
               </div>
 
               <div>
                 <p className="text-sm text-gray-500">Tarefas Pendentes</p>
                 <p className="text-2xl font-bold text-secondary-custom">
-                  {clientTasks.filter((task) => task.status === "pendente").length}
+                  {clientTasks.filter((task) => !task.concluida).length}
                 </p>
               </div>
 
@@ -915,16 +872,16 @@ export default function ClientDetail() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {client.notes?.map((note) => (
+                {client.notas?.map((note) => (
                   <div key={note.id} className="p-3 bg-gray-50 rounded-lg">
                     <p className="text-sm">{note.content}</p>
                     <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                      <span>{note.created_by}</span>
-                      <span>{new Date(note.created_at).toLocaleDateString("pt-BR")}</span>
+                      <span>{note.createdBy}</span>
+                      <span>{new Date(note.createdAt).toLocaleDateString("pt-BR")}</span>
                     </div>
                   </div>
                 ))}
-                {(!client.notes || client.notes.length === 0) && (
+                {(!client.notas || client.notas.length === 0) && (
                   <p className="text-gray-500 text-center py-4">Nenhuma anotação encontrada</p>
                 )}
               </div>

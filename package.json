@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && next build",
     "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
     "lint": "next lint",
-    "start": "next start"
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "latest",
@@ -54,8 +58,9 @@
     "eslint": "^8",
     "eslint-config-next": "14.1.0",
     "postcss": "^8.5",
-    "prisma": "^5.17.0",
+    "prisma": "^5.22.0",
     "tailwindcss": "^3.4.17",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

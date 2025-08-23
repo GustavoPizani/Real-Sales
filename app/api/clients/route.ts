@@ -1,225 +1,127 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { getUserFromToken } from "@/lib/auth"
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
+import { getUserFromToken } from '@/lib/auth'
+import { Prisma } from '@prisma/client'
 
-export async function GET(request: NextRequest) {
+// GET: Retorna todos os clientes com base nos filtros
+export async function GET(request: Request) {
   try {
     const user = await getUserFromToken(request)
     if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get("status")
-    const dateFilter = searchParams.get("date_filter")
-    const dataInicio = searchParams.get("data_inicio")
-    const dataFim = searchParams.get("data_fim")
-    const search = searchParams.get("search")
-    const userId = searchParams.get("user_id")
+    const statusFilter = searchParams.get('status')
+    const searchTerm = searchParams.get('search')
+    const assignedUserFilter = searchParams.get('user_id')
+    const dateFrom = searchParams.get('data_inicio')
+    const dateTo = searchParams.get('data_fim')
 
-    // Aplicar filtros baseados na hierarquia do usuário
-    const whereConditions = []
-    const queryParams: any[] = []
+    const where: Prisma.ClienteWhereInput = { AND: [] }
 
-    // Controle de acesso baseado na hierarquia
-    switch (user.role) {
-      case "marketing_adm":
-      case "diretor":
-        // Pode ver todos os clientes
-        break
-
-      case "gerente":
-        // Pode ver apenas clientes dos corretores subordinados
-        const subordinateIds = await sql`
-          SELECT id FROM users WHERE manager_id = ${user.id}
-        `
-        const ids = subordinateIds.map((u) => u.id)
-        ids.push(user.id) // Incluir próprios clientes se houver
-
-        if (ids.length > 0) {
-          whereConditions.push(`c.user_id = ANY($${queryParams.length + 1})`)
-          queryParams.push(ids)
-        } else {
-          // Se não tem subordinados, não vê nenhum cliente
-          whereConditions.push("1 = 0")
-        }
-        break
-
-      case "corretor":
-        // Pode ver apenas seus próprios clientes
-        whereConditions.push(`c.user_id = $${queryParams.length + 1}`)
-        queryParams.push(user.id)
-        break
+    // 1. Controle de acesso
+    if (user.role === 'gerente') {
+      const subordinateIds = (
+        await prisma.usuario.findMany({
+          where: { superiorId: user.id },
+          select: { id: true },
+        })
+      ).map((u) => u.id)
+      where.AND.push({ corretorId: { in: [user.id, ...subordinateIds] } })
+    } else if (user.role === 'corretor') {
+      where.AND.push({ corretorId: user.id })
     }
 
-    // Filtros adicionais
-    if (status && status !== "todos") {
-      switch (status) {
-        case "em_andamento":
-          whereConditions.push(`c.status IS NULL OR c.status = 'active'`)
+    // 2. Filtro de Status
+    if (statusFilter && statusFilter !== 'todos') {
+      switch (statusFilter) {
+        case 'em_andamento':
+          where.AND.push({ overallStatus: 'Ativo' })
           break
-        case "ganho":
-          whereConditions.push(`c.status = 'won'`)
+        case 'ganho':
+          where.AND.push({ overallStatus: 'Ganho' })
           break
-        case "perdido":
-          whereConditions.push(`c.status = 'lost'`)
+        case 'perdido':
+          where.AND.push({ overallStatus: 'Perdido' })
           break
       }
     }
 
-    if (search) {
-      whereConditions.push(`(
-        c.full_name ILIKE $${queryParams.length + 1} OR 
-        c.email ILIKE $${queryParams.length + 1} OR 
-        c.phone ILIKE $${queryParams.length + 1}
-      )`)
-      queryParams.push(`%${search}%`)
+    // 3. Termo de busca
+    if (searchTerm) {
+      where.AND.push({
+        OR: [
+          { nomeCompleto: { contains: searchTerm, mode: 'insensitive' } },
+          { email: { contains: searchTerm, mode: 'insensitive' } },
+          { telefone: { contains: searchTerm, mode: 'insensitive' } },
+        ],
+      })
     }
 
-    if (userId && userId !== "__all__") {
-      whereConditions.push(`c.user_id = $${queryParams.length + 1}`)
-      queryParams.push(userId)
+    // 4. Filtro de corretor
+    if (assignedUserFilter && assignedUserFilter !== '__all__') {
+      where.AND.push({ corretorId: assignedUserFilter })
     }
 
-    if (dataInicio) {
-      whereConditions.push(`c.created_at >= $${queryParams.length + 1}`)
-      queryParams.push(dataInicio)
+    // 5. Filtro de data
+    if (dateFrom) {
+      where.AND.push({ createdAt: { gte: new Date(dateFrom) } })
+    }
+    if (dateTo) {
+      const endDate = new Date(dateTo)
+      endDate.setHours(23, 59, 59, 999)
+      where.AND.push({ createdAt: { lte: endDate } })
     }
 
-    if (dataFim) {
-      whereConditions.push(`c.created_at <= $${queryParams.length + 1}`)
-      queryParams.push(dataFim)
-    }
+    const clients = await prisma.cliente.findMany({
+      where: where.AND.length > 0 ? where : undefined,
+      include: {
+        corretor: true,
+        imovelDeInteresse: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    })
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : ""
-
-    const query = `
-      SELECT 
-        c.*,
-        u.name as assigned_user_name,
-        u.email as assigned_user_email,
-        u.role as assigned_user_role,
-        p.title as property_title,
-        p.address as property_address,
-        p.price as property_price
-      FROM clients c
-      LEFT JOIN users u ON c.user_id = u.id
-      LEFT JOIN properties p ON c.property_of_interest_id = p.id
-      ${whereClause}
-      ORDER BY c.updated_at DESC
-    `
-
-    const clients = await sql.unsafe(query, queryParams)
-
-    // Estruturar resposta
-    const response = clients.map((client) => ({
-      id: client.id,
-      full_name: client.full_name,
-      phone: client.phone,
-      email: client.email,
-      funnel_status: client.funnel_status,
-      notes: client.notes,
-      created_at: client.created_at,
-      updated_at: client.updated_at,
-      user_id: client.user_id,
-      property_of_interest_id: client.property_of_interest_id,
-      status: client.status,
-      lost_reason: client.lost_reason,
-      property_title: client.property_title,
-      property_address: client.property_address,
-      property_price: client.property_price,
-      assigned_user: client.assigned_user_name
-        ? {
-            id: client.user_id,
-            name: client.assigned_user_name,
-            email: client.assigned_user_email,
-            role: client.assigned_user_role,
-          }
-        : null,
-    }))
-
-    return NextResponse.json(response)
+    return NextResponse.json(clients)
   } catch (error) {
-    console.error("Erro ao buscar clientes:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    console.error('Erro ao buscar clientes:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST: Cria um novo cliente
+export async function POST(request: Request) {
   try {
     const user = await getUserFromToken(request)
     if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { full_name, phone, email, funnel_status, notes, property_of_interest_id, user_id } = await request.json()
+    const body = await request.json()
+    const { full_name, phone, email, notes, property_of_interest_id, status } = body
 
     if (!full_name) {
-      return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
+      return NextResponse.json({ error: 'Nome completo é obrigatório' }, { status: 400 })
     }
 
-    // Determinar o user_id baseado na hierarquia
-    let assignedUserId = user_id
+    const newClient = await prisma.cliente.create({
+      data: {
+        nomeCompleto: full_name,
+        telefone: phone || null,
+        email: email || null,
+        currentFunnelStage: status || 'Contato',
+        corretorId: user.id, // Atribui ao usuário logado por padrão
+        imovelDeInteresseId: property_of_interest_id || null,
+        ...(notes && { notas: { create: { content: notes, createdBy: user.nome } } }),
+      },
+    })
 
-    // Se não foi especificado um usuário, usar regras de hierarquia
-    if (!assignedUserId) {
-      switch (user.role) {
-        case "corretor":
-          assignedUserId = user.id
-          break
-        default:
-          // Para outros roles, é obrigatório especificar
-          if (!user_id) {
-            return NextResponse.json({ error: "Usuário responsável é obrigatório" }, { status: 400 })
-          }
-      }
-    }
-
-    // Validar se o usuário pode atribuir para o user_id especificado
-    if (assignedUserId !== user.id) {
-      switch (user.role) {
-        case "corretor":
-          return NextResponse.json({ error: "Corretor só pode criar clientes para si mesmo" }, { status: 403 })
-
-        case "gerente":
-          // Verificar se o usuário é subordinado
-          const subordinate = await sql`
-            SELECT id FROM users WHERE id = ${assignedUserId} AND manager_id = ${user.id}
-          `
-          if (subordinate.length === 0 && assignedUserId !== user.id) {
-            return NextResponse.json({ error: "Gerente só pode atribuir para seus subordinados" }, { status: 403 })
-          }
-          break
-      }
-    }
-
-    const result = await sql`
-      INSERT INTO clients (
-        full_name, 
-        phone, 
-        email, 
-        funnel_status, 
-        notes, 
-        property_of_interest_id,
-        user_id,
-        status
-      )
-      VALUES (
-        ${full_name}, 
-        ${phone}, 
-        ${email}, 
-        ${funnel_status || "Contato"}, 
-        ${notes}, 
-        ${property_of_interest_id},
-        ${assignedUserId},
-        'active'
-      )
-      RETURNING *
-    `
-
-    return NextResponse.json(result[0], { status: 201 })
+    return NextResponse.json(newClient, { status: 201 })
   } catch (error) {
-    console.error("Erro ao criar cliente:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    console.error('Erro ao criar cliente:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

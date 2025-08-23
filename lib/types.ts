@@ -167,8 +167,6 @@ export interface CreateTaskData {
 
 // --- CONSTANTES E ENUMS ---
 
-export const FUNNEL_STAGES = ["Contato", "Diagnóstico", "Agendado", "Visitado", "Proposta", "Contrato"] as const
-
 export const PROPERTY_TYPES = ["Apartamento", "Casa", "Cobertura", "Terreno", "Comercial"] as const
 
 export const PROPERTY_STATUS = ["Disponível", "Reservado", "Vendido"] as const

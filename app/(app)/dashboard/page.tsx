@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/auth-context" // 1. IMPORTAR O useAuth
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -25,6 +26,8 @@ interface Client {
 }
 
 export default function DashboardPage() {
+  const { user, isLoading: isAuthLoading } = useAuth() // 2. PEGAR O USUÁRIO LOGADO E O ESTADO DE CARREGAMENTO
+
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     activeClients: 0,
@@ -42,9 +45,12 @@ export default function DashboardPage() {
   })
 
   useEffect(() => {
-    fetchStats()
-    fetchClients()
-  }, [])
+    // Só busca os dados se o usuário estiver logado
+    if (user) {
+      fetchStats()
+      fetchClients()
+    }
+  }, [user]) // Roda o efeito quando o usuário for definido
 
   const fetchStats = async () => {
     try {
@@ -63,7 +69,7 @@ export default function DashboardPage() {
       const response = await fetch("/api/clients")
       if (response.ok) {
         const data = await response.json()
-        setClients(data)
+        setClients(data.clients || []) // Garante que clients seja um array
       }
     } catch (error) {
       console.error("Erro ao carregar clientes:", error)
@@ -106,12 +112,22 @@ export default function DashboardPage() {
     }
   }
 
+  // Mostra uma tela de carregamento enquanto o estado de autenticação é verificado
+  if (isAuthLoading) {
+    return (
+        <div className="flex h-full items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-custom"></div>
+        </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* Header - CORRIGIDO */}
       <div className="flex flex-col space-y-2">
         <h1 className="text-3xl font-bold text-primary-custom flex items-center gap-2">
-          👋 Olá, João Diretor!
+          {/* 3. EXIBIR O NOME DO USUÁRIO DINAMICAMENTE */}
+          👋 Olá, {user ? user.name : 'Usuário'}!
         </h1>
         <p className="text-gray-600">Aqui está um resumo das suas atividades e performance</p>
       </div>

@@ -5,6 +5,7 @@ import type React from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Navigation } from "./navigation"
 import { usePathname } from "next/navigation"
+import { Toaster } from "@/components/ui/toaster" // Adicione esta linha
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -36,6 +37,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
+      <Toaster /> {/* Adicione o Toaster aqui */}
 
       {/* Main Content */}
       <div className="lg:ml-16 transition-all duration-300">

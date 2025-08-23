@@ -109,24 +109,8 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-2">Usuários de teste:</p>
-            <div className="space-y-1 text-xs text-gray-600">
-              <p>
-                <strong>Admin:</strong> admin@realsales.com
-              </p>
-              <p>
-                <strong>Diretor:</strong> diretor@realsales.com
-              </p>
-              <p>
-                <strong>Gerente:</strong> gerente@realsales.com
-              </p>
-              <p>
-                <strong>Corretor:</strong> ana@realsales.com
-              </p>
-              <p className="text-gray-500 mt-2">Qualquer senha funciona</p>
-            </div>
-          </div>
+          {/* A SEÇÃO DE USUÁRIOS DE TESTE FOI REMOVIDA DAQUI */}
+
         </CardContent>
       </Card>
     </div>
