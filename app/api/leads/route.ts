@@ -1,79 +1,82 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { neon } from '@neondatabase/serverless'
-import { getUserFromToken } from '@/lib/auth'
+// app/api/leads/route.ts
 
-const sql = neon(process.env.DATABASE_URL!)
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { getUserFromToken } from '@/lib/auth';
 
+// GET: Busca todos os leads
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Token não fornecido' }, { status: 401 })
-    }
-
-    const token = authHeader.substring(7)
-    const user = await getUserFromToken(token)
-    
+    const user = await getUserFromToken(request);
     if (!user) {
-      return NextResponse.json({ error: 'Token inválido' }, { status: 401 })
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const leads = await sql`
-      SELECT id, name, email, phone, source, campaign, status, created_at, updated_at
-      FROM leads
-      ORDER BY created_at DESC
-    `
+    // Apenas usuários com permissão podem ver todos os leads
+    if (user.role !== 'marketing_adm' && user.role !== 'diretor') {
+        return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
 
-    return NextResponse.json({ leads })
+    const leads = await prisma.lead.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return NextResponse.json({ leads });
 
   } catch (error) {
-    console.error('Erro ao buscar leads:', error)
+    console.error('Erro ao buscar leads:', error);
     return NextResponse.json(
-      { error: 'Erro interno do servidor' },
+      { error: 'Erro interno do servidor ao buscar leads.' },
       { status: 500 }
-    )
+    );
   }
 }
 
+// POST: Cria um novo lead
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, phone, source, campaign } = await request.json()
+    const { name, email, phone, source, notes } = await request.json();
 
     if (!name || !email) {
       return NextResponse.json(
-        { error: 'Nome e email são obrigatórios' },
+        { error: 'Nome e email são obrigatórios.' },
         { status: 400 }
-      )
+      );
     }
 
-    // Verificar se já existe um lead com este email
-    const existingLeads = await sql`
-      SELECT id FROM leads WHERE email = ${email}
-    `
+    // Verifica se já existe um lead ou cliente com este email para evitar duplicatas
+    const existingLead = await prisma.lead.findFirst({ where: { email } });
+    const existingClient = await prisma.client.findUnique({ where: { email } });
 
-    if (existingLeads.length > 0) {
+    if (existingLead || existingClient) {
       return NextResponse.json(
-        { error: 'Já existe um lead com este email' },
-        { status: 409 }
-      )
+        { error: 'Já existe um lead ou cliente com este email.' },
+        { status: 409 } // 409 Conflict
+      );
     }
 
-    const result = await sql`
-      INSERT INTO leads (name, email, phone, source, campaign, status)
-      VALUES (${name}, ${email}, ${phone || ''}, ${source || 'manual'}, ${campaign || 'Não informado'}, 'new')
-      RETURNING id, name, email, phone, source, campaign, status, created_at
-    `
+    const newLead = await prisma.lead.create({
+      data: {
+        name,
+        email,
+        phone,
+        source: source || 'manual',
+        notes: notes || undefined,
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      lead: result[0]
-    }, { status: 201 })
+      lead: newLead,
+    }, { status: 201 });
 
   } catch (error) {
-    console.error('Erro ao criar lead:', error)
+    console.error('Erro ao criar lead:', error);
     return NextResponse.json(
-      { error: 'Erro interno do servidor' },
+      { error: 'Erro interno do servidor ao criar lead.' },
       { status: 500 }
-    )
+    );
   }
 }

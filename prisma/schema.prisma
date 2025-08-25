@@ -48,7 +48,7 @@ model Cliente {
   budget              Float?
   preferences         String?
 
-  currentFunnelStage  String   @default("Contato")
+  currentFunnelStage  String              @default("Contato")
   overallStatus       ClientOverallStatus @default(Ativo)
 
   tarefas             Tarefa[]
@@ -56,35 +56,45 @@ model Cliente {
   notas               Nota[]
 }
 
-enum ClientOverallStatus {
-  Ativo
-  Ganho
-  Perdido
-}
-
-model ClientWonDetails {
-  id          String   @id @default(uuid())
-  sale_value  Float
-  sale_date   DateTime @default(now())
-  createdAt   DateTime @default(now())
-  clienteId   String   @unique
-  cliente     Cliente  @relation(fields: [clienteId], references: [id])
-}
-
 model Imovel {
-  id                   String       @id @default(uuid())
+  id                   String            @id @default(uuid())
   titulo               String
   descricao            String?
   endereco             String?
   preco                Float?
   tipo                 String?
-  status               StatusImovel @default(Disponivel)
+  status               StatusImovel      @default(Disponivel)
   quartos              Int?
   banheiros            Int?
   area                 Int?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  
   clientesComInteresse Cliente[]
+  tipologias           TipologiaImovel[]
+  imagens              ImagemImovel[]
+}
+
+model TipologiaImovel {
+  id             String  @id @default(uuid())
+  nome           String
+  valor          Float
+  area           Float?
+  dormitorios    Int?
+  suites         Int?
+  vagas          Int?
+
+  imovelId       String
+  imovel         Imovel  @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+}
+
+model ImagemImovel {
+  id         String   @id @default(uuid())
+  url        String
+  createdAt  DateTime @default(now())
+
+  imovelId   String
+  imovel     Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
 }
 
 model Nota {
@@ -121,9 +131,9 @@ model Roleta {
 
 model RoletaCorretor {
   roletaId   String
-  roleta     Roleta   @relation(fields: [roletaId], references: [id])
+  roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
   corretorId String
-  corretor   Usuario  @relation(fields: [corretorId], references: [id])
+  corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade)
 
   @@id([roletaId, corretorId])
 }
@@ -135,14 +145,27 @@ model LostReason {
   created_at DateTime @default(now())
 }
 
-// --- Modelos de Configuração ---
-
 model RoleSetting {
   roleName Role    @id
   isActive Boolean @default(true)
 }
 
-// --- Enums ---
+model FunnelStage {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  order     Int
+  color     String
+  createdAt DateTime @default(now())
+}
+
+model ClientWonDetails {
+  id          String   @id @default(uuid())
+  sale_value  Float
+  sale_date   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  clienteId   String   @unique
+  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+}
 
 enum Role {
   marketing_adm
@@ -157,10 +180,8 @@ enum StatusImovel {
   Vendido
 }
 
-model FunnelStage {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  order     Int
-  color     String
-  createdAt DateTime @default(now())
+enum ClientOverallStatus {
+  Ativo
+  Ganho
+  Perdido
 }

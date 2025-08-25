@@ -1,155 +1,129 @@
-"use client"
+// app/(app)/properties/page.tsx
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Search, Filter, Eye, Edit, Building, MapPin, DollarSign, Home } from "lucide-react"
-import type { Property } from "@/lib/types"
+"use client";
 
-// Mock data
-const mockProperties: Property[] = [
-  {
-    id: "1",
-    title: "Residencial Vila Harmonia",
-    description: "Empreendimento moderno com excelente localização na Vila Madalena.",
-    address: "Rua Harmonia, 123 - Vila Madalena, São Paulo - SP",
-    type: "Empreendimento",
-    status: "Disponível",
-    features: ["Piscina", "Academia", "Salão de festas", "Playground", "Portaria 24h"],
-    images: ["/placeholder.jpg?height=400&width=600&text=Fachada+do+Empreendimento"],
-    typologies: [
-      {
-        id: "1",
-        name: "Apartamento 2 quartos",
-        price: 650000,
-        area: 65,
-        bedrooms: 2,
-        bathrooms: 2,
-        parking_spaces: 1,
-      },
-      {
-        id: "2",
-        name: "Apartamento 3 quartos",
-        price: 850000,
-        area: 85,
-        bedrooms: 3,
-        bathrooms: 2,
-        parking_spaces: 2,
-      },
-    ],
-    developer: {
-      name: "Construtora Harmonia Ltda",
-      partnership_manager: "Carlos Silva",
-      phone: "(11) 3333-4444",
-      email: "parcerias@harmoniaconstrutora.com.br",
-    },
-    created_at: "2024-01-01T00:00:00Z",
-    user_id: "1",
-  },
-  {
-    id: "2",
-    title: "Edifício Sunset Boulevard",
-    description: "Apartamentos de luxo com vista para o mar em Copacabana.",
-    address: "Av. Atlântica, 456 - Copacabana, Rio de Janeiro - RJ",
-    type: "Empreendimento",
-    status: "Disponível",
-    features: ["Vista para o mar", "Piscina infinity", "Spa", "Concierge"],
-    images: ["/placeholder.jpg?height=400&width=600&text=Vista+do+Mar"],
-    typologies: [
-      {
-        id: "3",
-        name: "Studio",
-        price: 450000,
-        area: 35,
-        bedrooms: 0,
-        bathrooms: 1,
-        parking_spaces: 1,
-      },
-      {
-        id: "4",
-        name: "Apartamento 1 quarto",
-        price: 750000,
-        area: 55,
-        bedrooms: 1,
-        bathrooms: 1,
-        parking_spaces: 1,
-      },
-    ],
-    developer: {
-      name: "Construtora Oceano Azul",
-      partnership_manager: "Marina Santos",
-      phone: "(21) 2222-3333",
-      email: "parcerias@oceanoazul.com.br",
-    },
-    created_at: "2024-01-15T00:00:00Z",
-    user_id: "2",
-  },
-]
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label"; // <-- ADICIONADO: Importação em falta
+import { Plus, Search, Filter, Edit, Building, MapPin, DollarSign, Home, Link as LinkIcon, PencilLine, Loader2 } from "lucide-react";
+import { type Property, PropertyStatus } from "@/lib/types";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function PropertiesPage() {
-  const router = useRouter()
-  const [properties, setProperties] = useState<Property[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState("all")
+  const router = useRouter();
+  const { toast } = useToast();
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  // Estados para a nova funcionalidade de importação
+  const [isAddOptionsOpen, setIsAddOptionsOpen] = useState(false);
+  const [isImportUrlOpen, setIsImportUrlOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
-    // Simular carregamento dos dados
-    setTimeout(() => {
-      setProperties(mockProperties)
-      setLoading(false)
-    }, 1000)
-  }, [])
+    const fetchProperties = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch('/api/properties', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          throw new Error("Falha ao buscar imóveis");
+        }
+        const data = await response.json();
+        setProperties(data || []);
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Não foi possível carregar a lista de imóveis.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProperties();
+  }, [toast]);
 
   const filteredProperties = properties.filter((property) => {
     const matchesSearch =
       property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property.developer?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      (property.address && property.address.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = statusFilter === "all" || property.status === statusFilter
-    const matchesType = typeFilter === "all" || property.type === typeFilter
+    const matchesStatus = statusFilter === "all" || property.status === statusFilter;
+    const matchesType = typeFilter === "all" || !property.type || property.type.toLowerCase() === typeFilter.toLowerCase();
 
-    return matchesSearch && matchesStatus && matchesType
-  })
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      Disponível: "default",
-      Reservado: "secondary",
-      Vendido: "destructive",
-    } as const
+    return matchesSearch && matchesStatus && matchesType;
+  });
 
-    return <Badge variant={variants[status as keyof typeof variants] || "default"}>{status}</Badge>
-  }
+  const getStatusBadge = (status: PropertyStatus) => {
+    const variants: Record<PropertyStatus, "default" | "secondary" | "destructive"> = {
+      [PropertyStatus.Disponivel]: "default",
+      [PropertyStatus.Reservado]: "secondary",
+      [PropertyStatus.Vendido]: "destructive",
+    };
+    return <Badge variant={variants[status] || "default"}>{status}</Badge>;
+  };
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null | undefined) => {
+    if (value == null) return "N/A";
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
+    }).format(value);
+  };
 
-  const getPriceRange = (typologies: any[]) => {
-    if (!typologies || typologies.length === 0) return "Não informado"
+  const handleManualRedirect = () => {
+    setIsAddOptionsOpen(false);
+    router.push("/properties/new");
+  };
 
-    const prices = typologies.map((t) => t.price).filter((p) => p > 0)
-    if (prices.length === 0) return "Não informado"
+  const handleImportRedirect = () => {
+    setIsAddOptionsOpen(false);
+    setIsImportUrlOpen(true);
+  };
 
-    const min = Math.min(...prices)
-    const max = Math.max(...prices)
+  const handleImportFromUrl = async () => {
+    if (!importUrl) {
+        toast({ variant: "destructive", title: "Erro", description: "Por favor, insira um URL." });
+        return;
+    }
+    setIsImporting(true);
+    
+    // --- SIMULAÇÃO DE BACKEND ---
+    console.log("Simulando scraping do URL:", importUrl);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    toast({
+        title: "Informações Importadas!",
+        description: "Os dados foram pré-preenchidos. Por favor, reveja e complete o cadastro.",
+    });
 
-    if (min === max) return formatCurrency(min)
-    return `${formatCurrency(min)} - ${formatCurrency(max)}`
-  }
+    const queryParams = new URLSearchParams({
+        title: "Empreendimento Importado (Exemplo)",
+        address: "Endereço extraído do link",
+        price: "1250000",
+    }).toString();
+
+    setIsImporting(false);
+    setIsImportUrlOpen(false);
+    setImportUrl("");
+
+    router.push(`/properties/new?${queryParams}`);
+  };
 
   if (loading) {
     return (
@@ -159,7 +133,7 @@ export default function PropertiesPage() {
           <div className="h-96 bg-gray-200 rounded"></div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -170,8 +144,7 @@ export default function PropertiesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
           <p className="text-gray-600">Gerencie todos os empreendimentos e propriedades</p>
         </div>
-
-        <Button onClick={() => router.push("/properties/new")}>
+        <Button onClick={() => setIsAddOptionsOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Imóvel
         </Button>
@@ -187,53 +160,40 @@ export default function PropertiesPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
+            <div className="relative md:col-span-2">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Buscar por nome, endereço ou construtora..."
+                placeholder="Buscar por nome ou endereço..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
-
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="Disponível">Disponível</SelectItem>
-                <SelectItem value="Reservado">Reservado</SelectItem>
-                <SelectItem value="Vendido">Vendido</SelectItem>
+                <SelectItem value={PropertyStatus.Disponivel}>Disponível</SelectItem>
+                <SelectItem value={PropertyStatus.Reservado}>Reservado</SelectItem>
+                <SelectItem value={PropertyStatus.Vendido}>Vendido</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
+             <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os tipos</SelectItem>
                 <SelectItem value="Empreendimento">Empreendimento</SelectItem>
                 <SelectItem value="Apartamento">Apartamento</SelectItem>
                 <SelectItem value="Casa">Casa</SelectItem>
-                <SelectItem value="Comercial">Comercial</SelectItem>
               </SelectContent>
             </Select>
-
-            <div className="flex items-center text-sm text-gray-600">
-              {filteredProperties.length} de {properties.length} imóveis
-            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Lista de Imóveis */}
       <Card>
-        <CardHeader>
-          <CardTitle>Lista de Imóveis</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Lista de Imóveis</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
@@ -241,59 +201,38 @@ export default function PropertiesPage() {
                 <TableHead>Empreendimento</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Construtora</TableHead>
-                <TableHead>Tipologias</TableHead>
-                <TableHead>Faixa de Preços</TableHead>
+                <TableHead>Preço</TableHead>
                 <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredProperties.map((property) => (
-                <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50">
+                <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/properties/${property.id}/edit`)}>
                   <TableCell>
                     <div>
                       <p className="font-medium">{property.title}</p>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        {property.address}
+                        {property.address || 'Endereço não informado'}
                       </p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="flex items-center gap-1 w-fit">
                       <Home className="h-3 w-3" />
-                      {property.type}
+                      {property.type || 'N/A'}
                     </Badge>
                   </TableCell>
                   <TableCell>{getStatusBadge(property.status)}</TableCell>
                   <TableCell>
-                    <div>
-                      <p className="font-medium">{property.developer?.name}</p>
-                      <p className="text-sm text-gray-600">{property.developer?.partnership_manager}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Building className="h-4 w-4 text-gray-400" />
-                      {property.typologies?.length || 0} tipologias
-                    </div>
-                  </TableCell>
-                  <TableCell>
                     <div className="flex items-center gap-1">
                       <DollarSign className="h-4 w-4 text-gray-400" />
-                      {getPriceRange(property.typologies || [])}
+                      {formatCurrency(property.price)}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => router.push(`/properties/${property.id}`)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push(`/properties/${property.id}/edit`)}
-                      >
+                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/properties/${property.id}/edit`); }}>
                         <Edit className="h-4 w-4" />
                       </Button>
                     </div>
@@ -302,7 +241,6 @@ export default function PropertiesPage() {
               ))}
             </TableBody>
           </Table>
-
           {filteredProperties.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <Building className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -312,6 +250,52 @@ export default function PropertiesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Opções de Adição */}
+      <Dialog open={isAddOptionsOpen} onOpenChange={setIsAddOptionsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Novo Imóvel</DialogTitle>
+            <DialogDescription>Como você gostaria de adicionar o imóvel?</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <Button variant="outline" className="h-24 flex flex-col gap-2" onClick={handleManualRedirect}>
+              <PencilLine className="h-6 w-6" />
+              <span>Cadastro Manual</span>
+            </Button>
+            <Button variant="outline" className="h-24 flex flex-col gap-2" onClick={handleImportRedirect}>
+              <LinkIcon className="h-6 w-6" />
+              <span>Importar via Link</span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para Importar URL */}
+      <Dialog open={isImportUrlOpen} onOpenChange={setIsImportUrlOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importar Imóvel de um Link</DialogTitle>
+            <DialogDescription>Cole o link do portal (ex: Orulo) para importar os dados automaticamente.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="import-url">URL do Imóvel</Label>
+            <Input 
+                id="import-url" 
+                placeholder="https://www.orulo.com.br/..."
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportUrlOpen(false)}>Cancelar</Button>
+            <Button onClick={handleImportFromUrl} disabled={isImporting}>
+                {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isImporting ? "Importando..." : "Importar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  )
+  );
 }

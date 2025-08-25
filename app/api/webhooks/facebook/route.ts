@@ -1,134 +1,120 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+// app/api/webhooks/facebook/route.ts
 
-async function getActiveRoleta() {
-  const [roleta] = await sql`
-    SELECT 
-      r.*,
-      ARRAY_AGG(ru.user_id ORDER BY ru.created_at) as user_ids
-    FROM roletas r
-    JOIN roleta_usuarios ru ON r.id = ru.roleta_id
-    WHERE r.ativa = true
-    GROUP BY r.id
-    LIMIT 1
-  `
-  return roleta
-}
+import { type NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 
-async function getNextCorretor(roleta: any) {
-  if (!roleta || !roleta.user_ids || roleta.user_ids.length === 0) {
-    return null
+// Função auxiliar para encontrar o próximo corretor na roleta ativa
+async function getNextBrokerFromRoleta() {
+  const activeRoleta = await prisma.roleta.findFirst({
+    where: { isActive: true },
+    include: {
+      brokers: {
+        include: {
+          broker: true,
+        },
+        orderBy: {
+          broker: {
+            createdAt: 'asc', // Ordem consistente para a roleta
+          },
+        },
+      },
+    },
+  });
+
+  if (!activeRoleta || activeRoleta.brokers.length === 0) {
+    return null;
   }
 
-  const nextIndex = (roleta.last_assigned_index + 1) % roleta.user_ids.length
-  const corretorId = roleta.user_ids[nextIndex]
+  const nextIndex = (activeRoleta.lastAssignedIndex + 1) % activeRoleta.brokers.length;
+  const nextBrokerId = activeRoleta.brokers[nextIndex].brokerId;
 
-  // Atualizar o índice da roleta
-  await sql`
-    UPDATE roletas 
-    SET last_assigned_index = ${nextIndex}
-    WHERE id = ${roleta.id}
-  `
+  await prisma.roleta.update({
+    where: { id: activeRoleta.id },
+    data: { lastAssignedIndex: nextIndex },
+  });
 
-  return corretorId
+  return nextBrokerId;
 }
 
-async function getFieldMappings() {
-  const mappings = await sql`
-    SELECT field_name, mapped_field FROM field_mappings WHERE source = 'facebook'
-  `
-
-  const mappingObj: Record<string, string> = {}
-  mappings.forEach((mapping: any) => {
-    mappingObj[mapping.field_name] = mapping.mapped_field
-  })
-
-  return mappingObj
-}
-
+// GET: Rota para verificação do webhook do Facebook
 export async function GET(request: NextRequest) {
-  // Verificação do webhook do Facebook
-  const { searchParams } = new URL(request.url)
-  const mode = searchParams.get("hub.mode")
-  const token = searchParams.get("hub.verify_token")
-  const challenge = searchParams.get("hub.challenge")
+  const { searchParams } = new URL(request.url);
+  const mode = searchParams.get('hub.mode');
+  const token = searchParams.get('hub.verify_token');
+  const challenge = searchParams.get('hub.challenge');
 
-  if (mode === "subscribe" && token === "your_verify_token") {
-    return new NextResponse(challenge)
+  // Use uma variável de ambiente para o token de verificação
+  const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN;
+
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    console.log('Webhook do Facebook verificado com sucesso.');
+    return new NextResponse(challenge);
   }
 
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  console.error('Falha na verificação do webhook do Facebook.');
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 }
 
+// POST: Recebe os dados de leads do Facebook
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
+    const data = await request.json();
 
-    // Processar dados do Facebook Lead Ads
-    if (data.object === "page") {
+    // Processa os dados de leadgen do Facebook
+    if (data.object === 'page') {
       for (const entry of data.entry) {
         for (const change of entry.changes) {
-          if (change.field === "leadgen") {
-            const leadgenData = change.value
-
-            // Buscar mapeamentos de campos
-            const fieldMappings = await getFieldMappings()
-
-            // Mapear dados recebidos para campos do cliente
-            const clientData: any = {}
-
-            if (fieldMappings.full_name && leadgenData[fieldMappings.full_name]) {
-              clientData.full_name = leadgenData[fieldMappings.full_name]
+          if (change.field === 'leadgen') {
+            const leadgenData = change.value;
+            const leadData: { [key: string]: any } = {};
+            
+            // Extrai os dados dos campos do formulário do Facebook
+            for (const field of leadgenData.field_data) {
+                leadData[field.name] = field.values[0];
             }
 
-            if (fieldMappings.email && leadgenData[fieldMappings.email]) {
-              clientData.email = leadgenData[fieldMappings.email]
+            // Busca os mapeamentos de campo para a fonte 'facebook'
+            const mappings = await prisma.fieldMapping.findMany({
+              where: { source: 'facebook' },
+            });
+
+            // Mapeia os dados recebidos para os campos do nosso modelo Lead
+            const newLeadData: { [key: string]: any } = {
+                source: 'meta_ads',
+                notes: leadData // Salva o payload original para referência
+            };
+
+            mappings.forEach(mapping => {
+              if (leadData[mapping.mappedField]) {
+                const prismaFieldName = mapping.fieldName === 'full_name' ? 'name' : mapping.fieldName;
+                newLeadData[prismaFieldName] = leadData[mapping.mappedField];
+              }
+            });
+
+            // Validação para garantir que temos o mínimo de informação
+            if (!newLeadData.name || !newLeadData.email) {
+                console.warn('Lead do Facebook recebido sem nome ou email. Dados:', leadData);
+                continue; // Pula para o próximo lead
             }
 
-            if (fieldMappings.phone && leadgenData[fieldMappings.phone]) {
-              clientData.phone = leadgenData[fieldMappings.phone]
-            }
-
-            // Buscar roleta ativa e próximo corretor
-            const roleta = await getActiveRoleta()
-            const corretorId = await getNextCorretor(roleta)
-
-            if (!corretorId) {
-              console.error("Nenhuma roleta ativa encontrada")
-              continue
-            }
-
-            // Criar cliente
-            await sql`
-              INSERT INTO clients (
-                full_name, 
-                email, 
-                phone, 
-                notes, 
-                funnel_status, 
-                user_id,
-                created_at,
-                updated_at
-              )
-              VALUES (
-                ${clientData.full_name || ""},
-                ${clientData.email || ""},
-                ${clientData.phone || ""},
-                'Lead recebido via Facebook Lead Ads',
-                'Contato',
-                ${corretorId},
-                NOW(),
-                NOW()
-              )
-            `
+            // Cria o novo lead no banco de dados
+            await prisma.lead.create({
+              data: {
+                name: newLeadData.name,
+                email: newLeadData.email,
+                phone: newLeadData.phone,
+                source: newLeadData.source,
+                notes: newLeadData.notes,
+              },
+            });
           }
         }
       }
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Erro no webhook do Facebook:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    console.error('Erro no webhook do Facebook:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

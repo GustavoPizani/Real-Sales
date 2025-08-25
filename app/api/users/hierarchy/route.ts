@@ -1,3 +1,5 @@
+// app/api/users/hierarchy/route.ts
+
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma, Role } from '@prisma/client';
@@ -7,14 +9,14 @@ function isValidRole(role: any): role is Role {
   return Object.values(Role).includes(role);
 }
 
-// GET: Retorna usuários para os filtros de hierarquia
+// GET: Retorna utilizadores para os filtros de hierarquia
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const role = searchParams.get('role');
   const superiorId = searchParams.get('superiorId');
 
   try {
-    const whereClause: Prisma.UsuarioWhereInput = {};
+    const whereClause: Prisma.UserWhereInput = {};
 
     if (role) {
       if (!isValidRole(role)) {
@@ -27,14 +29,14 @@ export async function GET(request: Request) {
       whereClause.superiorId = superiorId;
     }
 
-    const users = await prisma.usuario.findMany({
+    const users = await prisma.user.findMany({
       where: whereClause,
       select: {
         id: true,
-        nome: true,
+        name: true,
       },
       orderBy: {
-        nome: 'asc',
+        name: 'asc',
       },
     });
 

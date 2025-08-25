@@ -1,30 +1,39 @@
-"use client"
+// app/(app)/pipeline/page.tsx
 
-import type React from "react"
-import { useEffect, useState, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { DndContext, type DragEndEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Plus, MessageCircle, Building, Search, Mail, User, CalendarIcon, Phone, Filter, X } from "lucide-react"
-import { type Client, type Property, type User as UserType } from "@/lib/types"
-import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import type { DateRange } from "react-day-picker"
+"use client";
 
-// Interface para as etapas do funil que vêm da API
+import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { DndContext, type DragEndEvent, type DragStartEvent, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/components/ui/use-toast";
+import { format } from "date-fns";
+import { Role } from "@prisma/client";
+
+// --- Tipos Alinhados com o Schema e API ---
+interface UserSnippet {
+  id: string;
+  name: string;
+}
+
+interface Client {
+  id: string;
+  fullName: string; // Corrigido de full_name
+  phone?: string | null;
+  email?: string | null;
+  currentFunnelStage: string; // Corrigido de funnel_status
+  updatedAt: string; // Corrigido de updated_at
+  broker?: UserSnippet | null; // Corrigido de assigned_user
+}
+
 interface FunnelStage {
   id: string;
   name: string;
@@ -32,19 +41,7 @@ interface FunnelStage {
   color: string;
 }
 
-// Opções de período pré-definido
-const DATE_PRESETS = [
-  { label: "Hoje", value: "today" },
-  { label: "Esta semana", value: "this_week" },
-  { label: "Este mês", value: "this_month" },
-  { label: "Últimos 7 dias", value: "last_7_days" },
-  { label: "Últimos 14 dias", value: "last_14_days" },
-  { label: "Últimos 30 dias", value: "last_30_days" },
-  { label: "Últimos 6 meses", value: "last_6_months" },
-  { label: "Período personalizado", value: "custom" },
-]
-
-// Componente do Card Arrastável
+// --- Componente do Card Arrastável ---
 function DraggableClientCard({ client }: { client: Client }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id });
@@ -56,13 +53,13 @@ function DraggableClientCard({ client }: { client: Client }) {
 
   const onClientClick = () => {
     router.push(`/client/${client.id}`);
-  }
+  };
 
   const openWhatsApp = (phone: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const cleanPhone = phone.replace(/\D/g, "");
     window.open(`https://wa.me/55${cleanPhone}`, "_blank");
-  }
+  };
 
   return (
     <Card
@@ -70,21 +67,21 @@ function DraggableClientCard({ client }: { client: Client }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="cursor-grab active:cursor-grabbing touch-none bg-white border border-gray-200"
+      className="cursor-grab active:cursor-grabbing touch-none bg-white border border-gray-200 hover:shadow-md"
       onClick={onClientClick}
     >
-      <CardContent className="p-4 space-y-2">
+      <CardContent className="p-3 space-y-2">
         <div className="flex justify-between items-start">
-          <h4 className="font-semibold text-gray-900 text-sm">{client.full_name}</h4>
+          <h4 className="font-semibold text-gray-900 text-sm">{client.fullName}</h4>
           <div className="flex items-center text-xs text-gray-500">
             <CalendarIcon className="h-3 w-3 mr-1" />
-            {client.updated_at ? format(new Date(client.updated_at), "dd/MM/yy") : ''}
+            {client.updatedAt ? format(new Date(client.updatedAt), "dd/MM/yy") : ''}
           </div>
         </div>
-        {client.assigned_user && (
+        {client.broker && (
           <div className="flex items-center text-xs text-gray-600">
             <User className="h-3 w-3 text-gray-400 mr-1" />
-            <span>{client.assigned_user.name}</span>
+            <span>{client.broker.name}</span>
           </div>
         )}
         {client.phone && (
@@ -106,21 +103,19 @@ function DraggableClientCard({ client }: { client: Client }) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
-// Componente Principal da Página
+// --- Componente Principal da Página ---
 export default function PipelinePage() {
-  const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [funnelStages, setFunnelStages] = useState<FunnelStage[]>([]);
-  const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newClientForm, setNewClientForm] = useState({ full_name: "", phone: "", email: "" });
+  const [newClientForm, setNewClientForm] = useState({ fullName: "", phone: "", email: "" });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -128,24 +123,23 @@ export default function PipelinePage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('authToken');
+      if (!token) throw new Error("Token não encontrado");
       const headers = { 'Authorization': `Bearer ${token}` };
-      const [clientsRes, stagesRes, usersRes] = await Promise.all([
+      
+      const [clientsRes, stagesRes] = await Promise.all([
         fetch('/api/clients', { headers }),
-        fetch('/api/funnel-stages', { headers }),
-        fetch('/api/users', { headers })
+        fetch('/api/funnel-stages', { headers })
       ]);
 
-      if (!clientsRes.ok || !stagesRes.ok || !usersRes.ok) throw new Error('Falha ao carregar dados.');
+      if (!clientsRes.ok || !stagesRes.ok) throw new Error('Falha ao carregar dados do pipeline.');
       
       const clientsData = await clientsRes.json();
       const stagesData = await stagesRes.json();
-      const usersData = await usersRes.json();
 
       setClients(clientsData.clients || []);
-      setFunnelStages(stagesData.stages || []);
-      setUsers(usersData.users || []);
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados do pipeline.' });
+      setFunnelStages(stagesData || []); // A API de stages retorna o array diretamente
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
     } finally {
       setLoading(false);
     }
@@ -165,17 +159,17 @@ export default function PipelinePage() {
         const clientToMove = originalClients.find(c => c.id === active.id);
         if (!clientToMove) return;
 
-        const oldStatus = clientToMove.funnel_status;
         const newStatus = over.id as string; // O ID da coluna é o nome do estágio
         
-        setClients(prev => prev.map(c => c.id === active.id ? { ...c, funnel_status: newStatus } : c));
+        // Atualização otimista da UI
+        setClients(prev => prev.map(c => c.id === active.id ? { ...c, currentFunnelStage: newStatus } : c));
 
         try {
             const token = localStorage.getItem('authToken');
             const response = await fetch(`/api/clients/${active.id}`, {
-                method: 'PATCH',
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ funnel_status: newStatus }),
+                body: JSON.stringify({ status: newStatus }), // Envia o campo 'status' que a API espera
             });
             if (!response.ok) throw new Error('Falha ao atualizar o status.');
             toast({ title: 'Sucesso!', description: 'Status do cliente atualizado.' });
@@ -193,12 +187,18 @@ export default function PipelinePage() {
         const response = await fetch('/api/clients', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ ...newClientForm, funnel_status: funnelStages[0]?.name || 'Contato' }),
+            // Envia os nomes de campo corretos para a API
+            body: JSON.stringify({ 
+                full_name: newClientForm.fullName, 
+                phone: newClientForm.phone, 
+                email: newClientForm.email,
+                funnel_status: funnelStages[0]?.name || 'Contato' 
+            }),
         });
         if (!response.ok) throw new Error('Falha ao criar cliente.');
         toast({ title: 'Sucesso!', description: 'Novo cliente adicionado ao pipeline.' });
         setIsDialogOpen(false);
-        setNewClientForm({ full_name: "", phone: "", email: "" });
+        setNewClientForm({ fullName: "", phone: "", email: "" });
         fetchData();
     } catch (error) {
         toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível criar o cliente.' });
@@ -208,7 +208,7 @@ export default function PipelinePage() {
   if (loading) return <p className="p-6">A carregar pipeline...</p>;
 
   return (
-    <div className="h-full flex flex-col p-6">
+    <div className="h-full flex flex-col p-6 bg-gray-50">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pipeline de Vendas</h1>
@@ -222,8 +222,8 @@ export default function PipelinePage() {
             <DialogHeader><DialogTitle>Adicionar Novo Cliente</DialogTitle></DialogHeader>
             <form onSubmit={handleAddClient} className="space-y-4">
               <div>
-                <Label htmlFor="full_name">Nome Completo</Label>
-                <Input id="full_name" value={newClientForm.full_name} onChange={(e) => setNewClientForm(p => ({...p, full_name: e.target.value}))} required />
+                <Label htmlFor="fullName">Nome Completo</Label>
+                <Input id="fullName" value={newClientForm.fullName} onChange={(e) => setNewClientForm(p => ({...p, fullName: e.target.value}))} required />
               </div>
               <div>
                 <Label htmlFor="phone">Telefone</Label>
@@ -242,15 +242,15 @@ export default function PipelinePage() {
         </Dialog>
       </div>
       
-      <div className="flex-1 overflow-x-auto">
+      <div className="flex-1 overflow-x-auto pb-4">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => setActiveId(e.active.id as string)} onDragEnd={handleDragEnd}>
-          <div className="grid grid-flow-col auto-cols-fr gap-4 h-full">
+          <div className="grid grid-flow-col auto-cols-[280px] gap-4 h-full">
             {funnelStages.map((stage) => (
-              <div key={stage.id} id={stage.name} className="flex flex-col bg-gray-200 rounded-lg">
+              <div key={stage.id} id={stage.name} className="flex flex-col bg-gray-100 rounded-lg h-full">
                 <div className="p-3 font-semibold text-center text-white rounded-t-lg" style={{ backgroundColor: stage.color }}>{stage.name}</div>
-                <div className="p-3 flex-1 overflow-y-auto space-y-3">
-                  <SortableContext items={clients.filter(c => c.funnel_status === stage.name).map(c => c.id)} strategy={verticalListSortingStrategy}>
-                      {clients.filter(c => c.funnel_status === stage.name).map(client => (
+                <div className="p-2 flex-1 overflow-y-auto space-y-2">
+                  <SortableContext items={clients.filter(c => c.currentFunnelStage === stage.name).map(c => c.id)} strategy={verticalListSortingStrategy}>
+                      {clients.filter(c => c.currentFunnelStage === stage.name).map(client => (
                         <DraggableClientCard key={client.id} client={client} />
                       ))}
                   </SortableContext>
