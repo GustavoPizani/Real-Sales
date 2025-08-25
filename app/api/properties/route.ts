@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sql } from '@/lib/db'
+import prisma from '@/lib/prisma'
 import { getUserFromToken } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
@@ -9,13 +9,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const properties = await sql`
-      SELECT 
-        id, title, description, price, type, status, 
-        address, bedrooms, bathrooms, area, created_at, updated_at
-      FROM properties
-      ORDER BY created_at DESC
-    `
+    const properties = await prisma.imovel.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
 
     return NextResponse.json(properties)
   } catch (error) {
@@ -35,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { 
-      title, description, price, type, status = 'available', 
+      title, description, price, type, status = 'Disponivel', 
       address, bedrooms, bathrooms, area 
     } = await request.json()
 
@@ -46,19 +44,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await sql`
-      INSERT INTO properties (
-        title, description, price, type, status, 
-        address, bedrooms, bathrooms, area
-      )
-      VALUES (
-        ${title}, ${description}, ${price}, ${type}, ${status},
-        ${address}, ${bedrooms}, ${bathrooms}, ${area}
-      )
-      RETURNING id, title, description, price, type, status, address, bedrooms, bathrooms, area, created_at, updated_at
-    `
+    const newProperty = await prisma.imovel.create({
+      data: {
+        titulo: title,
+        descricao: description,
+        preco: parseFloat(price),
+        tipo: type,
+        status: status,
+        endereco: address,
+        quartos: parseInt(bedrooms),
+        banheiros: parseInt(bathrooms),
+        area: parseInt(area),
+      }
+    })
 
-    return NextResponse.json(result[0], { status: 201 })
+    return NextResponse.json(newProperty, { status: 201 })
   } catch (error) {
     console.error('Erro ao criar propriedade:', error)
     return NextResponse.json(

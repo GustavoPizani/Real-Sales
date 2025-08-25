@@ -1,5 +1,3 @@
-// app/layout.tsx
-
 import type React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
@@ -7,7 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { TaskProvider } from "@/contexts/task-context";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/toaster"; // 1. Importe o Toaster
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -40,4 +38,4 @@ export default function RootLayout({
       </body>
     </html>
   );
-}
+} // <--- ADICIONE ESTA CHAVE '}' QUE ESTAVA FALTANDO
