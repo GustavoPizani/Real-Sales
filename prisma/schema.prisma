@@ -1,5 +1,4 @@
 // prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -28,6 +27,7 @@ model Usuario {
   clientes     Cliente[]
   tarefas      Tarefa[]
   roletas      RoletaCorretor[]
+  integrations UserIntegration[]
 }
 
 model Cliente {
@@ -47,12 +47,11 @@ model Cliente {
 
   budget              Float?
   preferences         String?
-
   currentFunnelStage  String              @default("Contato")
   overallStatus       ClientOverallStatus @default(Ativo)
 
   tarefas             Tarefa[]
-  detalhesDeVenda     ClientWonDetails[]
+  detalhesDeVenda     ClientWonDetails? // Corrigido para relação 1-para-1
   notas               Nota[]
 }
 
@@ -83,7 +82,6 @@ model TipologiaImovel {
   dormitorios    Int?
   suites         Int?
   vagas          Int?
-
   imovelId       String
   imovel         Imovel  @relation(fields: [imovelId], references: [id], onDelete: Cascade)
 }
@@ -108,17 +106,19 @@ model Nota {
 }
 
 model Tarefa {
-  id        String   @id @default(uuid())
-  titulo    String
-  descricao String?
-  dataHora  DateTime
-  concluida Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id])
-  usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  id          String    @id @default(uuid())
+  titulo      String
+  descricao   String?
+  dataHora    DateTime
+  concluida   Boolean   @default(false)
+  prioridade  Priority  @default(media)
+  tipo        TaskType  @default(other)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  clienteId   String
+  cliente     Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuarioId   String
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model Roleta {
@@ -167,6 +167,31 @@ model ClientWonDetails {
   cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
 
+// --- Modelos de Integração ---
+model Integration {
+  id              String            @id @default(uuid())
+  name            String            @unique // 'slack', 'google_calendar'
+  userIntegrations UserIntegration[]
+}
+
+model UserIntegration {
+  id            String      @id @default(uuid())
+  userId        String
+  user          Usuario     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  accessToken   String
+  refreshToken  String?
+  scopes        String?
+  webhookUrl    String?     // Para notificações do Slack
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([userId, integrationId])
+}
+
+
+// --- ENUMS ---
 enum Role {
   marketing_adm
   diretor
@@ -184,4 +209,19 @@ enum ClientOverallStatus {
   Ativo
   Ganho
   Perdido
+}
+
+enum TaskType {
+  call
+  visit
+  follow_up
+  meeting
+  other
+}
+
+enum Priority {
+  baixa
+  media
+  alta
+  urgente
 }

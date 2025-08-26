@@ -1,11 +1,9 @@
 // app/api/clients/route.ts
-
 import { type NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserFromToken } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
 
-// GET: Busca clientes com base na hierarquia do usuário logado
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromToken(request);
@@ -13,45 +11,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    // Monta a cláusula 'where' para filtrar clientes com base no cargo do usuário
-    const where: Prisma.ClientWhereInput = {};
+    const where: Prisma.ClienteWhereInput = {};
     if (user.role === Role.corretor) {
-      // Corretores veem apenas seus próprios clientes
-      where.brokerId = user.id;
+      where.corretorId = user.id;
     } else if (user.role === Role.gerente) {
-      // Gerentes veem seus clientes e os clientes de seus subordinados
-      const subordinateIds = (await prisma.user.findMany({ 
+      const subordinateIds = (await prisma.usuario.findMany({ 
         where: { superiorId: user.id },
         select: { id: true }
       })).map(u => u.id);
-      where.brokerId = { in: [user.id, ...subordinateIds] };
+      where.corretorId = { in: [user.id, ...subordinateIds] };
     }
-    // Diretores e Admins não têm filtro, veem todos os clientes
 
-    const clients = await prisma.client.findMany({
+    const clients = await prisma.cliente.findMany({
       where,
       include: { 
-        broker: { select: { name: true, id: true } } // Inclui o corretor associado
+        corretor: { select: { nome: true, id: true } }
       },
       orderBy: { updatedAt: 'desc' },
     });
     
-    // Formata a resposta para o frontend
-    const formattedClients = clients.map(c => ({
-      ...c,
-      full_name: c.fullName, // Garante compatibilidade com o frontend
-      assigned_user: c.broker ? { id: c.brokerId, name: c.broker.name } : null,
-      funnel_status: c.currentFunnelStage // Garante compatibilidade
-    }));
-
-    return NextResponse.json({ clients: formattedClients });
+    return NextResponse.json({ clients });
   } catch (error) {
     console.error("Erro ao buscar clientes:", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
 
-// POST: Cria um novo cliente
 export async function POST(request: NextRequest) {
     try {
         const user = await getUserFromToken(request);
@@ -60,19 +45,19 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { full_name, email, phone, funnel_status } = body;
+        const { fullName, email, phone, funnelStage } = body;
 
-        if (!full_name) {
+        if (!fullName) {
              return NextResponse.json({ error: "Nome completo é obrigatório" }, { status: 400 });
         }
 
-        const newClient = await prisma.client.create({
+        const newClient = await prisma.cliente.create({
             data: {
-                fullName: full_name,
+                nomeCompleto: fullName,
                 email,
-                phone,
-                currentFunnelStage: funnel_status || 'Contato', // Usa o novo campo
-                brokerId: user.id, // Atribui ao usuário que está criando
+                telefone: phone,
+                currentFunnelStage: funnelStage || 'Contato',
+                corretorId: user.id,
             }
         });
 

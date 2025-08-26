@@ -1,15 +1,13 @@
 // contexts/auth-context.tsx
-
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, Dispatch, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
-import { type User } from "@/lib/types"; // Importa o tipo User do nosso ficheiro central
+import { type UserPayload } from "@/lib/auth";
 
-// A interface do que o nosso contexto de autenticação provê
 interface AuthContextType {
-  user: User | null;
-  setUser: Dispatch<SetStateAction<User | null>>; // Necessário para atualizar o perfil
+  user: UserPayload | null;
+  setUser: Dispatch<SetStateAction<UserPayload | null>>;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
@@ -18,16 +16,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Função para verificar o token e buscar os dados do utilizador
   const verifyUser = useCallback(async () => {
     const token = localStorage.getItem("authToken");
     if (token) {
       try {
-        // Usa a nossa rota de API refatorada
         const response = await fetch('/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -40,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(data.user);
           }
         } else {
-          // Se o token for inválido, limpa o localStorage
           localStorage.removeItem("authToken");
           setUser(null);
         }
@@ -56,7 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     verifyUser();
   }, [verifyUser]);
 
-  // Função de login (já estava correta)
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await fetch('/api/auth/login', {
@@ -84,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("authToken");
-    router.push('/login'); // Redireciona para o login após o logout
+    router.push('/login');
   };
 
   return (
