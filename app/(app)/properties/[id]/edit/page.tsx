@@ -11,29 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import {
-  ArrowLeft,
-  Save,
-  Plus,
-  Trash2,
-  Upload,
-  X,
-  Share2,
-  Copy,
-} from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Upload, X, Share2, Copy, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { type Imovel, type TipologiaImovel, StatusImovel } from "@prisma/client";
-
-// Helper
-const formatCurrency = (value: number | null | undefined) => {
-  if (value == null) return "N/A";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-};
 
 type PropertyWithDetails = Imovel & {
   tipologias: TipologiaImovel[];
@@ -48,6 +31,7 @@ export default function EditPropertyPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Estados do formulário
   const [title, setTitle] = useState("");
@@ -58,7 +42,7 @@ export default function EditPropertyPage() {
   const [images, setImages] = useState<{ file?: File; url: string }[]>([]);
   const [typologies, setTypologies] = useState<Partial<TipologiaImovel>[]>([]);
 
-  // Estados do Modal de Partilha
+  // Estados do Modal de Compartilhamento
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareableLink, setShareableLink] = useState("");
 
@@ -75,15 +59,25 @@ export default function EditPropertyPage() {
       });
       if (!response.ok) throw new Error("Imóvel não encontrado");
 
-      const data: PropertyWithDetails = await response.json();
+      const data = await response.json();
       
-      setTitle(data.titulo);
-      setDescription(data.descricao || "");
-      setAddress(data.endereco || "");
-      setType(data.tipo || "Empreendimento");
+      setTitle(data.title);
+      setDescription(data.description || "");
+      setAddress(data.address || "");
+      setType(data.type || "Empreendimento");
       setStatus(data.status);
-      setTypologies(data.tipologias || []);
-      setImages(data.imagens.map((img) => ({ url: img.url })) || []);
+      setTypologies(data.typologies?.map((t: any) => ({
+        id: t.id,
+        nome: t.name,
+        valor: t.price,
+        area: t.area,
+        dormitorios: t.bedrooms,
+        suites: t.bathrooms,
+        vagas: t.parking_spaces,
+        unidadesDisponiveis: t.available_units,
+        descricao: t.description,
+      })) || []);
+      setImages(data.images?.map((url: string) => ({ url })) || []);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
       toast({
@@ -91,7 +85,7 @@ export default function EditPropertyPage() {
         title: "Erro ao carregar imóvel",
         description: errorMessage,
       });
-      router.push("/properties"); // Redireciona se não conseguir carregar
+      router.push("/properties");
     } finally {
       setLoading(false);
     }
@@ -112,21 +106,6 @@ export default function EditPropertyPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const uploadPromises = images.map(image => {
-        if (!image.file) return Promise.resolve(image.url);
-
-        const formData = new FormData();
-        formData.append("file", image.file);
-        return fetch("/api/upload", { method: "POST", body: formData })
-          .then(res => {
-            if (!res.ok) throw new Error(`Falha no upload da imagem: ${image.file?.name}`);
-            return res.json();
-          })
-          .then(data => data.url);
-      });
-
-      const uploadedImageUrls = await Promise.all(uploadPromises);
-
       const propertyData = {
         title,
         description,
@@ -134,7 +113,7 @@ export default function EditPropertyPage() {
         type,
         status,
         typologies: typologies.map(({ id, imovelId, ...rest }: Partial<TipologiaImovel>) => rest),
-        imageUrls: uploadedImageUrls,
+        imageUrls: images.map(img => img.url), // Apenas envia as URLs
       };
 
       const token = localStorage.getItem('authToken');
@@ -147,7 +126,7 @@ export default function EditPropertyPage() {
       if (!response.ok) throw new Error("Falha ao guardar as alterações.");
 
       toast({ title: "Sucesso!", description: "Imóvel atualizado com sucesso." });
-      router.push("/properties");
+      router.push(`/properties/${propertyId}/view`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
       toast({
@@ -159,16 +138,61 @@ export default function EditPropertyPage() {
       setSaving(false);
     }
   };
-  
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    try {
+      const uploadedImages: { url: string }[] = [];
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("Token de autenticação não encontrado. Faça login novamente.");
+      }
+
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Falha ao carregar a imagem: ${file.name}`);
+        }
+        const result = await response.json();
+        uploadedImages.push({ url: result.url });
+      }
+      setImages((prev) => [...prev, ...uploadedImages]);
+      toast({ title: "Sucesso!", description: "Imagens carregadas." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro no Upload",
+        description: error.message,
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleShareClick = () => {
     if (user && propertyId) {
-      const link = `${window.location.origin}/properties/view/${propertyId}?brokerId=${user.id}`;
+      const link = `${window.location.origin}/public/properties/${propertyId}?brokerId=${user.id}`;
       setShareableLink(link);
       setIsShareModalOpen(true);
     }
   };
 
   const copyToClipboard = () => {
+    if (!shareableLink) return;
     navigator.clipboard.writeText(shareableLink);
     toast({ title: "Sucesso!", description: "Link copiado!" });
   };
@@ -182,13 +206,6 @@ export default function EditPropertyPage() {
           t.id === id ? { ...t, [field]: value } : t
         )
       );
-  };
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFiles = event.target.files;
-      if (selectedFiles && selectedFiles.length > 0) {
-          const filesArray = Array.from(selectedFiles).map(file => ({ file, url: URL.createObjectURL(file) }));
-          setImages(prev => [...prev, ...filesArray]);
-      }
   };
   const removeImage = (index: number) => setImages(prev => prev.filter((_, i) => i !== index));
 
@@ -205,7 +222,7 @@ export default function EditPropertyPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.push("/properties")}>
+          <Button variant="outline" size="icon" onClick={() => router.push(`/properties/${propertyId}/view`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -216,9 +233,9 @@ export default function EditPropertyPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleShareClick}>
             <Share2 className="h-4 w-4 mr-2" />
-            Partilhar
+            Compartilhar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || uploading}>
             <Save className="h-4 w-4 mr-2" />
             {saving ? "A guardar..." : "Guardar Alterações"}
           </Button>
@@ -305,11 +322,11 @@ export default function EditPropertyPage() {
           <Card>
             <CardHeader><CardTitle>Imagens</CardTitle></CardHeader>
             <CardContent>
-              <Label htmlFor="image-upload" className="w-full inline-block cursor-pointer text-center p-4 border-2 border-dashed rounded-lg hover:bg-gray-50">
-                <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                <span>Subir fotos</span>
+              <Label htmlFor="image-upload" className={`w-full inline-block cursor-pointer text-center p-4 border-2 border-dashed rounded-lg hover:bg-gray-50 ${uploading ? 'cursor-not-allowed bg-gray-100' : ''}`}>
+                {uploading ? <Loader2 className="mx-auto h-8 w-8 text-gray-400 animate-spin" /> : <Upload className="mx-auto h-8 w-8 text-gray-400" />}
+                <span>{uploading ? 'A carregar...' : 'Subir fotos'}</span>
               </Label>
-              <Input id="image-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
+              <Input id="image-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
               <div className="grid grid-cols-2 gap-2 mt-4">
                 {images.map((image, index) => (
                   <div key={image.url} className="relative group">
@@ -325,25 +342,23 @@ export default function EditPropertyPage() {
         </div>
       </div>
 
-      {/* Modal de Partilha */}
+      {/* Modal de Compartilhamento */}
       <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
-          <DialogContent>
-              <DialogHeader>
-                  <DialogTitle>Partilhar Imóvel</DialogTitle>
-                  <DialogDescription>
-                      Copie o link abaixo e envie para o seu cliente. Ele verá uma página com os detalhes do imóvel e um formulário para entrar em contacto. Os valores ficarão ocultos até que ele se registe.
-                  </DialogDescription>
-              </DialogHeader>
-              <div className="flex items-center space-x-2 mt-4">
-                  <Input value={shareableLink} readOnly />
-                  <Button type="button" size="sm" onClick={copyToClipboard}>
-                      <Copy className="h-4 w-4" />
-                  </Button>
-              </div>
-              <DialogFooter>
-                  <Button variant="secondary" onClick={() => setIsShareModalOpen(false)}>Fechar</Button>
-              </DialogFooter>
-          </DialogContent>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Compartilhar Imóvel</DialogTitle>
+            <DialogDescription>
+              Copie o link abaixo e envie para o seu cliente. Ele verá uma página pública com os detalhes do imóvel e um formulário para entrar em contacto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2 mt-4">
+            <Input value={shareableLink} readOnly />
+            <Button type="button" size="sm" onClick={copyToClipboard}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter><Button variant="secondary" onClick={() => setIsShareModalOpen(false)}>Fechar</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

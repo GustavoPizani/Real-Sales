@@ -1,154 +1,393 @@
 // app/(app)/client/[id]/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  ArrowLeft, Phone, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, Building, ArrowUpDown, Pencil, Loader2, AlertTriangle
+} from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import { Phone, Mail, Edit, UserPlus, DollarSign } from "lucide-react";
-import { format } from 'date-fns';
-import { type Cliente, type User, type Nota, type Tarefa, type Imovel } from "@/lib/types";
+import { useToast } from "@/components/ui/use-toast";
+import { format, addHours } from "date-fns"; 
+import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa } from "@/lib/types";
 
-export default function ClientDetailPage() {
+const formatCurrency = (value: number | null | undefined) => {
+    if (value == null) return "N/A";
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+};
+
+export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { toast } = useToast();
+
   const [client, setClient] = useState<Cliente | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [properties, setProperties] = useState<Imovel[]>([]);
+  const [funnelStages, setFunnelStages] = useState<any[]>([]);
+  const [lostReasons, setLostReasons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [isEditClientOpen, setIsEditClientOpen] = useState(false);
-  const [isAssignClientOpen, setIsAssignClientOpen] = useState(false);
-  const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
+  // Modals State
+  const [isWonDialogOpen, setIsWonDialogOpen] = useState(false);
+  const [isLostDialogOpen, setIsLostDialogOpen] = useState(false);
+  const [isFunnelDialogOpen, setIsFunnelDialogOpen] = useState(false);
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [isEditClientDialogOpen, setIsEditClientDialogOpen] = useState(false);
+  const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
+  const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
 
-  const [editClientData, setEditClientData] = useState({
-    fullName: "", email: "", phone: "", budget: "", preferences: "", status: ""
-  });
-  const [assignData, setAssignData] = useState({ assigned_to: "" });
+  // Forms State
+  const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
+  const [lostReason, setLostReason] = useState("");
+  const [newFunnelStatus, setNewFunnelStatus] = useState("");
   const [newNote, setNewNote] = useState("");
+  const [taskForm, setTaskForm] = useState({ title: "", description: "", dataHora: "" });
+  const [editClientForm, setEditClientForm] = useState({ nomeCompleto: "", email: "", telefone: "" });
+  const [newPropertyId, setNewPropertyId] = useState("");
+  const [visitDateTime, setVisitDateTime] = useState("");
+  const [activeTab, setActiveTab] = useState("anotacoes");
 
   const clientId = Array.isArray(params.id) ? params.id[0] : params.id;
 
-  const fetchClientData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!clientId) return;
     setLoading(true);
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/clients/${clientId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error(response.status === 404 ? "Cliente não encontrado" : "Erro ao carregar dados do cliente");
+      const headers = { 'Authorization': `Bearer ${token}` };
       
-      const data = await response.json();
-      setClient(data.client);
+      const [clientRes, stagesRes, reasonsRes, propertiesRes] = await Promise.all([
+        fetch(`/api/clients/${clientId}`, { headers }),
+        fetch('/api/funnel-stages', { headers }),
+        fetch('/api/lost-reasons', { headers }),
+        fetch('/api/properties', { headers })
+      ]);
+
+      if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
       
-      setEditClientData({
-        fullName: data.client.nomeCompleto || "",
-        email: data.client.email || "",
-        phone: data.client.telefone || "",
-        budget: data.client.budget?.toString() || "",
-        preferences: data.client.preferences || "",
-        status: data.client.currentFunnelStage || "",
-      });
-      setAssignData({ assigned_to: data.client.corretorId || "" });
+      const clientData = await clientRes.json();
+      const stagesData = await stagesRes.json();
+      const reasonsData = await reasonsRes.json();
+      const propertiesData = await propertiesRes.json();
+
+      setClient(clientData.client);
+      setFunnelStages(stagesData || []);
+      setLostReasons(reasonsData.reasons || []);
+      setProperties(propertiesData || []);
+
+      if (clientData.client) {
+        setNewFunnelStatus(clientData.client.currentFunnelStage);
+        setEditClientForm({
+            nomeCompleto: clientData.client.nomeCompleto,
+            email: clientData.client.email || "",
+            telefone: clientData.client.telefone || ""
+        });
+        setNewPropertyId(clientData.client.imovelDeInteresseId || "");
+      }
     } catch (err: any) {
       setError(err.message);
+      toast({ variant: "destructive", title: "Erro ao carregar dados", description: err.message });
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
-  
-  const fetchUsers = useCallback(async () => {
-    try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch("/api/users", { headers: { 'Authorization': `Bearer ${token}` } });
-        if (response.ok) {
-            const data = await response.json();
-            setUsers(data.users || []);
-        }
-    } catch (error) {
-        console.error("Error fetching users:", error);
-    }
-  }, []);
+  }, [clientId, toast]);
 
-  useEffect(() => {
-    fetchClientData();
-    fetchUsers();
-  }, [fetchClientData, fetchUsers]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleUpdateClient = async (dataToUpdate: object) => {
+  const handleUpdateClient = async (payload: object, options?: { successMessage?: string }) => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`/api/clients/${clientId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(dataToUpdate),
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload),
       });
-      if (!response.ok) throw new Error(`Falha ao atualizar cliente`);
-      await fetchClientData();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao atualizar cliente.');
+      }
+      toast({ title: "Sucesso!", description: options?.successMessage || "Cliente atualizado com sucesso." });
+      fetchData();
       return true;
-    } catch (error) {
-      console.error(`Error updating client:`, error);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
       return false;
     }
   };
 
   const handleEditClientSubmit = async () => {
-    const success = await handleUpdateClient(editClientData);
-    if (success) setIsEditClientOpen(false);
+    const payload = {
+        nomeCompleto: editClientForm.nomeCompleto,
+        email: editClientForm.email,
+        telefone: editClientForm.telefone
+    };
+    const success = await handleUpdateClient(payload, { successMessage: "Dados do cliente atualizados." });
+    if (success) setIsEditClientDialogOpen(false);
   };
   
-  const handleAssignClientSubmit = async () => {
-    const success = await handleUpdateClient({ assigned_to: assignData.assigned_to });
-    if (success) setIsAssignClientOpen(false);
+  const handleEditPropertySubmit = async () => {
+    const success = await handleUpdateClient({ successMessage: "Imóvel de interesse atualizado.", imovelDeInteresseId: newPropertyId });
+    if (success) setIsEditPropertyDialogOpen(false);
   };
 
-  const handleAddNoteSubmit = async () => {
+  const handleScheduleVisit = () => {
+    if (!visitDateTime || !client?.imovelDeInteresse || !client.email) {
+      toast({ variant: "destructive", title: "Erro", description: "Data, imóvel de interesse e email do cliente são necessários." });
+      return;
+    }
+
+    const startDate = new Date(visitDateTime);
+    const endDate = addHours(startDate, 1);
+    
+    const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+
+    const title = `Visita ao empreendimento ${client.imovelDeInteresse.titulo}`;
+    const location = client.imovelDeInteresse.endereco;
+    const details = `Visita agendada com o cliente ${client.nomeCompleto} para conhecer o imóvel ${client.imovelDeInteresse.titulo}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
+
+    const url = [
+        "https://www.google.com/calendar/render?action=TEMPLATE",
+        `text=${encodeURIComponent(title)}`,
+        `dates=${formatDate(startDate)}/${formatDate(endDate)}`,
+        `details=${encodeURIComponent(details)}`,
+        `location=${encodeURIComponent(location || '')}`,
+        `add=${encodeURIComponent(client.email)}`,
+        "reminders=30",
+        "reminders=1440"
+    ].join("&");
+
+    window.open(url, "_blank");
+    setIsScheduleVisitOpen(false);
+  };
+
+  const handleMarkAsWon = async () => {
+    const success = await handleUpdateClient({
+      overallStatus: ClientOverallStatus.Ganho,
+      currentFunnelStage: "Ganho",
+      detalhesDeVenda: {
+        sale_value: parseFloat(wonDetails.sale_value),
+        sale_date: new Date(wonDetails.sale_date),
+      }
+    }, { successMessage: "Cliente marcado como 'Ganho'!" });
+    if (success) setIsWonDialogOpen(false);
+  };
+
+  const handleMarkAsLost = async () => {
+    const success = await handleUpdateClient({
+      overallStatus: ClientOverallStatus.Perdido,
+      currentFunnelStage: "Perdido",
+      preferences: `Motivo da perda: ${lostReason}`
+    }, { successMessage: "Cliente marcado como 'Perdido'." });
+    if (success) setIsLostDialogOpen(false);
+  };
+
+  const handleChangeFunnelStatus = async () => {
+    const success = await handleUpdateClient({ currentFunnelStage: newFunnelStatus }, { successMessage: "Etapa do funil alterada." });
+    if (success) setIsFunnelDialogOpen(false);
+  };
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`/api/clients/${clientId}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ content: newNote }),
       });
-      if (!response.ok) throw new Error("Falha ao adicionar nota");
+      if (!response.ok) throw new Error("Falha ao adicionar anotação.");
+      toast({ title: "Sucesso!", description: "Anotação adicionada." });
       setNewNote("");
-      setIsAddNoteOpen(false);
-      await fetchClientData();
-    } catch (error) {
-      console.error("Error adding note:", error);
+      setIsNoteDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
     }
   };
-  
-  if (loading) return <div>Carregando...</div>;
-  if (error || !client) return <div>{error || "Cliente não encontrado"}</div>;
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ 
+          title: taskForm.title,
+          description: taskForm.description,
+          due_date: new Date(taskForm.dataHora), 
+          client_id: clientId
+        }),
+      });
+      if (!response.ok) throw new Error("Falha ao criar tarefa.");
+      toast({ title: "Sucesso!", description: "Tarefa criada." });
+      setIsTaskDialogOpen(false);
+      setTaskForm({ title: "", description: "", dataHora: "" });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  const getStatusProps = (status: string): { className?: string; style?: React.CSSProperties } => {
+    if (status === ClientOverallStatus.Ganho) return { className: "bg-emerald-100 text-emerald-800" };
+    if (status === ClientOverallStatus.Perdido) return { className: "bg-red-100 text-red-800" };
+    const stage = funnelStages.find(s => s.name === status);
+    if (stage?.color) return { style: { color: stage.color, backgroundColor: `${stage.color}1A` } };
+    return { className: "bg-gray-100 text-gray-800" };
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-custom mb-4" />
+        <p className="text-muted-foreground">A carregar dados do cliente...</p>
+      </div>
+    );
+  }
+
+  if (error || !client) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
+        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Erro ao Carregar Cliente</h2>
+        <p className="text-muted-foreground mb-4">{error || "O cliente que procura não foi encontrado."}</p>
+        <Button onClick={() => router.push("/pipeline")}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar para o Pipeline
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">{client.nomeCompleto}</h1>
-        <Button onClick={() => router.push("/pipeline")} variant="outline">Voltar</Button>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.push("/pipeline")}><ArrowLeft className="h-4 w-4" /></Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{client.nomeCompleto}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge {...getStatusProps(client.currentFunnelStage)}>{client.currentFunnelStage}</Badge>
+              <span className="text-sm text-gray-600">Corretor: {client.corretor?.nome}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {client.overallStatus === ClientOverallStatus.Ativo && (
+            <>
+              <Button variant="outline" className="text-green-600 hover:text-green-700" onClick={() => setIsWonDialogOpen(true)}><CheckCircle className="h-4 w-4 mr-2" /> Cliente Ganho</Button>
+              <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={() => setIsLostDialogOpen(true)}><XCircle className="h-4 w-4 mr-2" /> Cliente Perdido</Button>
+            </>
+          )}
+        </div>
       </div>
-      <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Informações do Cliente</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setIsEditClientOpen(true)}><Edit className="h-4 w-4 mr-2" /> Editar</Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-              <p><Mail className="inline mr-2" /> {client.email || "N/A"}</p>
-              <p><Phone className="inline mr-2" /> {client.telefone || "N/A"}</p>
-              <p><DollarSign className="inline mr-2" /> {client.budget ? `R$ ${client.budget.toLocaleString("pt-BR")}` : "N/A"}</p>
-          </CardContent>
-      </Card>
-      {/* O resto da UI da página... */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Informações do Cliente</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4">
+                <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
+                <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
+                <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
+                <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row justify-between items-center">
+              <CardTitle>Histórico e Atividades</CardTitle>
+              <Button size="sm" onClick={() => activeTab === 'tarefas' ? setIsTaskDialogOpen(true) : setIsNoteDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                {activeTab === 'tarefas' ? 'Nova Tarefa' : 'Nova Anotação'}
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Tabs defaultValue="anotacoes" onValueChange={setActiveTab} className="w-full">
+                <div className="px-6">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="anotacoes">Anotações</TabsTrigger>
+                    <TabsTrigger value="tarefas">Tarefas</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="tarefas" className="p-6 pt-4">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Tarefa</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {client.tarefas?.length > 0 ? client.tarefas.map(task => (<TableRow key={task.id}><TableCell>{task.titulo}</TableCell><TableCell>{format(new Date(task.dataHora), "dd/MM/yy HH:mm")}</TableCell><TableCell><Badge variant={task.concluida ? "secondary" : "default"}>{task.concluida ? "Concluída" : "Pendente"}</Badge></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+                <TabsContent value="anotacoes" className="p-6 pt-4">
+                  <div className="space-y-4">
+                    {client.notas?.length > 0 ? client.notas.map(note => (
+                      <div key={note.id} className="border-l-2 pl-4"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{note.createdBy} em {format(new Date(note.createdAt), "dd/MM/yyyy")}</p></div>
+                    )) : <p className="text-center text-muted-foreground">Nenhuma anotação.</p>}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="space-y-6">
+          {client.imovelDeInteresse && <Card><CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader><CardContent><h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3><p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco}</p><p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p><Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}/edit`)}>Ver Detalhes</Button><Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button></CardContent></Card>}
+          <Card>
+              <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2"/>Editar Cliente</Button>
+                  <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
+                  <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
+              </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center justify-between"><span>Status Atual</span><Badge {...getStatusProps(client.overallStatus)}>{client.overallStatus ?? 'N/A'}</Badge></div>
+              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.corretor?.nome ?? 'N/A'}</span></div>
+              <Separator/>
+              <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notas?.length ?? 0}</span></div>
+              <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tarefas?.filter(t => !t.concluida).length ?? 0}</span></div>
+              <Separator/>
+              <div className="flex justify-between"><span>Cliente desde</span><span className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</span></div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      
+      {/* Modais */}
+      <Dialog open={isWonDialogOpen} onOpenChange={setIsWonDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Ganho</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="sale_value">Valor da Venda</Label><Input id="sale_value" type="number" value={wonDetails.sale_value} onChange={e => setWonDetails({...wonDetails, sale_value: e.target.value})} /><Label htmlFor="sale_date">Data da Venda</Label><Input id="sale_date" type="date" value={wonDetails.sale_date} onChange={e => setWonDetails({...wonDetails, sale_date: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsWonDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsWon}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isLostDialogOpen} onOpenChange={setIsLostDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Perdido</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="lost_reason">Motivo da Perda</Label><Select value={lostReason} onValueChange={setLostReason}><SelectTrigger><SelectValue placeholder="Selecione um motivo..." /></SelectTrigger><SelectContent>{lostReasons.map(r => <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsLostDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsLost} variant="destructive">Confirmar Perda</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isFunnelDialogOpen} onOpenChange={setIsFunnelDialogOpen}><DialogContent><DialogHeader><DialogTitle>Alterar Etapa do Funil</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="funnel_status">Nova Etapa</Label><Select value={newFunnelStatus} onValueChange={setNewFunnelStatus}><SelectTrigger><SelectValue placeholder="Selecione uma etapa..." /></SelectTrigger><SelectContent>{funnelStages.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsFunnelDialogOpen(false)}>Cancelar</Button><Button onClick={handleChangeFunnelStatus}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Anotação</DialogTitle></DialogHeader><form onSubmit={handleAddNote} className="py-4"><Textarea placeholder="Escreva sua anotação aqui..." value={newNote} onChange={e => setNewNote(e.target.value)} /><DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsNoteDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Tarefa</DialogTitle></DialogHeader>
+        <form onSubmit={handleAddTask} className="space-y-4 py-4">
+          <Label>Título</Label>
+          <Input value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} required />
+          <Label>Descrição</Label>
+          <Textarea value={taskForm.description || ''} onChange={e => setTaskForm({...taskForm, description: e.target.value})} />
+          <Label>Data e Hora</Label>
+          <Input type="datetime-local" value={taskForm.dataHora} onChange={e => setTaskForm({...taskForm, dataHora: e.target.value})} required />
+          <DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsTaskDialogOpen(false)}>Cancelar</Button><Button type="submit">Criar Tarefa</Button></DialogFooter>
+        </form>
+      </DialogContent></Dialog>
+      <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.nomeCompleto} onChange={e => setEditClientForm({...editClientForm, nomeCompleto: e.target.value})} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({...editClientForm, email: e.target.value})} /><Label>Telefone</Label><Input value={editClientForm.telefone} onChange={e => setEditClientForm({...editClientForm, telefone: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

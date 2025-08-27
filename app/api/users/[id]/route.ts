@@ -1,31 +1,39 @@
-// app/api/users/[id]/route.ts
-
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from 'next/server';
 import prisma from "@/lib/prisma";
-import { getUserFromToken } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import { getUserFromToken, hashPassword } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
 
 // GET: Busca um utilizador específico
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) {
+    const loggedInUser = await getUserFromToken(request);
+    if (!loggedInUser) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const userToFind = await prisma.user.findUnique({
+    const userToFind = await prisma.usuario.findUnique({
       where: { id: params.id },
-      include: { superior: true },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        role: true,
+        superiorId: true,
+      },
     });
 
     if (!userToFind) {
       return NextResponse.json({ error: "Utilizador não encontrado" }, { status: 404 });
     }
+    
+    // Mapeia para o formato esperado pelo frontend (name)
+    const { nome, ...rest } = userToFind;
+    const userForFrontend = { ...rest, name: nome };
 
-    return NextResponse.json(userToFind);
+    return NextResponse.json(userForFrontend);
   } catch (error) {
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Erro ao buscar utilizador:", error);
+    return NextResponse.json({ error: "Erro interno ao buscar utilizador" }, { status: 500 });
   }
 }
 
@@ -38,42 +46,54 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         }
 
         const body = await request.json();
-        const { name, email, role, manager_id, currentPassword, newPassword } = body;
+        const { name, email, role, superiorId, password } = body;
 
-        // Apenas admins podem mudar o cargo e o gestor de outros
-        if ((role || manager_id) && currentUser.role !== Role.marketing_adm) {
-            return NextResponse.json({ error: "Sem permissão para alterar cargo ou gestor." }, { status: 403 });
+        const isAdmin = currentUser.role === Role.marketing_adm;
+        const isEditingSelf = currentUser.id === params.id;
+
+        // Apenas um admin pode editar outros utilizadores. Utilizadores normais só se podem editar a si mesmos.
+        if (!isAdmin && !isEditingSelf) {
+             return NextResponse.json({ error: "Sem permissão para editar este utilizador." }, { status: 403 });
         }
 
-        const dataToUpdate: Prisma.UserUpdateInput = {};
+        const dataToUpdate: Prisma.UsuarioUpdateInput = {};
 
-        if (name) dataToUpdate.name = name;
+        if (name) dataToUpdate.nome = name;
         if (email) dataToUpdate.email = email;
-        if (role) dataToUpdate.role = role;
-        if (manager_id) dataToUpdate.superior = { connect: { id: manager_id } };
 
-        // Lógica para atualização de senha
-        if (newPassword && currentPassword) {
-            const userToUpdate = await prisma.user.findUnique({ where: { id: params.id } });
-            if (!userToUpdate?.passwordHash) {
-                return NextResponse.json({ error: "Utilizador não tem uma senha definida." }, { status: 400 });
+        // Apenas admins podem mudar o cargo e o superior
+        if (isAdmin) {
+            if (role) dataToUpdate.role = role;
+            if (superiorId !== undefined) { // Permite definir superiorId como null
+                dataToUpdate.superiorId = superiorId;
             }
-            const isPasswordValid = await bcrypt.compare(currentPassword, userToUpdate.passwordHash);
-            if (!isPasswordValid) {
-                return NextResponse.json({ error: "Senha atual incorreta." }, { status: 403 });
-            }
-            dataToUpdate.passwordHash = await bcrypt.hash(newPassword, 12);
+        } else if (role || superiorId !== undefined) {
+            // Utilizadores não-admin não podem alterar o seu próprio cargo ou superior
+            return NextResponse.json({ error: "Sem permissão para alterar cargo ou superior." }, { status: 403 });
         }
 
-        const updatedUser = await prisma.user.update({
+        // Apenas admins podem redefinir a senha de outros utilizadores sem a senha antiga
+        if (password && isAdmin && !isEditingSelf) {
+            dataToUpdate.passwordHash = await hashPassword(password);
+        } else if (password) {
+            // A alteração de senha do próprio utilizador deve ser feita pelo endpoint /api/users/change-password
+            return NextResponse.json({ error: "Para alterar a sua senha, use a aba de Segurança." }, { status: 400 });
+        }
+
+        const updatedUser = await prisma.usuario.update({
             where: { id: params.id },
             data: dataToUpdate,
         });
+        
+        const { passwordHash, nome, ...userWithoutSensitiveData } = updatedUser;
 
-        return NextResponse.json({ user: updatedUser });
+        return NextResponse.json({ user: { ...userWithoutSensitiveData, name: nome } });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Erro ao atualizar utilizador:", error);
+        if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
+            return NextResponse.json({ error: 'Este email já está em uso.' }, { status: 400 });
+        }
         return NextResponse.json({ error: "Erro interno ao atualizar utilizador" }, { status: 500 });
     }
 }
@@ -83,20 +103,23 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     try {
         const currentUser = await getUserFromToken(request);
         if (!currentUser || currentUser.role !== Role.marketing_adm) {
-            return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+            return NextResponse.json({ error: "Sem permissão para remover utilizadores." }, { status: 403 });
         }
         
         if (currentUser.id === params.id) {
             return NextResponse.json({ error: "Não pode excluir a sua própria conta." }, { status: 400 });
         }
 
-        await prisma.user.delete({
+        await prisma.usuario.delete({
             where: { id: params.id },
         });
 
         return NextResponse.json({ message: "Utilizador removido com sucesso." });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Erro ao remover utilizador:", error);
+        if (error.code === 'P2003') { // Foreign key constraint failed
+             return NextResponse.json({ error: "Não é possível remover o utilizador pois ele é superior de outros ou tem clientes/tarefas associadas." }, { status: 409 });
+        }
         return NextResponse.json({ error: "Erro interno ao remover utilizador" }, { status: 500 });
     }
 }

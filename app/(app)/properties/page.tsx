@@ -1,5 +1,4 @@
 // app/(app)/properties/page.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -10,22 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label"; // <-- ADICIONADO: Importação em falta
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Plus, Search, Filter, Edit, Building, MapPin, DollarSign, Home, Link as LinkIcon, PencilLine, Loader2 } from "lucide-react";
-import { type Property, PropertyStatus } from "@/lib/types";
+import { type Imovel, StatusImovel } from "@/lib/types"; // CORREÇÃO: Importado StatusImovel
 import { useToast } from "@/components/ui/use-toast";
 
 export default function PropertiesPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [properties, setProperties] = useState<Imovel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  // Estados para a nova funcionalidade de importação
   const [isAddOptionsOpen, setIsAddOptionsOpen] = useState(false);
   const [isImportUrlOpen, setIsImportUrlOpen] = useState(false);
   const [importUrl, setImportUrl] = useState("");
@@ -59,21 +57,20 @@ export default function PropertiesPage() {
 
   const filteredProperties = properties.filter((property) => {
     const matchesSearch =
-      property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (property.address && property.address.toLowerCase().includes(searchTerm.toLowerCase()));
+      property.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (property.endereco && property.endereco.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = statusFilter === "all" || property.status === statusFilter;
-    const matchesType = typeFilter === "all" || !property.type || property.type.toLowerCase() === typeFilter.toLowerCase();
-
+    const matchesType = typeFilter === "all" || !property.tipo || property.tipo.toLowerCase() === typeFilter.toLowerCase();
 
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const getStatusBadge = (status: PropertyStatus) => {
-    const variants: Record<PropertyStatus, "default" | "secondary" | "destructive"> = {
-      [PropertyStatus.Disponivel]: "default",
-      [PropertyStatus.Reservado]: "secondary",
-      [PropertyStatus.Vendido]: "destructive",
+  const getStatusBadge = (status: StatusImovel) => {
+    const variants: Record<StatusImovel, "default" | "secondary" | "destructive"> = {
+      [StatusImovel.Disponivel]: "default",
+      [StatusImovel.Reservado]: "secondary",
+      [StatusImovel.Vendido]: "destructive",
     };
     return <Badge variant={variants[status] || "default"}>{status}</Badge>;
   };
@@ -103,7 +100,6 @@ export default function PropertiesPage() {
     }
     setIsImporting(true);
     
-    // --- SIMULAÇÃO DE BACKEND ---
     console.log("Simulando scraping do URL:", importUrl);
     await new Promise(resolve => setTimeout(resolve, 2000));
     
@@ -138,7 +134,6 @@ export default function PropertiesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
@@ -150,7 +145,6 @@ export default function PropertiesPage() {
         </Button>
       </div>
 
-      {/* Filtros */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -173,9 +167,9 @@ export default function PropertiesPage() {
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value={PropertyStatus.Disponivel}>Disponível</SelectItem>
-                <SelectItem value={PropertyStatus.Reservado}>Reservado</SelectItem>
-                <SelectItem value={PropertyStatus.Vendido}>Vendido</SelectItem>
+                <SelectItem value={StatusImovel.Disponivel}>Disponível</SelectItem>
+                <SelectItem value={StatusImovel.Reservado}>Reservado</SelectItem>
+                <SelectItem value={StatusImovel.Vendido}>Vendido</SelectItem>
               </SelectContent>
             </Select>
              <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -191,7 +185,6 @@ export default function PropertiesPage() {
         </CardContent>
       </Card>
 
-      {/* Lista de Imóveis */}
       <Card>
         <CardHeader><CardTitle>Lista de Imóveis</CardTitle></CardHeader>
         <CardContent>
@@ -207,27 +200,27 @@ export default function PropertiesPage() {
             </TableHeader>
             <TableBody>
               {filteredProperties.map((property) => (
-                <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/properties/${property.id}/edit`)}>
+                <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/properties/${property.id}/view`)}>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{property.title}</p>
+                      <p className="font-medium">{property.titulo}</p>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        {property.address || 'Endereço não informado'}
+                        {property.endereco || 'Endereço não informado'}
                       </p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="flex items-center gap-1 w-fit">
                       <Home className="h-3 w-3" />
-                      {property.type || 'N/A'}
+                      {property.tipo || 'N/A'}
                     </Badge>
                   </TableCell>
                   <TableCell>{getStatusBadge(property.status)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <DollarSign className="h-4 w-4 text-gray-400" />
-                      {formatCurrency(property.price)}
+                      {formatCurrency(property.preco)}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -251,7 +244,6 @@ export default function PropertiesPage() {
         </CardContent>
       </Card>
 
-      {/* Modal de Opções de Adição */}
       <Dialog open={isAddOptionsOpen} onOpenChange={setIsAddOptionsOpen}>
         <DialogContent>
           <DialogHeader>
@@ -271,7 +263,6 @@ export default function PropertiesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal para Importar URL */}
       <Dialog open={isImportUrlOpen} onOpenChange={setIsImportUrlOpen}>
         <DialogContent>
           <DialogHeader>

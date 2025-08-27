@@ -1,5 +1,5 @@
 // prisma/seed.ts
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, StatusImovel } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -75,11 +75,46 @@ async function main() {
   
   console.log('Usuários criados/atualizados:', { admin, thaina, herculano, gustavo });
 
-  // 5. Adiciona a cliente Nelma, atribuída ao corretor Gustavo
+  // 5. Cria o novo Imóvel "Escape Eden" (LÓGICA CORRIGIDA)
+  let escapeEdenProperty = await prisma.imovel.findFirst({
+    where: { titulo: "Escape Eden - Cyrela" },
+  });
+
+  if (!escapeEdenProperty) {
+    escapeEdenProperty = await prisma.imovel.create({
+      data: {
+        titulo: "Escape Eden - Cyrela",
+        descricao: "Entre a natureza e o extraordinário, nasce um refúgio na cidade do futuro. Um paraíso particular da Cyrela no Brooklin, com design que encanta os sentidos e um parque de 12 mil m².",
+        endereco: "Avenida Roque Petroni Júnior, 576 - Brooklin, São Paulo - SP",
+        status: StatusImovel.Disponivel,
+        tipo: "Empreendimento",
+        preco: 1358004, // Valor "A partir de" como referência
+      }
+    });
+    console.log(`Imóvel criado: ${escapeEdenProperty.titulo}`);
+  } else {
+    console.log(`Imóvel "${escapeEdenProperty.titulo}" já existe.`);
+  }
+
+  // 6. Adiciona as tipologias ao imóvel "Escape Eden"
+  await prisma.tipologiaImovel.createMany({
+    data: [
+      { nome: 'Apartamento 50m²', valor: 1045729, area: 50, dormitorios: 1, suites: 0, vagas: 1, imovelId: escapeEdenProperty.id },
+      { nome: 'Apartamento 74m²', valor: 1215589, area: 74, dormitorios: 2, suites: 1, vagas: 1, imovelId: escapeEdenProperty.id },
+      { nome: 'Apartamento 94m²', valor: 1630264, area: 94, dormitorios: 3, suites: 1, vagas: 1, imovelId: escapeEdenProperty.id },
+      { nome: 'Apartamento 94m² (2 Suítes)', valor: 2047223, area: 94, dormitorios: 2, suites: 2, vagas: 2, imovelId: escapeEdenProperty.id },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('Tipologias do imóvel Escape Eden criadas/verificadas.');
+
+  // 7. Adiciona a cliente Nelma, atribuída ao corretor Gustavo e interessada no Escape Eden
   if (gustavo) {
     await prisma.cliente.upsert({
       where: { email: 'nelmaaguiadourada@gmail.com' },
-      update: {},
+      update: {
+        imovelDeInteresseId: escapeEdenProperty.id,
+      },
       create: {
         nomeCompleto: 'Nelma',
         email: 'nelmaaguiadourada@gmail.com',
@@ -87,12 +122,13 @@ async function main() {
         currentFunnelStage: 'Contato',
         overallStatus: 'Ativo',
         corretorId: gustavo.id,
+        imovelDeInteresseId: escapeEdenProperty.id,
       }
     });
-    console.log('Cliente Nelma criada e atribuída a Gustavo.');
+    console.log('Cliente Nelma criada e atribuída a Gustavo com interesse no imóvel Escape Eden.');
   }
 
-  // 6. Cria os estágios do funil
+  // 8. Cria os estágios do funil
   console.log('Criando/atualizando estágios do funil...');
   for (const stage of funnelStagesData) {
     const funnelStage = await prisma.funnelStage.upsert({
@@ -107,7 +143,7 @@ async function main() {
     console.log(`Estágio do funil criado/atualizado: ${funnelStage.name}`);
   }
 
-  // 7. Inicializa as configurações dos cargos
+  // 9. Inicializa as configurações dos cargos
   await prisma.roleSetting.upsert({
     where: { roleName: 'diretor' },
     update: {},
@@ -125,5 +161,10 @@ async function main() {
 }
 
 main()
-  .catch((e) => console.error(e))
-  .finally(async () => await prisma.$disconnect());
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

@@ -1,42 +1,42 @@
-// app/api/clients/[id]/notes/route.ts
-
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { getUserFromToken } from '@/lib/auth';
 
-// POST: Adiciona uma nova nota a um cliente
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+const prisma = new PrismaClient();
+
+export async function POST(request: Request, { params }: { params: { clientId: string } }) {
   try {
     const user = await getUserFromToken(request);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { id } = params; // ID do cliente
     const body = await request.json();
     const { content } = body;
 
     if (!content) {
-      return NextResponse.json(
-        { error: 'O conteúdo da nota é obrigatório.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Conteúdo da nota é obrigatório' }, { status: 400 });
     }
 
-    const newNote = await prisma.note.create({
-      data: {
-        content,
-        createdBy: user.name, // Salva o nome do usuário que criou a nota
-        clientId: id,
-      },
-    });
+    // Usar uma transação para garantir que ambas as operações (criar nota e atualizar cliente)
+    // sejam concluídas com sucesso ou revertidas juntas.
+    const [newNote] = await prisma.$transaction([
+      prisma.nota.create({
+        data: {
+          content,
+          createdBy: user.name, // Corrigido: o objeto 'user' do token usa 'name'
+          clienteId: params.clientId,
+        },
+      }),
+      prisma.cliente.update({
+        where: { id: params.clientId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
 
     return NextResponse.json(newNote, { status: 201 });
   } catch (error) {
-    console.error('Erro ao adicionar nota:', error);
-    return NextResponse.json(
-      { error: 'Erro interno do servidor ao adicionar nota.' },
-      { status: 500 }
-    );
+    console.error('Erro ao criar nota:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

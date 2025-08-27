@@ -109,17 +109,3 @@ export const USER_ROLE_LABELS: Record<Role, string> = {
   [Role.corretor]: "Corretor",
 };
 
-export const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  call: "Ligação",
-  visit: "Visita",
-  follow_up: "Follow-up",
-  meeting: "Reunião",
-  other: "Outro",
-};
-
-export const PRIORITY_LABELS: Record<Priority, string> = {
-    baixa: "Baixa",
-    media: "Média",
-    alta: "Alta",
-    urgente: "Urgente"
-};

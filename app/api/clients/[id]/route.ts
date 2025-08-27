@@ -1,9 +1,11 @@
 // app/api/clients/[id]/route.ts
+
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 
+// Função auxiliar para buscar cliente com detalhes
 async function getClientWithDetails(id: string) {
   return await prisma.cliente.findUnique({
     where: { id },
@@ -28,7 +30,7 @@ async function getClientWithDetails(id: string) {
           createdAt: 'desc',
         },
       },
-      tarefas: {
+      tarefas: { // A busca de tarefas foi mantida simples, sem ordenar por campos inexistentes
         orderBy: {
           dataHora: 'desc',
         },
@@ -37,6 +39,7 @@ async function getClientWithDetails(id: string) {
   });
 }
 
+// GET: Retorna um único cliente com seus dados relacionados
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getUserFromToken(request);
@@ -50,7 +53,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     if (!client) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
     }
-
+    
     return NextResponse.json({ client });
   } catch (error) {
     console.error('Erro ao buscar cliente:', error);
@@ -58,6 +61,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
+// PUT: Atualiza um cliente
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getUserFromToken(request);
@@ -70,15 +74,18 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     const dataToUpdate: Prisma.ClienteUpdateInput = {};
 
-    if (body.fullName !== undefined) dataToUpdate.nomeCompleto = body.fullName;
+    // Corrigido para corresponder aos nomes enviados pelo frontend
+    if (body.nomeCompleto !== undefined) dataToUpdate.nomeCompleto = body.nomeCompleto;
     if (body.email !== undefined) dataToUpdate.email = body.email;
-    if (body.phone !== undefined) dataToUpdate.telefone = body.phone;
-    if (body.status !== undefined) dataToUpdate.currentFunnelStage = body.status;
-    if (body.budget !== undefined) dataToUpdate.budget = parseFloat(body.budget) || null;
+    if (body.telefone !== undefined) dataToUpdate.telefone = body.telefone;
+
+    // Adicionado suporte para outros campos de atualização
+    if (body.currentFunnelStage !== undefined) dataToUpdate.currentFunnelStage = body.currentFunnelStage;
+    if (body.imovelDeInteresseId !== undefined) dataToUpdate.imovelDeInteresseId = body.imovelDeInteresseId;
+    if (body.overallStatus !== undefined) dataToUpdate.overallStatus = body.overallStatus;
+    if (body.sale_value !== undefined) dataToUpdate.sale_value = body.sale_value;
+    if (body.sale_date !== undefined) dataToUpdate.sale_date = new Date(body.sale_date);
     if (body.preferences !== undefined) dataToUpdate.preferences = body.preferences;
-    if (body.assigned_to !== undefined) {
-      dataToUpdate.corretor = { connect: { id: body.assigned_to } };
-    }
 
     if (Object.keys(dataToUpdate).length === 0) {
       return NextResponse.json({ error: 'Nenhum dado para atualizar' }, { status: 400 });
@@ -92,8 +99,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     return NextResponse.json(updatedClient);
   } catch (error) {
     console.error('Erro ao atualizar cliente:', error);
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2025') {
+        return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
+      }
     }
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
   }

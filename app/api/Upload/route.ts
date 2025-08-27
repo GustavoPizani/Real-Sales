@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     // e o terceiro são as opções, como o nível de acesso.
     const blob = await put(file.name, file, {
       access: 'public', // Torna o ficheiro publicamente acessível através do URL
+      addRandomSuffix: true, // Adiciona um sufixo aleatório para evitar sobreposições
     });
 
     // A função 'put' devolve um objeto com várias informações, incluindo o URL público do ficheiro.

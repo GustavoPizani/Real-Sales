@@ -1,7 +1,6 @@
 // app/api/users/route.ts
-
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma from "@/lib/prisma"; // CORREÇÃO: Importação do cliente Prisma que estava faltando
 import { getUserFromToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
@@ -15,17 +14,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const users = await prisma.user.findMany({
+    const users = await prisma.usuario.findMany({ // Agora 'prisma' está definido
       include: { 
-        superior: true // Inclui os dados do superior (manager)
+        superior: true
       },
       orderBy: { createdAt: 'desc' },
     });
     
-    // Mapeia os campos para corresponder ao que o frontend espera
     const formattedUsers = users.map(u => ({
         ...u,
-        manager: u.superior ? { ...u.superior, name: u.superior.name, role: u.superior.role } : null
+        manager: u.superior ? { name: u.superior.nome, role: u.superior.role } : null
     }));
 
     return NextResponse.json({ users: formattedUsers });
@@ -50,16 +48,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Campos obrigatórios em falta" }, { status: 400 });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.usuario.findUnique({ where: { email } });
     if (existingUser) {
         return NextResponse.json({ error: "Email já está em uso" }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const newUser = await prisma.user.create({
+    const newUser = await prisma.usuario.create({
         data: {
-            name: name,
+            nome: name,
             email,
             passwordHash,
             role,

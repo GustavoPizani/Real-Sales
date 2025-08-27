@@ -148,27 +148,30 @@ export function useToast() {
 
   const toast = React.useCallback(
     (props: Omit<ToasterToast, "id">) => {
-      const id = genId()
+      const id = genId();
       const update = (updatedProps: ToasterToast) =>
         dispatch({
           type: "UPDATE_TOAST",
           toast: { ...updatedProps, id },
-        })
+        });
+      const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
 
       dispatch({
         type: "ADD_TOAST",
         toast: {
           ...props,
           id,
+          duration: props.duration ?? 5000,
           open: true,
-          update,
-          dismiss: () => dispatch({ type: "DISMISS_TOAST", toastId: id }),
+          onOpenChange: (open) => {
+            if (!open) dismiss();
+          },
         },
-      })
+      });
 
       return {
         id,
-        dismiss: () => dispatch({ type: "DISMISS_TOAST", toastId: id }),
+        dismiss,
         update,
       }
     },
