@@ -1,10 +1,10 @@
-// app/api/users/route.ts
+// c:\Users\gusta\Real-sales\app\api\users\route.ts
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma"; // CORREÇÃO: Importação do cliente Prisma que estava faltando
+import prisma from "@/lib/prisma";
 import { getUserFromToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 
 // GET: Busca todos os utilizadores
 export async function GET(request: NextRequest) {
@@ -14,19 +14,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const users = await prisma.usuario.findMany({ // Agora 'prisma' está definido
+    const users = await prisma.usuario.findMany({
       include: { 
-        superior: true
+        superior: {
+          select: {
+            nome: true
+          }
+        } 
       },
       orderBy: { createdAt: 'desc' },
     });
     
-    const formattedUsers = users.map(u => ({
-        ...u,
-        manager: u.superior ? { name: u.superior.nome, role: u.superior.role } : null
-    }));
-
-    return NextResponse.json({ users: formattedUsers });
+    return NextResponse.json({ users: users });
   } catch (error) {
     console.error("Erro ao buscar utilizadores:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
@@ -38,31 +37,33 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromToken(request);
     if (!user || user.role !== Role.marketing_adm) {
-        return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+        return NextResponse.json({ error: "Sem permissão para criar utilizadores" }, { status: 403 });
     }
 
     const body = await request.json();
-    const { name, email, password, role, manager_id } = body;
+    const { name, email, password, role, superiorId } = body;
 
     if (!name || !email || !password || !role) {
-        return NextResponse.json({ error: "Campos obrigatórios em falta" }, { status: 400 });
+        return NextResponse.json({ error: "Nome, email, senha e cargo são obrigatórios." }, { status: 400 });
     }
 
     const existingUser = await prisma.usuario.findUnique({ where: { email } });
     if (existingUser) {
-        return NextResponse.json({ error: "Email já está em uso" }, { status: 400 });
+        return NextResponse.json({ error: "Este email já está em uso" }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    const data: Prisma.UsuarioCreateInput = {
+      nome: name,
+      email,
+      passwordHash,
+      role,
+      superior: superiorId ? { connect: { id: superiorId } } : undefined,
+    };
+
     const newUser = await prisma.usuario.create({
-        data: {
-            nome: name,
-            email,
-            passwordHash,
-            role,
-            superiorId: manager_id || null,
-        }
+        data,
     });
 
     return NextResponse.json(newUser, { status: 201 });

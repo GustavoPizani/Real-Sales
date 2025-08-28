@@ -1,4 +1,4 @@
-// components/navigation.tsx
+// c:UsersgustaReal-salescomponentsnavigation.tsx
 "use client";
 
 import Link from 'next/link';
@@ -15,12 +15,10 @@ const navigationLinks = [
   { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Imóveis', href: '/properties', icon: Building, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Usuários', href: '/users', icon: Users, roles: ['marketing_adm', 'diretor', 'gerente'] },
-  { name: 'Integrações', href: '/integrations', icon: Megaphone, roles: ['marketing_adm'] },
-  { name: 'Roleta', href: '/roleta', icon: RotateCcw, roles: ['marketing_adm'] },
+  // { name: 'Integrações', href: '/integrations', icon: Megaphone, roles: ['marketing_adm'] },
+  // { name: 'Roleta', href: '/roleta', icon: RotateCcw, roles: ['marketing_adm'] },
   { name: 'Configurações', href: '/settings', icon: Settings, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
 ];
-
 
 export function Navigation() {
   const pathname = usePathname();
@@ -63,17 +61,17 @@ export function Navigation() {
             <span className="text-md font-bold text-white tracking-widest">RS</span>
           </div>
           <div className={cn(
-            "flex flex-col transition-opacity duration-200",
+            "flex flex-col transition-opacity duration-200 whitespace-nowrap",
             isExpanded ? "opacity-100" : "opacity-0"
           )}>
-            <span className="text-lg font-extrabold leading-tight text-white whitespace-nowrap">Real Sales</span>
-            <span className="text-xs text-gray-200 font-normal whitespace-nowrap">CRM</span>
+            <span className="text-lg font-extrabold leading-tight text-white">Real Sales</span>
+            <span className="text-xs text-gray-200 font-normal">CRM</span>
           </div>
         </Link>
       </div>
       
       {/* Navigation Links */}
-      <nav className="flex-1 px-2 py-4 overflow-y-auto">
+      <nav className="flex-1 px-2 py-4 overflow-hidden">
         <ul className="space-y-2">
           {filteredNavigation.map((item) => {
             const Icon = item.icon;
@@ -84,16 +82,16 @@ export function Navigation() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center p-3 text-sm font-medium rounded-lg transition-colors duration-200 group relative",
+                    "flex items-center p-3 text-sm font-medium rounded-lg transition-colors duration-200 group relative border-l-4",
                     isActive
-                      ? "bg-secondary-custom text-primary-custom"
-                      : "text-gray-200 hover:bg-tertiary-custom/60 hover:text-white"
+                      ? "bg-secondary-custom text-primary-custom border-secondary-custom"
+                      : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:border-secondary-custom"
                   )}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
                   <span className={cn(
-                      "ml-3 whitespace-nowrap transition-opacity",
-                      isExpanded ? "opacity-100" : "opacity-0"
+                    "ml-3 whitespace-nowrap transition-opacity",
+                    isExpanded ? "opacity-100" : "opacity-0 hidden"
                   )}>
                     {item.name}
                   </span>
@@ -119,11 +117,11 @@ export function Navigation() {
               </span>
             </div>
             <div className={cn(
-              "ml-3 min-w-0 flex-1 transition-opacity",
-              isExpanded ? "opacity-100" : "opacity-0"
+              "ml-3 min-w-0 flex-1 transition-opacity whitespace-nowrap",
+              isExpanded ? "opacity-100" : "opacity-0 hidden"
             )}>
-              <p className="text-sm font-semibold truncate whitespace-nowrap">{user?.name}</p>
-              <p className="text-xs text-gray-400 truncate whitespace-nowrap">
+              <p className="text-sm font-semibold truncate">{user?.name}</p>
+              <p className="text-xs text-gray-400 truncate">
                 {getRoleLabel(user?.role || '')}
               </p>
             </div>
@@ -138,7 +136,10 @@ export function Navigation() {
           )}
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
-          {isExpanded && <span className="ml-3">Sair</span>}
+          <span className={cn(
+            "ml-3",
+            !isExpanded && "hidden"
+          )}>Sair</span>
         </Button>
       </div>
     </aside>

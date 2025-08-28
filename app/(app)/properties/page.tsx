@@ -24,11 +24,6 @@ export default function PropertiesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const [isAddOptionsOpen, setIsAddOptionsOpen] = useState(false);
-  const [isImportUrlOpen, setIsImportUrlOpen] = useState(false);
-  const [importUrl, setImportUrl] = useState("");
-  const [isImporting, setIsImporting] = useState(false);
-
   useEffect(() => {
     const fetchProperties = async () => {
       setLoading(true);
@@ -83,44 +78,6 @@ export default function PropertiesPage() {
     }).format(value);
   };
 
-  const handleManualRedirect = () => {
-    setIsAddOptionsOpen(false);
-    router.push("/properties/new");
-  };
-
-  const handleImportRedirect = () => {
-    setIsAddOptionsOpen(false);
-    setIsImportUrlOpen(true);
-  };
-
-  const handleImportFromUrl = async () => {
-    if (!importUrl) {
-        toast({ variant: "destructive", title: "Erro", description: "Por favor, insira um URL." });
-        return;
-    }
-    setIsImporting(true);
-    
-    console.log("Simulando scraping do URL:", importUrl);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    toast({
-        title: "Informações Importadas!",
-        description: "Os dados foram pré-preenchidos. Por favor, reveja e complete o cadastro.",
-    });
-
-    const queryParams = new URLSearchParams({
-        title: "Empreendimento Importado (Exemplo)",
-        address: "Endereço extraído do link",
-        price: "1250000",
-    }).toString();
-
-    setIsImporting(false);
-    setIsImportUrlOpen(false);
-    setImportUrl("");
-
-    router.push(`/properties/new?${queryParams}`);
-  };
-
   if (loading) {
     return (
       <div className="p-6">
@@ -139,7 +96,7 @@ export default function PropertiesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
           <p className="text-gray-600">Gerencie todos os empreendimentos e propriedades</p>
         </div>
-        <Button onClick={() => setIsAddOptionsOpen(true)}>
+        <Button onClick={() => router.push('/properties/new')}>
           <Plus className="h-4 w-4 mr-2" />
           Novo Imóvel
         </Button>
@@ -243,50 +200,6 @@ export default function PropertiesPage() {
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={isAddOptionsOpen} onOpenChange={setIsAddOptionsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adicionar Novo Imóvel</DialogTitle>
-            <DialogDescription>Como você gostaria de adicionar o imóvel?</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            <Button variant="outline" className="h-24 flex flex-col gap-2" onClick={handleManualRedirect}>
-              <PencilLine className="h-6 w-6" />
-              <span>Cadastro Manual</span>
-            </Button>
-            <Button variant="outline" className="h-24 flex flex-col gap-2" onClick={handleImportRedirect}>
-              <LinkIcon className="h-6 w-6" />
-              <span>Importar via Link</span>
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isImportUrlOpen} onOpenChange={setIsImportUrlOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Importar Imóvel de um Link</DialogTitle>
-            <DialogDescription>Cole o link do portal (ex: Orulo) para importar os dados automaticamente.</DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-2">
-            <Label htmlFor="import-url">URL do Imóvel</Label>
-            <Input 
-                id="import-url" 
-                placeholder="https://www.orulo.com.br/..."
-                value={importUrl}
-                onChange={(e) => setImportUrl(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportUrlOpen(false)}>Cancelar</Button>
-            <Button onClick={handleImportFromUrl} disabled={isImporting}>
-                {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isImporting ? "Importando..." : "Importar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

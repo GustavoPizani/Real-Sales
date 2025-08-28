@@ -20,13 +20,14 @@ model Usuario {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  superiorId   String?
+  superiorId     String?
   superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
   subordinados Usuario[] @relation("Hierarquia")
-
-  clientes     Cliente[]
-  tarefas      Tarefa[]
-  roletas      RoletaCorretor[]
+  
+  clientes       Cliente[]
+  pushSubscription PushSubscription?
+  tarefas        Tarefa[]
+  roletas        RoletaCorretor[]
 }
 
 model Cliente {
@@ -118,6 +119,18 @@ model Tarefa {
   usuarioId String
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
+
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    String   @unique
+  user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
 
 model Roleta {
   id                String           @id @default(uuid())

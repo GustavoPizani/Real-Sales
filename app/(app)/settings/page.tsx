@@ -1,4 +1,4 @@
-// app/(app)/settings/page.tsx
+// c:\Users\gusta\Real-sales\app\(app)\settings\page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback, ReactNode } from "react";
@@ -10,21 +10,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
 
+import Papa from 'papaparse';
+
 interface RoleSetting {
   roleName: Role;
   isActive: boolean;
 }
 
+interface HierarchyUser {
+  id: string;
+  nome: string;
+}
+
 // --- Sub-componente: Gestão de Cargos ---
-// Este componente foi extraído da sua página de usuários e integrado aqui.
 function RoleManagementCard({ settings, onUpdate }: { settings: RoleSetting[], onUpdate: () => void }) {
     const { toast } = useToast();
 
@@ -157,8 +163,29 @@ function TeamManagementTab() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     
+    // State for hierarchy form
+    const [directors, setDirectors] = useState<HierarchyUser[]>([]);
+    const [managers, setManagers] = useState<HierarchyUser[]>([]);
+    const [selectedDirectorId, setSelectedDirectorId] = useState<string>('');
+    
     interface UserFormData { name: string; email: string; password?: string; role: Role; superiorId?: string | null; }
     const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.corretor, superiorId: null });
+
+    const fetchHierarchyData = useCallback(async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+        try {
+            const directorsRes = await fetch('/api/users/hierarchy?role=diretor', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (directorsRes.ok) {
+                const directorsData = await directorsRes.json();
+                setDirectors(directorsData);
+            }
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar a lista de diretores.' });
+        }
+    }, [toast]);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -185,11 +212,36 @@ function TeamManagementTab() {
         }
     }, [toast]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { 
+        fetchData();
+        fetchHierarchyData();
+    }, [fetchData, fetchHierarchyData]);
+
+    // Effect for cascading managers
+    useEffect(() => {
+        const fetchManagers = async () => {
+            if (userForm.role === Role.corretor && selectedDirectorId) {
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`/api/users/hierarchy?role=gerente&superiorId=${selectedDirectorId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const managersData = await res.json();
+                    setManagers(managersData);
+                }
+            } else {
+                setManagers([]);
+            }
+        };
+        fetchManagers();
+    }, [selectedDirectorId, userForm.role]);
+
 
     const openDialog = (user: User | null = null) => {
         if (user) {
+            // Editing logic can be expanded here if needed
             setEditingUser(user);
+            toast({ title: "Info", description: "A edição de hierarquia ainda não está implementada neste formulário."})
             setUserForm({
                 name: user.name,
                 email: user.email,
@@ -198,7 +250,10 @@ function TeamManagementTab() {
                 superiorId: user.superiorId || ''
             });
         } else {
+            // Reset for new user
             setEditingUser(null);
+            setSelectedDirectorId('');
+            setManagers([]);
             setUserForm({ name: '', email: '', password: '', role: Role.corretor, superiorId: null });
         }
         setIsDialogOpen(true);
@@ -222,6 +277,8 @@ function TeamManagementTab() {
 
     const resetForm = () => {
         setUserForm({ name: '', email: '', password: '', role: Role.corretor, superiorId: null });
+        setSelectedDirectorId('');
+        setManagers([]);
         setEditingUser(null);
         setIsDialogOpen(false);
     };
@@ -232,7 +289,21 @@ function TeamManagementTab() {
         const method = editingUser ? 'PATCH' : 'POST';
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
         
-        const body = { ...userForm };
+        let finalSuperiorId = null;
+        if (userForm.role === Role.corretor) {
+            finalSuperiorId = userForm.superiorId; // This will be the manager's ID
+        } else if (userForm.role === Role.gerente) {
+            finalSuperiorId = selectedDirectorId;
+        }
+
+        const body = { 
+            name: userForm.name,
+            email: userForm.email,
+            password: userForm.password,
+            role: userForm.role,
+            superiorId: finalSuperiorId
+        };
+
         if (!editingUser && !body.password) {
             toast({ variant: 'destructive', title: 'Erro', description: 'A senha é obrigatória para novos usuários.' });
             return;
@@ -257,20 +328,6 @@ function TeamManagementTab() {
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Erro', description: error.message });
         }
-    };
-
-    const getAvailableManagers = (role: Role) => {
-        const isDiretorActive = roleSettings.find(r => r.roleName === Role.diretor)?.isActive ?? false;
-        const isGerenteActive = roleSettings.find(r => r.roleName === Role.gerente)?.isActive ?? false;
-
-        if (role === Role.gerente && isDiretorActive) {
-            return users.filter(u => u.role === Role.diretor);
-        }
-        if (role === Role.corretor) {
-            if (isGerenteActive) return users.filter(u => u.role === Role.gerente);
-            if (isDiretorActive) return users.filter(u => u.role === Role.diretor);
-        }
-        return [];
     };
 
     const getRoleIcon = (role: Role) => {
@@ -333,7 +390,9 @@ function TeamManagementTab() {
                         <CardTitle>Lista de Utilizadores</CardTitle>
                         <CardDescription>Gerencie os utilizadores da sua equipa e as suas permissões</CardDescription>
                     </div>
-                    <Button onClick={() => openDialog(null)}><Plus className="h-4 w-4 mr-2" /> Novo Utilizador</Button>
+                    {currentUser?.role === 'marketing_adm' && (
+                        <Button onClick={() => openDialog(null)}><Plus className="h-4 w-4 mr-2" /> Novo Utilizador</Button>
+                    )}
                 </CardHeader>
                 <CardContent>
                 <Table>
@@ -359,7 +418,7 @@ function TeamManagementTab() {
                                         {USER_ROLE_LABELS[user.role]}
                                     </Badge>
                                 </TableCell>
-                                <TableCell>{user.superior?.name || '-'}</TableCell>
+                                <TableCell>{user.superior?.nome || '-'}</TableCell>
                                 <TableCell>{user.createdAt ? format(new Date(user.createdAt), 'dd/MM/yyyy') : '-'}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={() => openDialog(user)}><Edit className="h-4 w-4" /></Button>
@@ -393,28 +452,57 @@ function TeamManagementTab() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="role">Cargo</Label>
-                            <Select value={userForm.role} onValueChange={(value: Role) => setUserForm(p => ({...p, role: value, superiorId: ''}))}>
+                            <Select value={userForm.role} onValueChange={(value: Role) => {
+                                setUserForm(p => ({...p, role: value, superiorId: null}));
+                                setSelectedDirectorId('');
+                                setManagers([]);
+                            }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {Object.entries(USER_ROLE_LABELS).filter(([role]) => role !== 'marketing_adm').map(([role, label]) => (
-                                        <SelectItem key={role} value={role}>{label}</SelectItem>
+                                    {Object.entries(USER_ROLE_LABELS)
+                                        .filter(([role]) => role !== 'marketing_adm')
+                                        .map(([role, label]) => (
+                                            <SelectItem key={role} value={role}>{label}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        {getAvailableManagers(userForm.role).length > 0 && (
+                        
+                        {(userForm.role === Role.gerente || userForm.role === Role.corretor) && (
                             <div className="space-y-2">
-                                <Label htmlFor="superiorId">Responsável</Label>
-                                <Select value={userForm.superiorId || ''} onValueChange={(value) => setUserForm(p => ({...p, superiorId: value}))}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione um gerente ou diretor" /></SelectTrigger>
+                                <Label htmlFor="directorId">Diretor Responsável</Label>
+                                <Select value={selectedDirectorId} onValueChange={(value) => {
+                                    setSelectedDirectorId(value);
+                                    setUserForm(p => ({...p, superiorId: null})); // Reset manager selection
+                                }}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione um diretor" /></SelectTrigger>
                                     <SelectContent>
-                                        {getAvailableManagers(userForm.role).map(manager => (
-                                            <SelectItem key={manager.id} value={manager.id}>{manager.name}</SelectItem>
+                                        {directors.map(dir => (
+                                            <SelectItem key={dir.id} value={dir.id}>{dir.nome}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                         )}
+
+                        {userForm.role === Role.corretor && (
+                             <div className="space-y-2">
+                                <Label htmlFor="superiorId">Gerente Responsável</Label>
+                                <Select 
+                                    value={userForm.superiorId || ''} 
+                                    onValueChange={(value) => setUserForm(p => ({...p, superiorId: value}))}
+                                    disabled={!selectedDirectorId || managers.length === 0}
+                                >
+                                    <SelectTrigger><SelectValue placeholder={!selectedDirectorId ? "Selecione um diretor primeiro" : "Selecione um gerente"} /></SelectTrigger>
+                                    <SelectContent>
+                                        {managers.map(manager => (
+                                            <SelectItem key={manager.id} value={manager.id}>{manager.nome}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
                         <DialogFooter>
                             <Button type="button" variant="ghost" onClick={resetForm}>Cancelar</Button>
                             <Button type="submit">Salvar</Button>
@@ -499,53 +587,92 @@ function SecurityTab() {
 
 function NotificationsTab() {
   const { toast } = useToast();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [newClient, setNewClient] = useState(false);
-  const [taskReminder, setTaskReminder] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscription, setSubscription] = useState<PushSubscription | null>(null);
+  const [isSupported, setIsSupported] = useState(false);
 
+  // 1. Verifica se o navegador suporta notificações push e service workers
   useEffect(() => {
-    if ("Notification" in window) {
-      setNotificationsEnabled(Notification.permission === "granted");
-      setNewClient(localStorage.getItem('notif_new_client') === 'true');
-      setTaskReminder(localStorage.getItem('notif_task_reminder') === 'true');
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      setIsSupported(true);
     }
   }, []);
 
-  const handleRequestPermission = async () => {
-    if (!("Notification" in window)) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Este navegador não suporta notificações.' });
+  // 2. Registra o Service Worker e verifica o status da inscrição atual
+  useEffect(() => {
+    if (!isSupported) return;
+
+    const registerServiceWorker = async () => {
+      try {
+        const swRegistration = await navigator.serviceWorker.register('/sw.js');
+        const existingSubscription = await swRegistration.pushManager.getSubscription();
+        
+        if (existingSubscription) {
+          setIsSubscribed(true);
+          setSubscription(existingSubscription);
+        }
+      } catch (error) {
+        console.error('Falha ao registrar Service Worker:', error);
+      }
+    };
+
+    registerServiceWorker();
+  }, [isSupported]);
+
+  // 3. Função para ligar/desligar as notificações
+  const handleToggleNotifications = async (enabled: boolean) => {
+    if (!isSupported || !navigator.serviceWorker.ready) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Notificações push não são suportadas neste navegador.' });
       return;
     }
-    if (Notification.permission === 'granted') {
-        toast({ title: 'Info', description: 'As notificações já estão ativadas.' });
-        return;
-    }
-    if (Notification.permission !== 'denied') {
-      const permission = await Notification.requestPermission();
-      setNotificationsEnabled(permission === 'granted');
-      if (permission === 'granted') {
-        toast({ title: 'Sucesso!', description: 'Notificações ativadas.' });
-      } else {
-        toast({ variant: 'destructive', title: 'Aviso', description: 'Permissão para notificações negada.' });
-      }
-    } else {
-        toast({ variant: 'destructive', title: 'Aviso', description: 'As notificações estão bloqueadas nas configurações do seu navegador.' });
-    }
-  };
 
-  const handlePreferenceChange = (type: 'newClient' | 'taskReminder', value: boolean) => {
-    if (!notificationsEnabled) {
-        toast({ variant: 'destructive', title: 'Aviso', description: 'Ative as notificações do navegador primeiro.' });
+    const swRegistration = await navigator.serviceWorker.ready;
+
+    if (enabled) {
+      // Lógica para INSCREVER
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        toast({ variant: 'destructive', title: 'Permissão Negada', description: 'Você precisa permitir as notificações no seu navegador.' });
         return;
+      }
+
+      try {
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) throw new Error('Chave VAPID pública não encontrada.');
+        
+        const newSubscription = await swRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidPublicKey,
+        });
+
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          body: JSON.stringify(newSubscription),
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+        });
+
+        setSubscription(newSubscription);
+        setIsSubscribed(true);
+        toast({ title: 'Sucesso!', description: 'Inscrição para notificações realizada.' });
+      } catch (error) {
+        console.error('Falha ao se inscrever:', error);
+        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível se inscrever para notificações.' });
+        setIsSubscribed(false); // Reverte o estado do switch em caso de erro
+      }
+    } else if (subscription) {
+      // Lógica para CANCELAR INSCRIÇÃO
+      try {
+        await subscription.unsubscribe();
+        await fetch('/api/notifications/subscribe', { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
+        setSubscription(null);
+        setIsSubscribed(false);
+        toast({ title: 'Sucesso!', description: 'Inscrição para notificações removida.' });
+      } catch (error) {
+        console.error('Falha ao cancelar inscrição:', error);
+        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível remover a inscrição.' });
+        setIsSubscribed(true); // Reverte o estado do switch em caso de erro
+      }
     }
-    if (type === 'newClient') {
-        setNewClient(value);
-        localStorage.setItem('notif_new_client', String(value));
-    } else if (type === 'taskReminder') {
-        setTaskReminder(value);
-        localStorage.setItem('notif_task_reminder', String(value));
-    }
-    toast({ title: 'Preferência salva!' });
   };
 
   return (
@@ -554,39 +681,174 @@ function NotificationsTab() {
         <CardTitle>Notificações</CardTitle>
         <CardDescription>Gerencie como você recebe notificações.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex items-center justify-between rounded-lg border p-4">
-          <div className="space-y-0.5">
-            <Label className="text-base">Notificações do Navegador</Label>
-            <CardDescription>Receba notificações push diretamente no seu navegador.</CardDescription>
-          </div>
-          <Button onClick={handleRequestPermission} disabled={notificationsEnabled}>
-            {notificationsEnabled ? 'Ativadas' : 'Ativar'}
-          </Button>
-        </div>
-        <div className="space-y-4">
-            <h3 className="text-lg font-medium">Tipos de Notificação</h3>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                    <Label htmlFor="new-client-notif">Novo Cliente</Label>
-                    <p className="text-sm text-muted-foreground">Receber notificação quando um novo cliente for cadastrado.</p>
-                </div>
-                <Switch id="new-client-notif" checked={newClient} onCheckedChange={(checked) => handlePreferenceChange('newClient', checked)} disabled={!notificationsEnabled} />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                    <Label htmlFor="task-reminder-notif">Lembrete de Tarefa</Label>
-                    <p className="text-sm text-muted-foreground">Receber notificação 10 minutos antes de uma tarefa agendada.</p>
-                </div>
-                <Switch id="task-reminder-notif" checked={taskReminder} onCheckedChange={(checked) => handlePreferenceChange('taskReminder', checked)} disabled={!notificationsEnabled} />
-            </div>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="push-notifications" className="font-medium">Notificações Push</Label>
+          <Switch
+            id="push-notifications"
+            checked={isSubscribed}
+            onCheckedChange={handleToggleNotifications}
+            disabled={!isSupported}
+          />
         </div>
       </CardContent>
     </Card>
   );
 }
 
+function DataImportTab() {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [importResult, setImportResult] = useState<{ successCount: number; errorCount: number; errors: string[] } | null>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      setFile(event.target.files[0]);
+      setImportResult(null); // Limpa resultados anteriores ao selecionar novo arquivo
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setFile(null);
+    const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = "";
+    }
+  };
+
+  const handleImport = async () => {
+    if (!file) {
+      toast({ variant: "destructive", title: "Nenhum arquivo selecionado." });
+      return;
+    }
+
+    setIsProcessing(true);
+    setImportResult(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch('/api/clients/bulk-import', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Falha ao importar clientes.");
+      }
+
+      setImportResult(result);
+      toast({ title: "Processamento concluído!", description: `${result.successCount} clientes importados com sucesso.` });
+
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro na Importação", description: error.message });
+    } finally {
+      setIsProcessing(false);
+      const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
+      if(fileInput) fileInput.value = ""; // Limpa o input do arquivo
+      setFile(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Importação de Clientes em Massa</CardTitle>
+        <CardDescription>
+          Importe múltiplos clientes de uma vez usando uma planilha CSV.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="p-4 border rounded-lg space-y-3">
+          <h3 className="font-semibold">Passo 1: Baixe a planilha modelo</h3>
+          <p className="text-sm text-muted-foreground">
+            Use este modelo para garantir que os dados estão no formato correto. A coluna 'nomeCompleto' é obrigatória.
+          </p>
+          <a href="/api/clients/template" download="modelo_clientes.csv">
+            <Button variant="outline">
+              <Download className="mr-2 h-4 w-4" />
+              Gerar Planilha Modelo (.csv)
+            </Button>
+          </a>
+        </div>
+
+        <div className="p-4 border rounded-lg space-y-3">
+          <h3 className="font-semibold">Passo 2: Faça o upload da sua planilha</h3>
+          <p className="text-sm text-muted-foreground">
+            Selecione o arquivo .csv preenchido para iniciar a importação.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
+            <Label
+              htmlFor="csv-upload"
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 cursor-pointer"
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              {file ? (
+                <span className="truncate max-w-[200px]">{file.name}</span>
+              ) : (
+                "Escolher Planilha (.csv)"
+              )}
+            </Label>
+            
+            {file && (
+                <Button variant="ghost" size="icon" onClick={handleRemoveFile} className="text-red-500 hover:text-red-700">
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            )}
+
+            <Button onClick={handleImport} disabled={!file || isProcessing} className="ml-auto">
+              {isProcessing ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
+              ) : (
+                <><Upload className="mr-2 h-4 w-4" /> Importar Clientes</>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {importResult && (
+          <Dialog open={!!importResult} onOpenChange={(open) => !open && setImportResult(null)}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Resultado da Importação</DialogTitle>
+                <DialogDescription>
+                  <div className="flex items-center gap-4 mt-2">
+                    <span className="flex items-center text-green-600"><CheckCircle className="mr-2 h-5 w-5" /> {importResult.successCount} Sucessos</span>
+                    <span className="flex items-center text-red-600"><XCircle className="mr-2 h-5 w-5" /> {importResult.errorCount} Erros</span>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              {importResult.errorCount > 0 && (
+                <div className="mt-4 max-h-60 overflow-y-auto space-y-2 pr-2">
+                  <h4 className="font-semibold">Detalhes dos Erros:</h4>
+                  <ul className="list-disc list-inside text-sm text-muted-foreground">
+                    {importResult.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <DialogFooter>
+                <DialogClose asChild><Button>Fechar</Button></DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'marketing_adm';
+
   return (
     <div className="flex-1 p-6">
       <div className="mb-6">
@@ -595,16 +857,18 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-3'}`}>
           <TabsTrigger value="profile"><UserIcon className="h-4 w-4 mr-2" />Perfil</TabsTrigger>
-          <TabsTrigger value="team"><Users className="h-4 w-4 mr-2" />Equipe</TabsTrigger>
+          {isAdmin && <TabsTrigger value="team"><Users className="h-4 w-4 mr-2" />Equipe</TabsTrigger>}
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notificações</TabsTrigger>
           <TabsTrigger value="security"><Shield className="h-4 w-4 mr-2" />Segurança</TabsTrigger>
+          {isAdmin && <TabsTrigger value="import"><Upload className="h-4 w-4 mr-2" />Importação</TabsTrigger>}
         </TabsList>
         <TabsContent value="profile"><ProfileTab /></TabsContent>
-        <TabsContent value="team"><TeamManagementTab /></TabsContent>
+        {isAdmin && <TabsContent value="team"><TeamManagementTab /></TabsContent>}
         <TabsContent value="notifications"><NotificationsTab /></TabsContent>
         <TabsContent value="security"><SecurityTab /></TabsContent>
+        {isAdmin && <TabsContent value="import"><DataImportTab /></TabsContent>}
       </Tabs>
     </div>
   );

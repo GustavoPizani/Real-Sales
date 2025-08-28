@@ -1,26 +1,30 @@
-// app/api/users/hierarchy/route.ts
-
-import { NextResponse } from 'next/server';
+// c:\Users\gusta\Real-sales\app\api\users\hierarchy\route.ts
+import { NextResponse, NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma, Role } from '@prisma/client';
+import { getUserFromToken } from '@/lib/auth';
 
-// Função auxiliar para validar se o valor da role é válido
 function isValidRole(role: any): role is Role {
   return Object.values(Role).includes(role);
 }
 
-// GET: Retorna utilizadores para os filtros de hierarquia
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const role = searchParams.get('role');
-  const superiorId = searchParams.get('superiorId');
-
+// GET: Retorna utilizadores para os filtros de hierarquia (ex: todos os diretores, ou todos os gerentes de um diretor)
+export async function GET(request: NextRequest) {
   try {
-    const whereClause: Prisma.UserWhereInput = {};
+    const loggedInUser = await getUserFromToken(request);
+    if (!loggedInUser || loggedInUser.role !== 'marketing_adm') {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get('role');
+    const superiorId = searchParams.get('superiorId');
+
+    const whereClause: Prisma.UsuarioWhereInput = {};
 
     if (role) {
       if (!isValidRole(role)) {
-        return new NextResponse('Parâmetro "role" inválido', { status: 400 });
+        return NextResponse.json({ error: 'Parâmetro "role" inválido' }, { status: 400 });
       }
       whereClause.role = role;
     }
@@ -29,20 +33,20 @@ export async function GET(request: Request) {
       whereClause.superiorId = superiorId;
     }
 
-    const users = await prisma.user.findMany({
+    const users = await prisma.usuario.findMany({
       where: whereClause,
       select: {
         id: true,
-        name: true,
+        nome: true,
       },
       orderBy: {
-        name: 'asc',
+        nome: 'asc',
       },
     });
 
     return NextResponse.json(users);
   } catch (error) {
     console.error('[USERS_HIERARCHY_GET]', error);
-    return new NextResponse('Internal error', { status: 500 });
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
   }
 }
