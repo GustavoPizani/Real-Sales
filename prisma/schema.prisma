@@ -1,13 +1,13 @@
 // prisma/schema.prisma
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider     = "postgresql"
+  url          = env("POSTGRES_PRISMA_URL")
+  directUrl    = env("POSTGRES_URL_NON_POOLING")
   relationMode = "prisma"
 }
 
@@ -22,10 +22,10 @@ model Usuario {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  superiorId     String?
-  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
+  superiorId   String?
+  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   subordinados Usuario[] @relation("Hierarquia")
-  
+
   clientes       Cliente[]
   pushSubscription PushSubscription?
   tarefas        Tarefa[]
@@ -42,7 +42,7 @@ model Cliente {
   updatedAt           DateTime  @updatedAt
 
   corretorId          String
-  corretor            Usuario   @relation(fields: [corretorId], references: [id])
+  corretor            Usuario   @relation(fields: [corretorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   imovelDeInteresseId String?
   imovelDeInteresse   Imovel?   @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
@@ -70,41 +70,41 @@ model Imovel {
   area                 Int?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
-  
+
   clientesComInteresse Cliente[]
   tipologias           TipologiaImovel[]
   imagens              ImagemImovel[]
 }
 
 model TipologiaImovel {
-  id             String  @id @default(uuid())
-  nome           String
-  valor          Float
-  area           Float?
-  dormitorios    Int?
-  suites         Int?
-  vagas          Int?
-  imovelId       String
-  imovel         Imovel  @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  id          String @id @default(uuid())
+  nome        String
+  valor       Float
+  area        Float?
+  dormitorios Int?
+  suites      Int?
+  vagas       Int?
+  imovelId    String
+  imovel      Imovel @relation(fields: [imovelId], references: [id], onDelete: Cascade)
 }
 
 model ImagemImovel {
-  id         String   @id @default(uuid())
-  url        String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  url       String
+  createdAt DateTime @default(now())
 
-  imovelId   String
-  imovel     Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  imovelId  String
+  imovel    Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
 }
 
 model Nota {
-  id         String   @id @default(uuid())
-  content    String
-  createdAt  DateTime @default(now())
-  createdBy  String
+  id        String   @id @default(uuid())
+  content   String
+  createdAt DateTime @default(now())
+  createdBy String
 
-  clienteId  String
-  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  clienteId String
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 
 model Tarefa {
@@ -117,11 +117,10 @@ model Tarefa {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
-
 
 model PushSubscription {
   id        String   @id @default(cuid())
@@ -129,10 +128,9 @@ model PushSubscription {
   p256dh    String
   auth      String
   userId    String   @unique
-  user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   createdAt DateTime @default(now())
 }
-
 
 model Roleta {
   id                String           @id @default(uuid())
@@ -146,7 +144,7 @@ model RoletaCorretor {
   roletaId   String
   roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
   corretorId String
-  corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade)
+  corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@id([roletaId, corretorId])
 }
@@ -177,7 +175,7 @@ model ClientWonDetails {
   sale_date   DateTime @default(now())
   createdAt   DateTime @default(now())
   clienteId   String   @unique
-  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 
 enum Role {
