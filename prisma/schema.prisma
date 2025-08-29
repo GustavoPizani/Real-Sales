@@ -6,9 +6,10 @@ generator client {
 
 datasource db {
   provider     = "postgresql"
-  url          = env("POSTGRES_PRISMA_URL")
-  directUrl    = env("POSTGRES_URL_NON_POOLING")
-  relationMode = "foreignKeys"
+  // CORREÇÃO FINAL: Usando os nomes exatos das variáveis de ambiente da Vercel
+  url          = env("database_POSTGRES_PRISMA_URL")
+  directUrl    = env("database_POSTGRES_URL_NON_POOLING")
+  relationMode = "prisma"
 }
 
 // --- Modelos Principais ---
@@ -26,10 +27,10 @@ model Usuario {
   superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   subordinados Usuario[] @relation("Hierarquia")
 
-  clientes       Cliente[]
+  clientes         Cliente[]
   pushSubscription PushSubscription?
-  tarefas        Tarefa[]
-  roletas        RoletaCorretor[]
+  tarefas          Tarefa[]
+  roletas          RoletaCorretor[]
 }
 
 model Cliente {
@@ -196,3 +197,4 @@ enum ClientOverallStatus {
   Ganho
   Perdido
 }
+
