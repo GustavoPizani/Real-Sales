@@ -5,11 +5,12 @@ generator client {
 }
 
 datasource db {
-  provider     = "postgresql"
-  // CORREÇÃO FINAL: Usando os nomes exatos das variáveis de ambiente da Vercel
-  url          = env("database_POSTGRES_PRISMA_URL")
-  directUrl    = env("database_POSTGRES_URL_NON_POOLING")
-  relationMode = "prisma"
+  provider  = "postgresql"
+  url       = env("database_POSTGRES_PRISMA_URL")
+  directUrl = env("database_POSTGRES_URL_NON_POOLING")
+  // 1. ALTERAÇÃO: Usando a estratégia de chaves estrangeiras nativas do banco de dados.
+  // Isso é mais robusto e recomendado para PostgreSQL.
+  relationMode = "foreignKeys"
 }
 
 // --- Modelos Principais ---
@@ -24,7 +25,8 @@ model Usuario {
   updatedAt    DateTime  @updatedAt
 
   superiorId   String?
-  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  // 2. ALTERAÇÃO: Removido o `onUpdate: Cascade` que estava causando o erro de validação.
+  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
   subordinados Usuario[] @relation("Hierarquia")
 
   clientes         Cliente[]
