@@ -21,16 +21,21 @@ const funnelStagesData = [
 async function main() {
   console.log('Iniciando o seeding...');
   
-  const defaultPassword = await bcrypt.hash('591190', 12);
+  const adminPasswordHash = await bcrypt.hash('198431', 12);
+  const defaultPasswordHash = await bcrypt.hash('591190', 12);
 
   // 1. Cria o Admin
   const admin = await prisma.usuario.upsert({
     where: { email: 'pizaniadm@realsales.com.br' },
-    update: {},
+    // CORREÇÃO: Força a atualização do nome e da senha se o usuário já existir.
+    update: {
+      nome: 'Pizani Luis',
+      passwordHash: adminPasswordHash,
+    },
     create: {
-      nome: 'Pizani Admin',
+      nome: 'Pizani Luis',
       email: 'pizaniadm@realsales.com.br',
-      passwordHash: await bcrypt.hash('198431', 12),
+      passwordHash: adminPasswordHash,
       role: 'marketing_adm',
     },
   });
@@ -38,11 +43,13 @@ async function main() {
   // 2. Cria a Diretora
   const thaina = await prisma.usuario.upsert({
     where: { email: 'thaina@realsales.com.br' },
-    update: {},
+    update: {
+      passwordHash: defaultPasswordHash,
+    },
     create: {
       nome: 'Thaina',
       email: 'thaina@realsales.com.br',
-      passwordHash: defaultPassword,
+      passwordHash: defaultPasswordHash,
       role: 'diretor',
     },
   });
@@ -50,11 +57,13 @@ async function main() {
   // 3. Cria o Gerente, subordinado à Diretora
   const herculano = await prisma.usuario.upsert({
     where: { email: 'herculano@realsales.com.br' },
-    update: {},
+    update: {
+      passwordHash: defaultPasswordHash,
+    },
     create: {
       nome: 'Herculano',
       email: 'herculano@realsales.com.br',
-      passwordHash: defaultPassword,
+      passwordHash: defaultPasswordHash,
       role: 'gerente',
       superiorId: thaina.id,
     },
@@ -63,11 +72,13 @@ async function main() {
   // 4. Cria o Corretor, subordinado ao Gerente
   const gustavo = await prisma.usuario.upsert({
     where: { email: 'gustavo@realsales.com.br' },
-    update: {},
+    update: {
+      passwordHash: defaultPasswordHash,
+    },
     create: {
       nome: 'Gustavo',
       email: 'gustavo@realsales.com.br',
-      passwordHash: defaultPassword,
+      passwordHash: defaultPasswordHash,
       role: 'corretor',
       superiorId: herculano.id,
     },
@@ -75,7 +86,7 @@ async function main() {
   
   console.log('Usuários criados/atualizados:', { admin, thaina, herculano, gustavo });
 
-  // 5. Cria o novo Imóvel "Escape Eden" (LÓGICA CORRIGIDA)
+  // 5. Cria o novo Imóvel "Escape Eden"
   let escapeEdenProperty = await prisma.imovel.findFirst({
     where: { titulo: "Escape Eden - Cyrela" },
   });
@@ -88,7 +99,7 @@ async function main() {
         endereco: "Avenida Roque Petroni Júnior, 576 - Brooklin, São Paulo - SP",
         status: StatusImovel.Disponivel,
         tipo: "Empreendimento",
-        preco: 1358004, // Valor "A partir de" como referência
+        preco: 1358004,
       }
     });
     console.log(`Imóvel criado: ${escapeEdenProperty.titulo}`);
@@ -108,7 +119,7 @@ async function main() {
   });
   console.log('Tipologias do imóvel Escape Eden criadas/verificadas.');
 
-  // 7. Adiciona a cliente Nelma, atribuída ao corretor Gustavo e interessada no Escape Eden
+  // 7. Adiciona a cliente Nelma
   if (gustavo) {
     await prisma.cliente.upsert({
       where: { email: 'nelmaaguiadourada@gmail.com' },
@@ -131,7 +142,7 @@ async function main() {
   // 8. Cria os estágios do funil
   console.log('Criando/atualizando estágios do funil...');
   for (const stage of funnelStagesData) {
-    const funnelStage = await prisma.funnelStage.upsert({
+    await prisma.funnelStage.upsert({
       where: { name: stage.name },
       update: {},
       create: {
@@ -140,8 +151,8 @@ async function main() {
         color: stage.color,
       },
     });
-    console.log(`Estágio do funil criado/atualizado: ${funnelStage.name}`);
   }
+  console.log('Estágios do funil criados/atualizados.');
 
   // 9. Inicializa as configurações dos cargos
   await prisma.roleSetting.upsert({
