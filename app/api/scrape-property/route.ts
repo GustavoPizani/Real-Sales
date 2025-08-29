@@ -103,11 +103,22 @@ export async function POST(req: Request) {
             throw new Error("A API de IA retornou uma resposta vazia.");
         }
 
-        const scrapedData = JSON.parse(aiResponseContent);
+        // A IA pode retornar o JSON dentro de um bloco de código markdown (```json ... ```)
+        // Esta linha limpa a string para garantir que apenas o JSON seja processado.
+        const cleanedJsonString = aiResponseContent.replace(/^```json\s*|```$/g, '');
+
+        const scrapedData = JSON.parse(cleanedJsonString);
         return NextResponse.json(scrapedData);
 
     } catch (error: any) {
         console.error('[SCAN] ERRO no processo geral de scraping:', error);
+
+        // Adiciona um log mais específico para erros de parsing de JSON
+        if (error instanceof SyntaxError) {
+            console.error('[SCAN] ERRO DE PARSE JSON: A resposta da IA não é um JSON válido. Resposta recebida:', completion.choices[0]?.message?.content);
+            return NextResponse.json({ error: "A resposta da IA não pôde ser convertida para JSON.", details: error.message }, { status: 500 });
+        }
+
         const errorMessage = error.response?.data?.error?.message || error.message || 'Falha ao processar o scraping com IA.';
         return NextResponse.json({ error: "A API de IA não conseguiu processar a página.", details: errorMessage }, { status: 500 });
     }
