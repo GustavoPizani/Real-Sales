@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
