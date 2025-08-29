@@ -1,29 +1,48 @@
-// app/api/leads/[id]/convert/route.ts - trecho modificado
-// ... (código existente para converter o lead)
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { Cliente } from '@prisma/client';
 
-// Após a transação bem-sucedida:
-if (result) {
-    // Dispara a notificação do Slack, sem bloquear a resposta da API
-    sendSlackNotification(result.corretorId, result);
+// Função auxiliar movida para fora do handler principal para melhor estrutura
+async function sendSlackNotification(brokerId: string, client: Cliente) {
+  // Lógica para enviar notificação para o Slack
+  console.log(`Notificando Slack para o corretor ${brokerId} sobre o cliente ${client.nomeCompleto}`);
 }
 
-return NextResponse.json({
-  message: 'Lead convertido com sucesso!',
-  client: result,
-});
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const leadId = params.id;
+    // const body = await request.json(); // Descomente se precisar de dados do corpo da requisição
 
-// --- Função de Notificação ---
-async function sendSlackNotification(brokerId: string, client: Cliente) {
-    const integration = await prisma.userIntegration.findFirst({
-        where: {
-            userId: brokerId,
-            integration: { name: 'slack' }
-        }
+    // Lógica para converter o lead em cliente
+    const result = await prisma.cliente.update({
+      where: { id: leadId },
+      data: {
+        // Exemplo: atualiza o status do cliente
+        status: 'ATIVO',
+      },
+      include: {
+        corretor: true,
+      },
     });
 
-    if (integration?.accessToken) {
-        console.log(`ENVIANDO NOTIFICAÇÃO SLACK para corretor ${brokerId} sobre cliente ${client.nomeCompleto}`);
-        // Lógica para enviar a mensagem para o Slack usando o integration.accessToken
-        // Ex: await fetch('https://slack.com/api/chat.postMessage', { ... });
+    if (result && result.corretorId) {
+      await sendSlackNotification(result.corretorId, result);
     }
+
+    // O `return` agora está corretamente posicionado dentro do bloco `try`
+    return NextResponse.json({
+      message: 'Lead convertido com sucesso!',
+      client: result,
+    });
+
+  } catch (error) {
+    console.error('Erro ao converter lead:', error);
+    return NextResponse.json(
+      { error: 'Erro interno do servidor ao converter o lead.' },
+      { status: 500 }
+    );
+  }
 }
