@@ -1,6 +1,6 @@
 // c:\Users\gusta\Real-sales\app\api\users\route.ts
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";

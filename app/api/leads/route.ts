@@ -1,7 +1,7 @@
 // app/api/leads/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 
 // GET: Busca todos os leads

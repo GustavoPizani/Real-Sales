@@ -1,7 +1,7 @@
 // lib/auth.ts
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { NextRequest } from 'next/server';
 
 // Interface para o objeto de usuário usado no frontend e no token

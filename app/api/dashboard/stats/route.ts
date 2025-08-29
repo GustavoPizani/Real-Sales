@@ -1,7 +1,7 @@
 // app/api/dashboard/stats/route.ts
 
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ClientOverallStatus } from '@prisma/client';
 
 export async function GET() {

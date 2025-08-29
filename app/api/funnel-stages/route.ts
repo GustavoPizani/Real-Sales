@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma';
 
 // GET: Retorna todas as etapas do funil, ordenadas
 export async function GET() {

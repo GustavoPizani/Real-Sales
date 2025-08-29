@@ -1,7 +1,7 @@
 // app/api/field-mappings/route.ts
 
 import { type NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 
 // GET: Busca os mapeamentos para uma fonte específica (ex: 'site' ou 'meta_ads')

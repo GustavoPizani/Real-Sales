@@ -1,6 +1,6 @@
 // c:\Users\gusta\Real-sales\app\api\clients\bulk-import\route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import Papa from 'papaparse';
 import { ClientOverallStatus } from '@prisma/client';
