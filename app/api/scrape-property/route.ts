@@ -2,9 +2,12 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
+// 1. O nome da variável de ambiente foi atualizado para corresponder à sua chave
+const apiKey = process.env.OPENROUTER_API_KEY_deepseek;
+
 // Inicializa o cliente, apontando para a API do OpenRouter
-const openrouter = new OpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY,
+const deepseekClient = new OpenAI({
+    apiKey: apiKey,
     baseURL: "https://openrouter.ai/api/v1",
     defaultHeaders: {
         "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL,
@@ -58,9 +61,10 @@ ${htmlContent}
 
 export async function POST(req: Request) {
     console.log('[SCAN] Pedido recebido na API /api/scrape-property');
-    if (!process.env.OPENROUTER_API_KEY) {
-        console.error('[SCAN] ERRO: A chave da API do OpenRouter não está configurada.');
-        return NextResponse.json({ error: 'A chave da API do OpenRouter não está configurada no ambiente.' }, { status: 500 });
+    // 2. A verificação agora usa a variável correta
+    if (!apiKey) {
+        console.error('[SCAN] ERRO: A chave da API OPENROUTER_API_KEY_deepseek não está configurada.');
+        return NextResponse.json({ error: 'A chave da API de IA não está configurada no ambiente.' }, { status: 500 });
     }
 
     try {
@@ -85,10 +89,10 @@ export async function POST(req: Request) {
         console.log('[SCAN] HTML da página obtido com sucesso.');
 
         const prompt = buildPrompt(htmlContent);
-        console.log('[SCAN] Prompt enviado para a IA (primeiros 300 caracteres):', prompt.substring(0, 300) + '...');
 
-        const completion = await openrouter.chat.completions.create({
-            model: "google/gemini-flash-1.5",
+        const completion = await deepseekClient.chat.completions.create({
+            // 3. O modelo foi trocado para o DeepSeek
+            model: "deepseek/deepseek-chat-v3.1:free",
             messages: [{ "role": "user", "content": prompt }],
             response_format: { type: "json_object" },
         });
@@ -96,20 +100,11 @@ export async function POST(req: Request) {
         const aiResponseContent = completion.choices[0]?.message?.content;
 
         if (!aiResponseContent) {
-            console.error('[SCAN] ERRO: A API de IA retornou uma resposta vazia.');
             throw new Error("A API de IA retornou uma resposta vazia.");
         }
 
-        console.log('[SCAN] Resposta recebida da IA (bruta):', aiResponseContent);
-
-        try {
-            const scrapedData = JSON.parse(aiResponseContent);
-            console.log('[SCAN] JSON da IA analisado com sucesso:', scrapedData);
-            return NextResponse.json(scrapedData);
-        } catch (parseError) {
-            console.error('[SCAN] ERRO: Não foi possível analisar o JSON retornado pela IA.', parseError);
-            throw new Error("A API de IA não retornou um JSON válido.");
-        }
+        const scrapedData = JSON.parse(aiResponseContent);
+        return NextResponse.json(scrapedData);
 
     } catch (error: any) {
         console.error('[SCAN] ERRO no processo geral de scraping:', error);
