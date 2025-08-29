@@ -8,7 +8,7 @@ datasource db {
   provider     = "postgresql"
   url          = env("POSTGRES_PRISMA_URL")
   directUrl    = env("POSTGRES_URL_NON_POOLING")
-  relationMode = "prisma"
+  relationMode = "foreignKeys"
 }
 
 // --- Modelos Principais ---
@@ -23,7 +23,7 @@ model Usuario {
   updatedAt    DateTime  @updatedAt
 
   superiorId   String?
-  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   subordinados Usuario[] @relation("Hierarquia")
 
   clientes       Cliente[]
@@ -104,7 +104,7 @@ model Nota {
   createdBy String
 
   clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
 
 model Tarefa {
@@ -117,9 +117,9 @@ model Tarefa {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model PushSubscription {
@@ -128,7 +128,7 @@ model PushSubscription {
   p256dh    String
   auth      String
   userId    String   @unique
-  user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
 
@@ -144,7 +144,7 @@ model RoletaCorretor {
   roletaId   String
   roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
   corretorId String
-  corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade)
 
   @@id([roletaId, corretorId])
 }
@@ -175,7 +175,7 @@ model ClientWonDetails {
   sale_date   DateTime @default(now())
   createdAt   DateTime @default(now())
   clienteId   String   @unique
-  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
 
 enum Role {
