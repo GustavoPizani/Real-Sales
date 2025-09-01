@@ -1,11 +1,12 @@
 // components/app-layout.tsx
 "use client";
 
-import type React from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Navigation } from "./navigation";
+import { MobileHeader } from "./mobile-header";
 import { usePathname } from "next/navigation";
-import { Toaster } from "@/components/ui/toaster";
+import { useMobileHeader } from "@/contexts/mobile-header-context";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -14,6 +15,8 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { actionButton } = useMobileHeader();
 
   if (pathname === "/login") {
     return <>{children}</>;
@@ -28,19 +31,27 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   if (!user) {
-    return <>{children}</>;
+    // Idealmente, isto seria tratado por um redirect no auth-context ou middleware
+    // Mas, por segurança, retornamos null para não mostrar o layout
+    return null;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      {/* Conteúdo Principal com margem ajustada para a sidebar RECOLHIDA */}
-      <div className="lg:ml-16 transition-all duration-300">
+      {/* Componente de Navegação (Sidebar) */}
+      <Navigation isMobileOpen={isMobileMenuOpen} setIsMobileOpen={setIsMobileMenuOpen} />
+
+      <MobileHeader
+        onMenuClick={() => setIsMobileMenuOpen(true)}
+        actionButton={actionButton}
+      />
+      
+      {/* Conteúdo Principal com espaçamento ajustado */}
+      <div className="pt-16 lg:pt-0 lg:ml-16 transition-all duration-300">
         <main className="min-h-screen">
-          {children}
+          <div>{children}</div>
         </main>
       </div>
-      <Toaster />
     </div>
   );
 }

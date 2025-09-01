@@ -1,5 +1,5 @@
 import type React from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   title: "Real Sales CRM",
   description: "Sistema de CRM para imobiliárias",
 };
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1.0,
+}
 
 export default function RootLayout({
   children,
@@ -38,4 +43,4 @@ export default function RootLayout({
       </body>
     </html>
   );
-} // <--- ADICIONE ESTA CHAVE '}' QUE ESTAVA FALTANDO
+}

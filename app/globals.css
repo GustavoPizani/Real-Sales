@@ -161,21 +161,27 @@
   }
 }
 
-/* Mobile responsive styles */
-@media (max-width: 768px) {
-  .mobile-padding {
+/* Base (Mobile-First) Styles */
+.content-padding {
     padding-left: 1rem;
     padding-right: 1rem;
   }
 
-  .mobile-card {
+.content-card {
     margin-left: 1rem;
     margin-right: 1rem;
   }
 
-  .mobile-text {
+.body-text {
     font-size: 0.875rem;
     line-height: 1.25rem;
+  }
+
+/* Styles for tablets and larger screens */
+@media (min-width: 768px) {
+  .content-padding {
+    padding-left: 2rem; /* Aumenta o padding em telas maiores */
+    padding-right: 2rem;
   }
 }
 

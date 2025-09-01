@@ -1,6 +1,7 @@
-"use client"
+// app/(app)/dashboard/page.tsx
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,6 +48,12 @@ interface Task {
   }
 }
 
+interface Broker {
+  id: string;
+  nome: string;
+  role: string;
+}
+
 export default function DashboardPage() {
   const { user, isLoading: isAuthLoading } = useAuth()
   const { toast } = useToast()
@@ -61,13 +68,14 @@ export default function DashboardPage() {
   const [overdueClients, setOverdueClients] = useState<Client[]>([])
   const [pendingTasks, setPendingTasks] = useState<Task[]>([])
   const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
+  const [brokers, setBrokers] = useState<Broker[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true)
 
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
   const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
 
-  const [clientForm, setClientForm] = useState({ nomeCompleto: "", email: "", telefone: "" })
+  const [clientForm, setClientForm] = useState({ nomeCompleto: "", email: "", telefone: "", selectedCorretorId: "" })
   const [propertyForm, setPropertyForm] = useState({ titulo: "", endereco: "", preco: "" })
   const [taskForm, setTaskForm] = useState({
     title: "",
@@ -87,17 +95,18 @@ export default function DashboardPage() {
       }
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      // Estas chamadas assumem que você tem ou criará estes endpoints na sua API
-      const [statsRes, overdueClientsRes, tasksRes, allClientsRes] = await Promise.all([
+      const [statsRes, overdueClientsRes, tasksRes, allClientsRes, brokersRes] = await Promise.all([
         fetch("/api/dashboard/stats", { headers }),
         fetch("/api/dashboard/overdue-clients", { headers }),
         fetch("/api/tasks", { headers }),
-        fetch("/api/clients", { headers })
+        fetch("/api/clients", { headers }),
+        fetch("/api/users", { headers }),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
       if (overdueClientsRes.ok) setOverdueClients(await overdueClientsRes.json());
       if (allClientsRes.ok) setClients((await allClientsRes.json()).clients || []);
+      if (brokersRes.ok) setBrokers((await brokersRes.json()).users || []);
 
       if (tasksRes.ok) {
         const allTasks = await tasksRes.json();
@@ -122,17 +131,40 @@ export default function DashboardPage() {
 
   const handleClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isManager = user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role);
+
+    if (isManager && !clientForm.selectedCorretorId) {
+      toast({
+        variant: "destructive",
+        title: "Campo obrigatório",
+        description: "Por favor, selecione um corretor responsável.",
+      });
+      return;
+    }
+
+    const corretorId = isManager ? clientForm.selectedCorretorId : user?.id;
+
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch("/api/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ...clientForm, corretorId: user?.id }),
+        body: JSON.stringify({ 
+          nomeCompleto: clientForm.nomeCompleto,
+          email: clientForm.email,
+          telefone: clientForm.telefone,
+          corretorId: corretorId,
+          currentFunnelStage: 'Contato'
+        }),
       });
-      if (!response.ok) throw new Error("Falha ao criar cliente.");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Falha ao criar cliente.");
+      }
       toast({ title: "Sucesso!", description: "Cliente criado com sucesso." });
       setIsClientModalOpen(false);
-      setClientForm({ nomeCompleto: "", email: "", telefone: "" });
+      setClientForm({ nomeCompleto: "", email: "", telefone: "", selectedCorretorId: "" });
       fetchDashboardData(); // Re-fetch data
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -278,6 +310,22 @@ export default function DashboardPage() {
                 <div className="space-y-2"><Label htmlFor="nomeCompleto">Nome Completo</Label><Input id="nomeCompleto" value={clientForm.nomeCompleto} onChange={(e) => setClientForm({ ...clientForm, nomeCompleto: e.target.value })} required /></div>
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} /></div>
                 <div className="space-y-2"><Label htmlFor="telefone">Telefone</Label><Input id="telefone" value={clientForm.telefone} onChange={(e) => setClientForm({ ...clientForm, telefone: e.target.value })} /></div>
+                {user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="corretor">Corretor Responsável</Label>
+                    <Select
+                      value={clientForm.selectedCorretorId}
+                      onValueChange={(value) => setClientForm(p => ({ ...p, selectedCorretorId: value }))}
+                    >
+                      <SelectTrigger id="corretor" className="w-full">
+                        <SelectValue placeholder="Selecione um corretor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <DialogFooter><Button type="button" variant="outline" onClick={() => setIsClientModalOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></DialogFooter>
               </form>
             </DialogContent>

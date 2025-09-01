@@ -1,7 +1,8 @@
 // app/(app)/properties/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Plus, Search, Filter, Edit, Building, MapPin, DollarSign, Home, Link as LinkIcon, PencilLine, Loader2 } from "lucide-react";
+import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2 } from "lucide-react";
 import { type Imovel, StatusImovel } from "@/lib/types"; // CORREÇÃO: Importado StatusImovel
 import { useToast } from "@/components/ui/use-toast";
+
+const PropertiesEmptyState = dynamic(() =>
+  import('./empty-state'),
+  { loading: () => <Loader2 className="h-8 w-8 mx-auto my-12 animate-spin text-gray-300" /> }
+);
 
 export default function PropertiesPage() {
   const router = useRouter();
@@ -192,11 +196,7 @@ export default function PropertiesPage() {
             </TableBody>
           </Table>
           {filteredProperties.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <Building className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>Nenhum imóvel encontrado</p>
-              <p className="text-sm">Tente ajustar os filtros ou adicione um novo imóvel</p>
-            </div>
+            <PropertiesEmptyState />
           )}
         </CardContent>
       </Card>

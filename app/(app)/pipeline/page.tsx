@@ -1,7 +1,8 @@
 // app/(app)/pipeline/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from "next/navigation";
 import { DndContext, type DragEndEvent, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -15,13 +16,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { type Cliente, type User as Broker, Role, ClientOverallStatus } from "@/lib/types";
 import { DateRange } from "react-day-picker";
+import { useMobileHeader } from "@/contexts/mobile-header-context";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // --- Tipos ---
 interface FunnelStage {
@@ -128,11 +131,17 @@ export default function PipelinePage() {
   const [activeClient, setActiveClient] = useState<Cliente | null>(null);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
-  const [newClientForm, setNewClientForm] = useState({ nomeCompleto: "", telefone: "", email: "" });
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ nomeCompleto: "", telefone: "", email: "", selectedCorretorId: "" });
   const [newStageForm, setNewStageForm] = useState({ name: "", color: "#010f27" });
   const [editingStages, setEditingStages] = useState<FunnelStage[]>([]);
-
-  const [filters, setFilters] = useState({
+  
+  const [filters, setFilters] = useState<{
+    searchTerm: string;
+    status: ClientOverallStatus | 'all';
+    dateRange: DateRange | undefined;
+    brokerId: string;
+  }>({
     searchTerm: '',
     status: ClientOverallStatus.Ativo,
     dateRange: undefined as DateRange | undefined,
@@ -140,6 +149,19 @@ export default function PipelinePage() {
   });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const { setActionButton } = useMobileHeader();
+
+  useEffect(() => {
+    const filterButton = (
+      <Button variant="ghost" size="icon" onClick={() => setIsFilterDialogOpen(true)} className="text-white hover:bg-white/20 hover:text-white">
+        <Filter className="h-5 w-5" />
+        <span className="sr-only">Filtros</span>
+      </Button>
+    );
+    setActionButton(filterButton);
+
+    return () => setActionButton(null);
+  }, [setActionButton]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -229,22 +251,36 @@ export default function PipelinePage() {
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isManager = user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role as Role);
+    const corretorId = isManager ? newClientForm.selectedCorretorId : user?.id;
+
+    if (!corretorId) {
+        toast({
+            variant: "destructive",
+            title: "Campo obrigatório",
+            description: isManager ? "Por favor, selecione um corretor responsável." : "Usuário não identificado.",
+        });
+        return;
+    }
+
     try {
         const token = localStorage.getItem('authToken');
         const response = await fetch('/api/clients', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ 
-                nomeCompleto: newClientForm.nomeCompleto, 
-                telefone: newClientForm.telefone, 
+            body: JSON.stringify({
+                nomeCompleto: newClientForm.nomeCompleto,
+                telefone: newClientForm.telefone,
                 email: newClientForm.email,
-                currentFunnelStage: funnelStages[0]?.name || 'Contato' 
+                currentFunnelStage: funnelStages[0]?.name || 'Contato',
+                corretorId: corretorId
             }),
         });
         if (!response.ok) throw new Error('Falha ao criar cliente.');
         toast({ title: 'Sucesso!', description: 'Novo cliente adicionado.' });
         setIsClientDialogOpen(false);
-        setNewClientForm({ nomeCompleto: "", telefone: "", email: "" });
+        setNewClientForm({ nomeCompleto: "", telefone: "", email: "", selectedCorretorId: "" });
         fetchData();
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Erro', description: error.message || 'Não foi possível criar o cliente.' });
@@ -340,6 +376,40 @@ export default function PipelinePage() {
 
   if (loading) return <p className="p-6">Carregando pipeline...</p>;
 
+  const FilterControls = ({ inModal = false }: { inModal?: boolean }) => (
+    <div className={`flex flex-wrap items-center gap-2 ${inModal ? 'flex-col' : ''}`}>
+        <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
+        </div>
+        <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
+            <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">Todos os Status</SelectItem>
+                <SelectItem value={ClientOverallStatus.Ativo}>Em andamento</SelectItem>
+                <SelectItem value={ClientOverallStatus.Ganho}>Ganho</SelectItem>
+                <SelectItem value={ClientOverallStatus.Perdido}>Perdido</SelectItem>
+            </SelectContent>
+        </Select>
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button variant="outline" className={`${inModal ? 'w-full' : 'w-[240px]'} justify-start text-left font-normal`}>{filters.dateRange?.from ? `${format(filters.dateRange.from, "dd/MM/yy")} - ${filters.dateRange.to ? format(filters.dateRange.to, "dd/MM/yy") : ''}` : "Data de criação"}</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 flex" align="start">
+                <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
+                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('today')}>Hoje</Button>
+                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('week')}>Esta semana</Button>
+                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('month')}>Este mês</Button>
+                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('last_month')}>Mês passado</Button>
+                </div>
+                <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({...f, dateRange: date}))} locale={ptBR} />
+            </PopoverContent>
+        </Popover>
+        <Select value={filters.brokerId} onValueChange={(value) => setFilters(f => ({...f, brokerId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os corretores</SelectItem>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>)}</SelectContent></Select>
+        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.Ativo, dateRange: undefined, brokerId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
+    </div>
+  );
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       <header className="p-4 border-b bg-white flex-shrink-0">
@@ -353,44 +423,48 @@ export default function PipelinePage() {
                     </Button>
                 )}
             </div>
-            <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
-                <DialogTrigger asChild>
-                    <Button><Plus className="h-4 w-4 mr-2" /> Novo Cliente</Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Adicionar Novo Cliente</DialogTitle></DialogHeader>
-                    <form onSubmit={handleAddClient} className="space-y-4 pt-4">
-                        <div><Label htmlFor="nomeCompleto">Nome Completo</Label><Input id="nomeCompleto" value={newClientForm.nomeCompleto} onChange={(e) => setNewClientForm(p => ({...p, nomeCompleto: e.target.value}))} required /></div>
-                        <div><Label htmlFor="telefone">Telefone</Label><Input id="telefone" value={newClientForm.telefone} onChange={(e) => setNewClientForm(p => ({...p, telefone: e.target.value}))} /></div>
-                        <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm(p => ({...p, email: e.target.value}))} /></div>
-                        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></div>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <div className="hidden lg:block">
+              <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+                  <DialogTrigger asChild>
+                      <Button><Plus className="h-4 w-4 mr-2" /> Novo Cliente</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                      <DialogHeader><DialogTitle>Adicionar Novo Cliente</DialogTitle></DialogHeader>
+                      <form onSubmit={handleAddClient} className="space-y-4 pt-4">
+                          <div><Label htmlFor="nomeCompleto">Nome Completo</Label><Input id="nomeCompleto" value={newClientForm.nomeCompleto} onChange={(e) => setNewClientForm(p => ({...p, nomeCompleto: e.target.value}))} required /></div>
+                          <div><Label htmlFor="telefone">Telefone</Label><Input id="telefone" value={newClientForm.telefone} onChange={(e) => setNewClientForm(p => ({...p, telefone: e.target.value}))} /></div>
+                          <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm(p => ({...p, email: e.target.value}))} /></div>
+                        {user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role) && (
+                          <div>
+                            <Label htmlFor="corretor">Corretor Responsável</Label>
+                            <Select
+                              value={newClientForm.selectedCorretorId}
+                              onValueChange={(value) => setNewClientForm(p => ({ ...p, selectedCorretorId: value }))}
+                            >
+                              <SelectTrigger id="corretor" className="w-full">
+                                <SelectValue placeholder="Selecione um corretor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.nome}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></div>
+                      </form>
+                  </DialogContent>
+              </Dialog>
+            </div>
         </div>
       </header>
       
-      <div className="p-4 border-b bg-white flex-shrink-0">
-        <div className="flex flex-wrap items-center gap-2">
-            <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por nome, email, telefone..." className="pl-8 w-64" value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} /></div>
-            <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}><SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Status</SelectItem><SelectItem value={ClientOverallStatus.Ativo}>Em andamento</SelectItem><SelectItem value={ClientOverallStatus.Ganho}>Ganho</SelectItem><SelectItem value={ClientOverallStatus.Perdido}>Perdido</SelectItem></SelectContent></Select>
-            <Popover><PopoverTrigger asChild><Button variant="outline" className="w-[240px] justify-start text-left font-normal">{filters.dateRange?.from ? `${format(filters.dateRange.from, "dd/MM/yy")} - ${filters.dateRange.to ? format(filters.dateRange.to, "dd/MM/yy") : ''}` : "Data de criação"}</Button></PopoverTrigger>
-                <PopoverContent className="w-auto p-0 flex" align="start">
-                    <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
-                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('today')}>Hoje</Button>
-                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('week')}>Esta semana</Button>
-                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('month')}>Este mês</Button>
-                        <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('last_month')}>Mês passado</Button>
-                    </div>
-                    <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({...f, dateRange: date}))} locale={ptBR} />
-                </PopoverContent>
-            </Popover>
-            <Select value={filters.brokerId} onValueChange={(value) => setFilters(f => ({...f, brokerId: value}))}><SelectTrigger className="w-[180px]"><SelectValue placeholder="Corretor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os corretores</SelectItem>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>)}</SelectContent></Select>
-            <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.Ativo, dateRange: undefined, brokerId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
-        </div>
+      {/* Filtros para Desktop */}
+      <div className="p-4 border-b bg-white flex-shrink-0 hidden lg:flex">
+        <FilterControls />
       </div>
       
-      <div className="flex-1 overflow-x-auto p-4">
+      {/* Layout Desktop: Colunas do Funil */}
+      <div className="flex-1 overflow-x-auto p-4 hidden lg:flex">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 h-full">
             {funnelStages.map((stage) => (
@@ -401,6 +475,40 @@ export default function PipelinePage() {
             {activeClient ? <DraggableClientCard client={activeClient} /> : null}
           </DragOverlay>
         </DndContext>
+      </div>
+
+      {/* Layout Mobile: Abas */}
+      <div className="block lg:hidden flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue={funnelStages[0]?.name} className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-4 flex-shrink-0">
+            <TabsList className="w-full overflow-x-auto justify-start">
+              {funnelStages.map((stage) => (
+                <TabsTrigger key={stage.id} value={stage.name}>
+                  {stage.name} ({filteredClients.filter(c => c.currentFunnelStage === stage.name).length})
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {funnelStages.map((stage) => (
+              <TabsContent key={stage.id} value={stage.name} className="p-4 space-y-2">
+                {filteredClients
+                  .filter(c => c.currentFunnelStage === stage.name)
+                  .map(client => (
+                    <DraggableClientCard key={client.id} client={client} />
+                  ))}
+              </TabsContent>
+            ))}
+          </div>
+        </Tabs>
+      </div>
+
+      {/* FAB para Novo Cliente em Mobile */}
+      <div className="lg:hidden fixed bottom-6 right-6 z-50">
+        <Button size="icon" className="h-14 w-14 rounded-full bg-primary-custom text-white shadow-lg hover:bg-primary-custom/90" onClick={() => setIsClientDialogOpen(true)}>
+          <Plus className="h-6 w-6" />
+          <span className="sr-only">Novo Cliente</span>
+        </Button>
       </div>
 
       <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
@@ -426,6 +534,19 @@ export default function PipelinePage() {
                   <Button onClick={saveAllStageChanges}>Salvar Todas as Alterações</Button>
               </DialogFooter>
           </DialogContent>
+      </Dialog>
+
+      {/* Modal de Filtros para Mobile */}
+      <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Filtros</DialogTitle>
+          </DialogHeader>
+          <div className="pt-4">
+            <FilterControls inModal={true} />
+          </div>
+          <DialogFooter><Button onClick={() => setIsFilterDialogOpen(false)} className="w-full">Aplicar</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   )
