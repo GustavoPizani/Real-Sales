@@ -139,7 +139,7 @@ export default function ClientDetailsPage() {
   };
   
   const handleEditPropertySubmit = async () => {
-    const success = await handleUpdateClient({ successMessage: "Imóvel de interesse atualizado.", imovelDeInteresseId: newPropertyId });
+    const success = await handleUpdateClient({ imovelDeInteresseId: newPropertyId }, { successMessage: "Imóvel de interesse atualizado." });
     if (success) setIsEditPropertyDialogOpen(false);
   };
 
@@ -343,7 +343,22 @@ export default function ClientDetailsPage() {
           </Card>
         </div>
         <div className="space-y-6">
-          {client.imovelDeInteresse && <Card><CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader><CardContent><h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3><p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco}</p><p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p><Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}/edit`)}>Ver Detalhes</Button><Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button></CardContent></Card>}
+          <Card>
+            <CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader>
+            <CardContent>
+              {client.imovelDeInteresse ? (
+                <>
+                  <h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3>
+                  <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
+                  <p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p>
+                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}`)}>Ver Detalhes</Button>
+                  <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
+                </>
+              ) : (
+                <Button variant="outline" className="w-full" onClick={() => setIsEditPropertyDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Inserir Imóvel de Interesse</Button>
+              )}
+            </CardContent>
+          </Card>
           <Card>
               <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
               <CardContent className="space-y-2">
@@ -386,7 +401,7 @@ export default function ClientDetailsPage() {
         </form>
       </DialogContent></Dialog>
       <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.nomeCompleto} onChange={e => setEditClientForm({...editClientForm, nomeCompleto: e.target.value})} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({...editClientForm, email: e.target.value})} /><Label>Telefone</Label><Input value={editClientForm.telefone} onChange={e => setEditClientForm({...editClientForm, telefone: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
