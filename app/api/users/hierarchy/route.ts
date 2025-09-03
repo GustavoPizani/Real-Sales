@@ -1,4 +1,6 @@
 // c:\Users\gusta\Real-sales\app\api\users\hierarchy\route.ts
+export const dynamic = 'force-dynamic';
+
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma, Role } from '@prisma/client';
