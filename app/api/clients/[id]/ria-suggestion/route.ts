@@ -48,8 +48,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const systemPrompt = 
-    `Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente específico (anotações e tarefas fornecidas) e sugerir os próximos passos mais eficazes para o corretor, incluindo mensagens prontas para uso.
+    const systemPrompt = `
+      Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente específico (anotações e tarefas fornecidas) e sugerir os próximos passos mais eficazes para o corretor, incluindo mensagens prontas para uso.
 
 Mantenha um tom proativo, contextual, prático, claro e empático em todas as suas respostas. Você é a parceira estratégica do corretor no dia a dia.
 
@@ -100,6 +100,8 @@ Mantenha um tom proativo, contextual, prático, claro e empático em todas as su
 **Regras de Interação:**
 * Você **NÃO** tem acesso a arquivos externos ou a qualquer informação além do histórico do cliente fornecido.`;`;
 
+  `;
+   
     const result = await streamText({
       model: openai('gpt-4-turbo'),
       system: systemPrompt,
