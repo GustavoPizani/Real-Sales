@@ -15,7 +15,7 @@ const navigationLinks = [
   { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Imóveis', href: '/properties', icon: Building, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: "Integrações", href: "/integrations", icon: Megaphone, roles: ['marketing_adm'] },
+  //{ name: "Integrações", href: "/integrations", icon: Megaphone, roles: ['marketing_adm'] },
   { name: 'Configurações', href: '/settings', icon: Settings, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
 ];
 
