@@ -1,15 +1,24 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { getUserFromToken } from '@/lib/auth'; // Assumindo que você tem este helper
+import { cookies } from 'next/headers';
+import { prisma } from '@/lib/prisma';
+import { getUserFromToken } from '@/lib/auth';
 import { subDays } from 'date-fns';
 
-const prisma = new PrismaClient();
+export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const user = await getUserFromToken(request);
+    const cookieStore = cookies();
+    const token = cookieStore.get('auth_token')?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: 'Token de autenticação não encontrado' }, { status: 401 });
+    }
+
+    const user = await getUserFromToken(token);
+
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }

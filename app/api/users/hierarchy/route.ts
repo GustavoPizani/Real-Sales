@@ -2,9 +2,11 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse, NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { Prisma, Role } from '@prisma/client';
 import { getUserFromToken } from '@/lib/auth';
+export const dynamic = 'force-dynamic';
 
 function isValidRole(role: any): role is Role {
   return Object.values(Role).includes(role);
@@ -13,7 +15,15 @@ function isValidRole(role: any): role is Role {
 // GET: Retorna utilizadores para os filtros de hierarquia (ex: todos os diretores, ou todos os gerentes de um diretor)
 export async function GET(request: NextRequest) {
   try {
-    const loggedInUser = await getUserFromToken(request);
+    const cookieStore = cookies();
+    const token = cookieStore.get('auth_token')?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: 'Token de autenticação não encontrado' }, { status: 401 });
+    }
+
+    const loggedInUser = await getUserFromToken(token);
+
     if (!loggedInUser || loggedInUser.role !== 'marketing_adm') {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
