@@ -1,11 +1,10 @@
 // c:\Users\gusta\Real-sales\app\api\users\hierarchy\route.ts
-export const dynamic = 'force-dynamic';
-
 import { NextResponse, NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { Prisma, Role } from '@prisma/client';
 import { getUserFromToken } from '@/lib/auth';
+
 export const dynamic = 'force-dynamic';
 
 function isValidRole(role: any): role is Role {
