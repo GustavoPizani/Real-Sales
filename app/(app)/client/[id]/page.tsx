@@ -16,6 +16,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Phone, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, Building, ArrowUpDown, Pencil, Loader2, AlertTriangle
+,
+  // Novos ícones
+  FolderKanban, Upload
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
@@ -48,6 +51,13 @@ export default function ClientDetailsPage() {
   const [isEditClientDialogOpen, setIsEditClientDialogOpen] = useState(false);
   const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
+  // Novos states para o Google Drive
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [driveFiles, setDriveFiles] = useState<{ id: string, name: string, webViewLink?: string, iconLink?: string }[]>([]);
+  const [isDriveLoading, setIsDriveLoading] = useState(false);
+  const [driveError, setDriveError] = useState("");
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Forms State
   const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
@@ -106,6 +116,49 @@ export default function ClientDetailsPage() {
   }, [clientId, toast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const fetchDriveFiles = useCallback(async () => {
+      if (!clientId) return;
+      setIsDriveLoading(true);
+      setDriveError("");
+      try {
+          const response = await fetch(`/api/clients/${clientId}/drive/files`);
+          if (!response.ok) throw new Error("Falha ao buscar arquivos.");
+          const data = await response.json();
+          setDriveFiles(data);
+      } catch (error: any) {
+          setDriveError(error.message);
+      } finally {
+          setIsDriveLoading(false);
+      }
+  }, [clientId]);
+
+  useEffect(() => {
+      if (isDriveModalOpen) {
+          fetchDriveFiles();
+      }
+  }, [isDriveModalOpen, fetchDriveFiles]);
+
+  const handleFileUpload = async () => {
+      if (!uploadingFile || !clientId) return;
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', uploadingFile);
+      try {
+          const response = await fetch(`/api/clients/${clientId}/drive/upload`, {
+              method: 'POST',
+              body: formData,
+          });
+          if (!response.ok) throw new Error('Falha no upload.');
+          toast({ title: "Sucesso!", description: `Arquivo "${uploadingFile.name}" enviado.` });
+          setUploadingFile(null);
+          fetchDriveFiles(); // Atualiza a lista de arquivos
+      } catch (error: any) {
+          toast({ variant: "destructive", title: "Erro", description: error.message });
+      } finally {
+          setIsUploading(false);
+      }
+  };
 
   const handleUpdateClient = async (payload: object, options?: { successMessage?: string }) => {
     try {
@@ -363,6 +416,10 @@ export default function ClientDetailsPage() {
               <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2"/>Editar Cliente</Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsDriveModalOpen(true)}>
+                      <FolderKanban className="h-4 w-4 mr-2"/>
+                      Arquivos do Cliente
+                  </Button>
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
@@ -403,6 +460,56 @@ export default function ClientDetailsPage() {
       <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.nomeCompleto} onChange={e => setEditClientForm({...editClientForm, nomeCompleto: e.target.value})} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({...editClientForm, email: e.target.value})} /><Label>Telefone</Label><Input value={editClientForm.telefone} onChange={e => setEditClientForm({...editClientForm, telefone: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
+
+      {/* Modal Google Drive */}
+      <Dialog open={isDriveModalOpen} onOpenChange={setIsDriveModalOpen}>
+          <DialogContent className="sm:max-w-[525px]">
+              <DialogHeader>
+                  <DialogTitle>Arquivos de {client?.nomeCompleto}</DialogTitle>
+              </DialogHeader>
+              <Tabs defaultValue="acessar" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="acessar">Acessar Documentos</TabsTrigger>
+                      <TabsTrigger value="upload">Upload de Documentos</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="acessar" className="mt-4 min-h-[200px]">
+                      {isDriveLoading ? (
+                          <div className="flex justify-center items-center h-full">
+                              <Loader2 className="h-8 w-8 animate-spin text-primary-custom" />
+                          </div>
+                      ) : driveError ? (
+                          <p className="text-destructive text-center">{driveError}</p>
+                      ) : driveFiles.length > 0 ? (
+                          <ul className="space-y-2">
+                              {driveFiles.map(file => (
+                                  <li key={file.id} className="flex items-center justify-between p-2 border rounded-md">
+                                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline">
+                                          {file.iconLink && <img src={file.iconLink} alt="ícone do arquivo" className="h-4 w-4" />}
+                                          <span>{file.name}</span>
+                                      </a>
+                                  </li>
+                              ))}
+                          </ul>
+                      ) : (
+                          <p className="text-center text-muted-foreground pt-10">Sem documentos inseridos</p>
+                      )}
+                  </TabsContent>
+                  <TabsContent value="upload" className="mt-4">
+                       <div className="grid w-full max-w-sm items-center gap-1.5">
+                          <Label htmlFor="picture">Selecione o arquivo</Label>
+                          <Input id="picture" type="file" onChange={(e) => setUploadingFile(e.target.files ? e.target.files[0] : null)} />
+                       </div>
+                       {uploadingFile && <p className="text-sm text-muted-foreground mt-2">Arquivo selecionado: {uploadingFile.name}</p>}
+                       <DialogFooter className="mt-4">
+                          <Button onClick={handleFileUpload} disabled={!uploadingFile || isUploading}>
+                              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                              Enviar
+                          </Button>
+                       </DialogFooter>
+                  </TabsContent>
+              </Tabs>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }

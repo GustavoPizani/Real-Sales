@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { Home, Building, Kanban, Settings, LogOut, CheckSquare, X } from 'lucide-react';
+import { Home, Building, Kanban, Settings, LogOut, CheckSquare, X, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Role } from '@prisma/client';
@@ -15,6 +15,7 @@ const navigationLinks = [
   { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Imóveis', href: '/properties', icon: Building, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: "Integrações", href: "/integrations", icon: Megaphone, roles: ['marketing_adm'] },
   { name: 'Configurações', href: '/settings', icon: Settings, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
 ];
 
