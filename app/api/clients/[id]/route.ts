@@ -1,9 +1,12 @@
 // app/api/clients/[id]/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
+
+export const dynamic = 'force-dynamic';
 
 // Função auxiliar para buscar cliente com detalhes
 async function getClientWithDetails(id: string) {
@@ -40,9 +43,10 @@ async function getClientWithDetails(id: string) {
 }
 
 // GET: Retorna um único cliente com seus dados relacionados
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
@@ -62,15 +66,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 // PUT: Atualiza um cliente
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     const { id } = params;
     const body = await request.json();
+
+    // Busca o cliente atual para obter o corretor antigo antes da atualização
+    const currentClient = await prisma.cliente.findUnique({
+      where: { id },
+      include: { corretor: { select: { nome: true } } },
+    });
+    if (!currentClient) return NextResponse.json({ error: 'Cliente não encontrado para transferência' }, { status: 404 });
 
     const dataToUpdate: Prisma.ClienteUpdateInput = {};
 
@@ -86,6 +98,25 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (body.sale_value !== undefined) dataToUpdate.sale_value = body.sale_value;
     if (body.sale_date !== undefined) dataToUpdate.sale_date = new Date(body.sale_date);
     if (body.preferences !== undefined) dataToUpdate.preferences = body.preferences;
+    if (body.corretorId !== undefined) {
+      // Lógica de permissão para transferência
+      if (user.role !== Role.gerente && user.role !== Role.diretor && user.role !== Role.marketing_adm) {
+        return NextResponse.json({ error: 'Você não tem permissão para transferir leads.' }, { status: 403 });
+      }
+      dataToUpdate.corretorId = body.corretorId;
+
+      // Adiciona uma nota automática para registrar a transferência
+      const newCorretor = await prisma.usuario.findUnique({ where: { id: body.corretorId } });
+      if (newCorretor) {
+        await prisma.nota.create({
+          data: {
+            clienteId: id,
+            content: `Lead transferido de ${currentClient.corretor.nome} para ${newCorretor.nome}.`,
+            createdBy: user.name, // Nome do usuário que realizou a ação
+          },
+        });
+      }
+    }
 
     if (Object.keys(dataToUpdate).length === 0) {
       return NextResponse.json({ error: 'Nenhum dado para atualizar' }, { status: 400 });

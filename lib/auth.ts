@@ -2,7 +2,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/prisma';
-import { NextRequest } from 'next/server';
 
 // Interface para o objeto de usuário usado no frontend e no token
 export interface UserPayload {
@@ -10,6 +9,11 @@ export interface UserPayload {
   name: string;
   email: string;
   role: string;
+}
+
+// Interface para o payload decodificado do JWT
+interface JwtPayload {
+  userId: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -35,13 +39,17 @@ export function generateToken(user: UserPayload): string {
   );
 }
 
-export async function verifyToken(token: string): Promise<UserPayload | null> {
+export async function verifyToken(token: string | undefined): Promise<UserPayload | null> {
+  if (!token) {
+    console.log('[AUTH] Tentativa de verificação sem token.');
+    return null;
+  }
   if (!process.env.JWT_SECRET) {
     console.error('[AUTH] ERRO: A variável de ambiente JWT_SECRET não está definida no backend.');
     return null;
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload;
     
     const userFromDb = await prisma.usuario.findUnique({
       where: { id: decoded.userId },
@@ -64,7 +72,7 @@ export async function verifyToken(token: string): Promise<UserPayload | null> {
     return user;
 
   } catch (error: any) {
-    console.error('[AUTH] ERRO ao verificar o token JWT:', error.message);
+    console.error(`[AUTH] ERRO ao verificar o token JWT: ${error.name} - ${error.message}`);
     return null;
   }
 }
@@ -98,12 +106,9 @@ export async function authenticateUser(email: string, password: string): Promise
   }
 }
 
-export async function getUserFromToken(request: Request): Promise<UserPayload | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-
-  const token = authHeader.substring(7);
+export async function getUserFromToken(token: string | undefined): Promise<UserPayload | null> {
+  // Esta função agora recebe o token diretamente.
+  // A lógica de extrair o token do cabeçalho ou cookie foi movida
+  // para as rotas da API, que é o local correto.
   return verifyToken(token);
 }

@@ -1,13 +1,17 @@
 // app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
@@ -49,7 +53,8 @@ const createClientSchema = z.object({
 
 export async function POST(request: NextRequest) {
     try {
-        const user = await getUserFromToken(request);
+        const token = cookies().get('authToken')?.value;
+        const user = await getUserFromToken(token);
         if (!user) {
             return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
         }

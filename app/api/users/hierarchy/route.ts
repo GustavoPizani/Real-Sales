@@ -15,7 +15,7 @@ function isValidRole(role: any): role is Role {
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = cookies();
-    const token = cookieStore.get('auth_token')?.value;
+    const token = cookieStore.get('authToken')?.value;
 
     if (!token) {
       return NextResponse.json({ error: 'Token de autenticação não encontrado' }, { status: 401 });

@@ -1,5 +1,5 @@
-// app/(app)/client/[id]/page.tsx
 "use client";
+import { useCompletion } from "@ai-sdk/react";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -15,15 +15,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Phone, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, Building, ArrowUpDown, Pencil, Loader2, AlertTriangle
-,
-  // Novos ícones
-  FolderKanban, Upload
+  ArrowLeft, Phone, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, Building, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
-import { format, addHours } from "date-fns"; 
-import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa } from "@/lib/types";
+import { format, addHours } from "date-fns";
+import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa, type Usuario } from "@/lib/types";
 
 const formatCurrency = (value: number | null | undefined) => {
     if (value == null) return "N/A";
@@ -32,15 +29,42 @@ const formatCurrency = (value: number | null | undefined) => {
 
 export default function ClientDetailsPage() {
   const params = useParams();
+  const clientId = Array.isArray(params.id) ? params.id[0] : params.id;
+
+  if (!clientId) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary-custom mb-4" />
+        <p className="text-muted-foreground">A carregar cliente...</p>
+      </div>
+    );
+  }
+
+  return <ClientDetailsContent clientId={clientId} />;
+}
+
+// Criamos um componente filho para conter a lógica principal
+function ClientDetailsContent({ clientId }: { clientId: string }) {
   const router = useRouter();
   const { toast } = useToast();
 
   const [client, setClient] = useState<Cliente | null>(null);
   const [properties, setProperties] = useState<Imovel[]>([]);
   const [funnelStages, setFunnelStages] = useState<any[]>([]);
+  const [users, setUsers] = useState<Usuario[]>([]);
   const [lostReasons, setLostReasons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const {
+    completion: riaSuggestion,
+    handleSubmit,
+    isLoading: isRiaLoading,
+    error: riaError,
+    setCompletion,
+  } = useCompletion({
+    api: `/api/clients/${clientId}/ria-suggestion`,
+  });
 
   // Modals State
   const [isWonDialogOpen, setIsWonDialogOpen] = useState(false);
@@ -51,13 +75,8 @@ export default function ClientDetailsPage() {
   const [isEditClientDialogOpen, setIsEditClientDialogOpen] = useState(false);
   const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
-  // Novos states para o Google Drive
-  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
-  const [driveFiles, setDriveFiles] = useState<{ id: string, name: string, webViewLink?: string, iconLink?: string }[]>([]);
-  const [isDriveLoading, setIsDriveLoading] = useState(false);
-  const [driveError, setDriveError] = useState("");
-  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [isRiaDialogOpen, setIsRiaDialogOpen] = useState(false);
 
   // Forms State
   const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
@@ -67,10 +86,9 @@ export default function ClientDetailsPage() {
   const [taskForm, setTaskForm] = useState({ title: "", description: "", dataHora: "" });
   const [editClientForm, setEditClientForm] = useState({ nomeCompleto: "", email: "", telefone: "" });
   const [newPropertyId, setNewPropertyId] = useState("");
+  const [transferToUserId, setTransferToUserId] = useState("");
   const [visitDateTime, setVisitDateTime] = useState("");
   const [activeTab, setActiveTab] = useState("anotacoes");
-
-  const clientId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const fetchData = useCallback(async () => {
     if (!clientId) return;
@@ -78,22 +96,25 @@ export default function ClientDetailsPage() {
     try {
       const token = localStorage.getItem('authToken');
       const headers = { 'Authorization': `Bearer ${token}` };
-      
-      const [clientRes, stagesRes, reasonsRes, propertiesRes] = await Promise.all([
+
+      const [clientRes, stagesRes, reasonsRes, propertiesRes, usersRes] = await Promise.all([
         fetch(`/api/clients/${clientId}`, { headers }),
         fetch('/api/funnel-stages', { headers }),
         fetch('/api/lost-reasons', { headers }),
-        fetch('/api/properties', { headers })
+        fetch('/api/properties', { headers }),
+        fetch('/api/users', { headers })
       ]);
 
       if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
-      
+
       const clientData = await clientRes.json();
       const stagesData = await stagesRes.json();
       const reasonsData = await reasonsRes.json();
       const propertiesData = await propertiesRes.json();
+      const usersData = await usersRes.json();
 
       setClient(clientData.client);
+      setUsers(usersData.users || []);
       setFunnelStages(stagesData || []);
       setLostReasons(reasonsData.reasons || []);
       setProperties(propertiesData || []);
@@ -117,48 +138,19 @@ export default function ClientDetailsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const fetchDriveFiles = useCallback(async () => {
-      if (!clientId) return;
-      setIsDriveLoading(true);
-      setDriveError("");
-      try {
-          const response = await fetch(`/api/clients/${clientId}/drive/files`);
-          if (!response.ok) throw new Error("Falha ao buscar arquivos.");
-          const data = await response.json();
-          setDriveFiles(data);
-      } catch (error: any) {
-          setDriveError(error.message);
-      } finally {
-          setIsDriveLoading(false);
-      }
-  }, [clientId]);
-
   useEffect(() => {
-      if (isDriveModalOpen) {
-          fetchDriveFiles();
-      }
-  }, [isDriveModalOpen, fetchDriveFiles]);
+    if (isRiaDialogOpen && !isRiaLoading && !riaSuggestion && client) {
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent<HTMLFormElement>;
+      handleSubmit(fakeEvent, {
+        body: {
+          clientName: client.nomeCompleto,
+          notes: client.notas,
+          tasks: client.tarefas,
+        }
+      });
+    }
+  }, [isRiaDialogOpen, isRiaLoading, riaSuggestion, client, handleSubmit]);
 
-  const handleFileUpload = async () => {
-      if (!uploadingFile || !clientId) return;
-      setIsUploading(true);
-      const formData = new FormData();
-      formData.append('file', uploadingFile);
-      try {
-          const response = await fetch(`/api/clients/${clientId}/drive/upload`, {
-              method: 'POST',
-              body: formData,
-          });
-          if (!response.ok) throw new Error('Falha no upload.');
-          toast({ title: "Sucesso!", description: `Arquivo "${uploadingFile.name}" enviado.` });
-          setUploadingFile(null);
-          fetchDriveFiles(); // Atualiza a lista de arquivos
-      } catch (error: any) {
-          toast({ variant: "destructive", title: "Erro", description: error.message });
-      } finally {
-          setIsUploading(false);
-      }
-  };
 
   const handleUpdateClient = async (payload: object, options?: { successMessage?: string }) => {
     try {
@@ -182,12 +174,7 @@ export default function ClientDetailsPage() {
   };
 
   const handleEditClientSubmit = async () => {
-    const payload = {
-        nomeCompleto: editClientForm.nomeCompleto,
-        email: editClientForm.email,
-        telefone: editClientForm.telefone
-    };
-    const success = await handleUpdateClient(payload, { successMessage: "Dados do cliente atualizados." });
+    const success = await handleUpdateClient(editClientForm, { successMessage: "Dados do cliente atualizados." });
     if (success) setIsEditClientDialogOpen(false);
   };
   
@@ -196,54 +183,50 @@ export default function ClientDetailsPage() {
     if (success) setIsEditPropertyDialogOpen(false);
   };
 
+  const handleTransferLead = async () => {
+    if (!transferToUserId) return;
+    const success = await handleUpdateClient({ corretorId: transferToUserId }, { successMessage: "Lead transferido com sucesso." });
+    if (success) setIsTransferDialogOpen(false);
+  };
+
+  const handleGetRiaSuggestions = () => {
+    if (!client) return;
+    setCompletion('');
+    setIsRiaDialogOpen(true);
+  };
+
+  const handleSaveRiaSuggestionAsNote = async () => {
+    if (!riaSuggestion) return;
+    const success = await handleAddNote(riaSuggestion);
+    if (success) {
+        toast({ title: "Sucesso!", description: "Sugestão da RIA salva como anotação." });
+        setIsRiaDialogOpen(false);
+    }
+  };
+
   const handleScheduleVisit = () => {
     if (!visitDateTime || !client?.imovelDeInteresse || !client.email) {
       toast({ variant: "destructive", title: "Erro", description: "Data, imóvel de interesse e email do cliente são necessários." });
       return;
     }
-
     const startDate = new Date(visitDateTime);
     const endDate = addHours(startDate, 1);
-    
     const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-
     const title = `Visita ao empreendimento ${client.imovelDeInteresse.titulo}`;
     const location = client.imovelDeInteresse.endereco;
     const details = `Visita agendada com o cliente ${client.nomeCompleto} para conhecer o imóvel ${client.imovelDeInteresse.titulo}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
-
-    const url = [
-        "https://www.google.com/calendar/render?action=TEMPLATE",
-        `text=${encodeURIComponent(title)}`,
-        `dates=${formatDate(startDate)}/${formatDate(endDate)}`,
-        `details=${encodeURIComponent(details)}`,
-        `location=${encodeURIComponent(location || '')}`,
-        `add=${encodeURIComponent(client.email)}`,
-        "reminders=30",
-        "reminders=1440"
-    ].join("&");
-
+    const url = [ "https://www.google.com/calendar/render?action=TEMPLATE", `text=${encodeURIComponent(title)}`, `dates=${formatDate(startDate)}/${formatDate(endDate)}`, `details=${encodeURIComponent(details)}`, `location=${encodeURIComponent(location || '')}`, `add=${encodeURIComponent(client.email)}`, "reminders=30", "reminders=1440" ].join("&");
     window.open(url, "_blank");
     setIsScheduleVisitOpen(false);
   };
 
   const handleMarkAsWon = async () => {
-    const success = await handleUpdateClient({
-      overallStatus: ClientOverallStatus.Ganho,
-      currentFunnelStage: "Ganho",
-      detalhesDeVenda: {
-        sale_value: parseFloat(wonDetails.sale_value),
-        sale_date: new Date(wonDetails.sale_date),
-      }
-    }, { successMessage: "Cliente marcado como 'Ganho'!" });
+    const success = await handleUpdateClient({ overallStatus: ClientOverallStatus.Ganho, currentFunnelStage: "Ganho", detalhesDeVenda: { sale_value: parseFloat(wonDetails.sale_value), sale_date: new Date(wonDetails.sale_date), } }, { successMessage: "Cliente marcado como 'Ganho'!" });
     if (success) setIsWonDialogOpen(false);
   };
 
   const handleMarkAsLost = async () => {
-    const success = await handleUpdateClient({
-      overallStatus: ClientOverallStatus.Perdido,
-      currentFunnelStage: "Perdido",
-      preferences: `Motivo da perda: ${lostReason}`
-    }, { successMessage: "Cliente marcado como 'Perdido'." });
+    const success = await handleUpdateClient({ overallStatus: ClientOverallStatus.Perdido, currentFunnelStage: "Perdido", preferences: `Motivo da perda: ${lostReason}` }, { successMessage: "Cliente marcado como 'Perdido'." });
     if (success) setIsLostDialogOpen(false);
   };
 
@@ -252,23 +235,29 @@ export default function ClientDetailsPage() {
     if (success) setIsFunnelDialogOpen(false);
   };
 
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddNote = async (content: string) => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`/api/clients/${clientId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ content: newNote }),
+        body: JSON.stringify({ content }),
       });
       if (!response.ok) throw new Error("Falha ao adicionar anotação.");
       toast({ title: "Sucesso!", description: "Anotação adicionada." });
       setNewNote("");
       setIsNoteDialogOpen(false);
       fetchData();
+      return true;
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
+      return false;
     }
+  };
+
+  const handleAddNoteFromForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleAddNote(newNote);
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -278,12 +267,7 @@ export default function ClientDetailsPage() {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ 
-          title: taskForm.title,
-          description: taskForm.description,
-          due_date: new Date(taskForm.dataHora), 
-          client_id: clientId
-        }),
+        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, due_date: new Date(taskForm.dataHora), client_id: clientId }),
       });
       if (!response.ok) throw new Error("Falha ao criar tarefa.");
       toast({ title: "Sucesso!", description: "Tarefa criada." });
@@ -386,9 +370,36 @@ export default function ClientDetailsPage() {
                 </TabsContent>
                 <TabsContent value="anotacoes" className="p-6 pt-4">
                   <div className="space-y-4">
-                    {client.notas?.length > 0 ? client.notas.map(note => (
-                      <div key={note.id} className="border-l-2 pl-4"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{note.createdBy} em {format(new Date(note.createdAt), "dd/MM/yyyy")}</p></div>
-                    )) : <p className="text-center text-muted-foreground">Nenhuma anotação.</p>}
+                    {client.notas && client.notas.length > 0 ? (
+                      client.notas
+                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                        .map((note) => (
+                          <Card key={note.id} className="shadow-sm">
+                            <CardHeader className="flex flex-row items-center justify-between p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
+                                  <User className="h-4 w-4 text-slate-600" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <CardTitle className="text-sm font-semibold">
+                                    {note.createdBy || 'Sistema'}
+                                  </CardTitle>
+                                  <p className="text-xs text-muted-foreground">
+                                    {format(new Date(note.createdAt), "dd/MM/yyyy 'às' HH:mm")}
+                                  </p>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                {note.content}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        ))
+                    ) : (
+                      <p className="text-center text-muted-foreground pt-10">Nenhuma anotação.</p>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
@@ -416,12 +427,16 @@ export default function ClientDetailsPage() {
               <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2"/>Editar Cliente</Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsDriveModalOpen(true)}>
-                      <FolderKanban className="h-4 w-4 mr-2"/>
-                      Arquivos do Cliente
-                  </Button>
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
+                  
+                  {/* Botão da RIA oculto temporariamente */}
+                  {/* <Button variant="outline" type="button" onClick={handleGetRiaSuggestions} className="w-full justify-start" disabled={isRiaLoading}>
+                    <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
+                    {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
+                  </Button> */}
+
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
               </CardContent>
@@ -445,7 +460,7 @@ export default function ClientDetailsPage() {
       <Dialog open={isWonDialogOpen} onOpenChange={setIsWonDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Ganho</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="sale_value">Valor da Venda</Label><Input id="sale_value" type="number" value={wonDetails.sale_value} onChange={e => setWonDetails({...wonDetails, sale_value: e.target.value})} /><Label htmlFor="sale_date">Data da Venda</Label><Input id="sale_date" type="date" value={wonDetails.sale_date} onChange={e => setWonDetails({...wonDetails, sale_date: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsWonDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsWon}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isLostDialogOpen} onOpenChange={setIsLostDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Perdido</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="lost_reason">Motivo da Perda</Label><Select value={lostReason} onValueChange={setLostReason}><SelectTrigger><SelectValue placeholder="Selecione um motivo..." /></SelectTrigger><SelectContent>{lostReasons.map(r => <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsLostDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsLost} variant="destructive">Confirmar Perda</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isFunnelDialogOpen} onOpenChange={setIsFunnelDialogOpen}><DialogContent><DialogHeader><DialogTitle>Alterar Etapa do Funil</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="funnel_status">Nova Etapa</Label><Select value={newFunnelStatus} onValueChange={setNewFunnelStatus}><SelectTrigger><SelectValue placeholder="Selecione uma etapa..." /></SelectTrigger><SelectContent>{funnelStages.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsFunnelDialogOpen(false)}>Cancelar</Button><Button onClick={handleChangeFunnelStatus}>Salvar</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Anotação</DialogTitle></DialogHeader><form onSubmit={handleAddNote} className="py-4"><Textarea placeholder="Escreva sua anotação aqui..." value={newNote} onChange={e => setNewNote(e.target.value)} /><DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsNoteDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></DialogFooter></form></DialogContent></Dialog>
+      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Anotação</DialogTitle></DialogHeader><form onSubmit={handleAddNoteFromForm} className="py-4"><Textarea placeholder="Escreva sua anotação aqui..." value={newNote} onChange={e => setNewNote(e.target.value)} /><DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsNoteDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Tarefa</DialogTitle></DialogHeader>
         <form onSubmit={handleAddTask} className="space-y-4 py-4">
           <Label>Título</Label>
@@ -461,55 +476,38 @@ export default function ClientDetailsPage() {
       <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
 
-      {/* Modal Google Drive */}
-      <Dialog open={isDriveModalOpen} onOpenChange={setIsDriveModalOpen}>
-          <DialogContent className="sm:max-w-[525px]">
-              <DialogHeader>
-                  <DialogTitle>Arquivos de {client?.nomeCompleto}</DialogTitle>
-              </DialogHeader>
-              <Tabs defaultValue="acessar" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="acessar">Acessar Documentos</TabsTrigger>
-                      <TabsTrigger value="upload">Upload de Documentos</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="acessar" className="mt-4 min-h-[200px]">
-                      {isDriveLoading ? (
-                          <div className="flex justify-center items-center h-full">
-                              <Loader2 className="h-8 w-8 animate-spin text-primary-custom" />
-                          </div>
-                      ) : driveError ? (
-                          <p className="text-destructive text-center">{driveError}</p>
-                      ) : driveFiles.length > 0 ? (
-                          <ul className="space-y-2">
-                              {driveFiles.map(file => (
-                                  <li key={file.id} className="flex items-center justify-between p-2 border rounded-md">
-                                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline">
-                                          {file.iconLink && <img src={file.iconLink} alt="ícone do arquivo" className="h-4 w-4" />}
-                                          <span>{file.name}</span>
-                                      </a>
-                                  </li>
-                              ))}
-                          </ul>
-                      ) : (
-                          <p className="text-center text-muted-foreground pt-10">Sem documentos inseridos</p>
-                      )}
-                  </TabsContent>
-                  <TabsContent value="upload" className="mt-4">
-                       <div className="grid w-full max-w-sm items-center gap-1.5">
-                          <Label htmlFor="picture">Selecione o arquivo</Label>
-                          <Input id="picture" type="file" onChange={(e) => setUploadingFile(e.target.files ? e.target.files[0] : null)} />
-                       </div>
-                       {uploadingFile && <p className="text-sm text-muted-foreground mt-2">Arquivo selecionado: {uploadingFile.name}</p>}
-                       <DialogFooter className="mt-4">
-                          <Button onClick={handleFileUpload} disabled={!uploadingFile || isUploading}>
-                              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                              Enviar
-                          </Button>
-                       </DialogFooter>
-                  </TabsContent>
-              </Tabs>
-          </DialogContent>
+      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um corretor..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.corretorId).map(u => <SelectItem key={u.id} value={u.id}>{u.nome} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
+      
+      <Dialog open={isRiaDialogOpen} onOpenChange={setIsRiaDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary-custom" />
+              Análise e Sugestões da RIA
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
+            {isRiaLoading && !riaSuggestion && (
+              <div className="flex flex-col items-center justify-center text-center p-8">
+                <Loader2 className="h-10 w-10 animate-spin text-primary-custom mb-4" />
+                <p className="text-muted-foreground">Analisando histórico do cliente...</p>
+                <p className="text-xs text-muted-foreground">(Isso pode levar alguns segundos)</p>
+              </div>
+            )}
+            {riaError && <div className="text-red-500 p-4 bg-red-50 rounded-md">{riaError.message}</div>}
+            {riaSuggestion && (
+              <div className="prose prose-sm max-w-none whitespace-pre-wrap">{riaSuggestion}</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRiaDialogOpen(false)}>Fechar</Button>
+            <Button onClick={handleSaveRiaSuggestionAsNote} disabled={isRiaLoading || !riaSuggestion}>
+              <Save className="h-4 w-4 mr-2" /> Salvar como Anotação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );
 }
+

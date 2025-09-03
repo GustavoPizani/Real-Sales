@@ -1,12 +1,19 @@
 // c:\Users\gusta\Real-sales\app\api\clients\bulk-import\route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import Papa from 'papaparse';
 import { ClientOverallStatus } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
-  const user = await getUserFromToken(request);
+  const cookieStore = cookies();
+  const token = cookieStore.get('authToken')?.value;
+
+  const user = await getUserFromToken(token);
+
   if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
@@ -19,13 +26,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
     }
 
+    console.log(`[BULK-IMPORT-SCAN] Arquivo recebido: ${file.name}, Tamanho: ${file.size} bytes, Tipo: ${file.type}`);
+
     const fileContent = await file.text();
+
+    if (!fileContent.trim()) {
+      console.log("[BULK-IMPORT-SCAN] Erro: O conteúdo do arquivo está vazio.");
+      return NextResponse.json({ error: 'O arquivo enviado está vazio.' }, { status: 400 });
+    }
 
     const parseResult = Papa.parse(fileContent, {
       header: true,
       skipEmptyLines: true,
       transformHeader: header => header.trim() // Garante que espaços em branco nos cabeçalhos sejam removidos
     });
+
+    // <<--- SCAN DOS DADOS PARSEADOS --- >>
+    console.log("[BULK-IMPORT-SCAN] Dados parseados do CSV:", JSON.stringify(parseResult.data, null, 2));
+    console.log("[BULK-IMPORT-SCAN] Erros do PapaParse:", JSON.stringify(parseResult.errors, null, 2));
 
     const clientsToCreate: any[] = [];
     const errors: string[] = [];
@@ -52,6 +70,9 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < parseResult.data.length; i++) {
       const row: any = parseResult.data[i];
       const lineNumber = i + 2; // +2 porque o header é a linha 1 e a contagem é base 0
+
+      // <<--- SCAN DE CADA LINHA --- >>
+      console.log(`[BULK-IMPORT-SCAN] Processando linha ${lineNumber}:`, JSON.stringify(row));
 
       // Validação de campos obrigatórios
       if (!row.nomeCompleto) {

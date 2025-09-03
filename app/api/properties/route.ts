@@ -1,14 +1,18 @@
 // app/api/properties/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { StatusImovel } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 // GET: Busca todas as propriedades
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
@@ -35,7 +39,8 @@ export async function GET(request: NextRequest) {
 // POST: Cria uma nova propriedade, as suas tipologias e associa as imagens
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }

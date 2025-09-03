@@ -1,15 +1,19 @@
 // c:\Users\gusta\Real-sales\app\api\users\route.ts
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
 import { Prisma, Role } from "@prisma/client";
 
+export const dynamic = 'force-dynamic';
+
 // GET: Busca todos os utilizadores
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
@@ -35,7 +39,8 @@ export async function GET(request: NextRequest) {
 // POST: Cria um novo utilizador
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user || user.role !== Role.marketing_adm) {
         return NextResponse.json({ error: "Sem permissão para criar utilizadores" }, { status: 403 });
     }

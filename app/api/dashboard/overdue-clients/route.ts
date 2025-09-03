@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const cookieStore = cookies();
-    const token = cookieStore.get('auth_token')?.value;
+    const token = cookieStore.get('authToken')?.value;
 
     if (!token) {
       return NextResponse.json({ error: 'Token de autenticação não encontrado' }, { status: 401 });
