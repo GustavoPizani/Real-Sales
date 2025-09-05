@@ -6,8 +6,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("database_POSTGRES_PRISMA_URL")
-  directUrl = env("database_POSTGRES_URL_NON_POOLING")
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
   // 1. ALTERAÇÃO: Usando a estratégia de chaves estrangeiras nativas do banco de dados.
   // Isso é mais robusto e recomendado para PostgreSQL.
   relationMode = "foreignKeys"
@@ -199,4 +199,3 @@ enum ClientOverallStatus {
   Ganho
   Perdido
 }
-
