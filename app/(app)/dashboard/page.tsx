@@ -18,10 +18,12 @@ import { format, formatDistanceToNow } from "date-fns"
 import { ptBR } from 'date-fns/locale'
 
 interface DashboardStats {
-  totalClients: number
-  activeClients: number
-  totalProperties: number
-  conversionRate: number
+  totalClients: number;
+  activeClients: number;
+  totalProperties: number;
+  conversionRate: number;
+  hierarchicalTotalClients: number;
+  hierarchicalActiveClients: number;
 }
 
 interface Client {
@@ -63,6 +65,8 @@ export default function DashboardPage() {
     activeClients: 0,
     totalProperties: 0,
     conversionRate: 0,
+    hierarchicalTotalClients: 0,
+    hierarchicalActiveClients: 0,
   })
   const [clients, setClients] = useState<Client[]>([])
   const [overdueClients, setOverdueClients] = useState<Client[]>([])
@@ -96,7 +100,7 @@ export default function DashboardPage() {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [statsRes, overdueClientsRes, tasksRes, allClientsRes, brokersRes] = await Promise.all([
-        fetch("/api/dashboard/stats", { headers }),
+        fetch(`/api/dashboard/stats?userId=${user.id}`, { headers }),
         fetch("/api/dashboard/overdue-clients", { headers }),
         fetch("/api/tasks", { headers }),
         fetch("/api/clients", { headers }),
@@ -251,7 +255,7 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-primary-custom" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary-custom">{stats.totalClients}</div>
+            <div className="text-2xl font-bold text-primary-custom">{stats.hierarchicalTotalClients}</div>
             <p className="text-xs text-gray-500">Todos os clientes cadastrados</p>
           </CardContent>
         </Card>
@@ -262,7 +266,7 @@ export default function DashboardPage() {
             <TrendingUp className="h-4 w-4 text-tertiary-custom" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-tertiary-custom">{stats.activeClients}</div>
+            <div className="text-2xl font-bold text-tertiary-custom">{stats.hierarchicalActiveClients}</div>
             <p className="text-xs text-gray-500">Em andamento no pipeline</p>
           </CardContent>
         </Card>

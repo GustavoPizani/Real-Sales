@@ -1,5 +1,4 @@
 "use client";
-import { useCompletion } from "@ai-sdk/react";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -11,21 +10,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Phone, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, Building, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save
+  ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save
 } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { format, addHours } from "date-fns";
 import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa, type Usuario } from "@/lib/types";
+
+// --- Tipos e Constantes ---
+
+type RiaModalState = 'initial' | 'loading' | 'suggestion' | 'closed';
 
 const formatCurrency = (value: number | null | undefined) => {
     if (value == null) return "N/A";
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 };
+
+// --- Componente Principal ---
 
 export default function ClientDetailsPage() {
   const params = useParams();
@@ -43,11 +47,13 @@ export default function ClientDetailsPage() {
   return <ClientDetailsContent clientId={clientId} />;
 }
 
-// Criamos um componente filho para conter a lógica principal
+// --- Componente de Conteúdo ---
+
 function ClientDetailsContent({ clientId }: { clientId: string }) {
   const router = useRouter();
   const { toast } = useToast();
 
+  // --- Estados ---
   const [client, setClient] = useState<Cliente | null>(null);
   const [properties, setProperties] = useState<Imovel[]>([]);
   const [funnelStages, setFunnelStages] = useState<any[]>([]);
@@ -56,17 +62,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const {
-    completion: riaSuggestion,
-    handleSubmit,
-    isLoading: isRiaLoading,
-    error: riaError,
-    setCompletion,
-  } = useCompletion({
-    api: `/api/clients/${clientId}/ria-suggestion`,
-  });
-
-  // Modals State
+  // Estados dos Modais
   const [isWonDialogOpen, setIsWonDialogOpen] = useState(false);
   const [isLostDialogOpen, setIsLostDialogOpen] = useState(false);
   const [isFunnelDialogOpen, setIsFunnelDialogOpen] = useState(false);
@@ -76,11 +72,16 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  
+  // Estados da RIA
   const [isRiaDialogOpen, setIsRiaDialogOpen] = useState(false);
+  const [riaModalState, setRiaModalState] = useState<RiaModalState>('closed');
+  const [isRiaLoading, setIsRiaLoading] = useState(false);
+  const [riaSuggestion, setRiaSuggestion] = useState('');
 
-  // Forms State
+  // Estados dos Formulários
   const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
-  const [lostReason, setLostReason] = useState("");
+  const [lostDetails, setLostDetails] = useState({ reason: "", feedback: "" });
   const [newFunnelStatus, setNewFunnelStatus] = useState("");
   const [newNote, setNewNote] = useState("");
   const [taskForm, setTaskForm] = useState({ title: "", description: "", dataHora: "" });
@@ -89,6 +90,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [transferToUserId, setTransferToUserId] = useState("");
   const [visitDateTime, setVisitDateTime] = useState("");
   const [activeTab, setActiveTab] = useState("anotacoes");
+
+  // --- Funções de Busca e Atualização de Dados ---
 
   const fetchData = useCallback(async () => {
     if (!clientId) return;
@@ -136,21 +139,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     }
   }, [clientId, toast]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
   useEffect(() => {
-    if (isRiaDialogOpen && !isRiaLoading && !riaSuggestion && client) {
-      const fakeEvent = { preventDefault: () => {} } as React.FormEvent<HTMLFormElement>;
-      handleSubmit(fakeEvent, {
-        body: {
-          clientName: client.nomeCompleto,
-          notes: client.notas,
-          tasks: client.tarefas,
-        }
-      });
-    }
-  }, [isRiaDialogOpen, isRiaLoading, riaSuggestion, client, handleSubmit]);
-
+    fetchData();
+  }, [fetchData]);
 
   const handleUpdateClient = async (payload: object, options?: { successMessage?: string }) => {
     try {
@@ -173,6 +164,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     }
   };
 
+  // --- Handlers de Ações ---
+
   const handleEditClientSubmit = async () => {
     const success = await handleUpdateClient(editClientForm, { successMessage: "Dados do cliente atualizados." });
     if (success) setIsEditClientDialogOpen(false);
@@ -189,10 +182,48 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     if (success) setIsTransferDialogOpen(false);
   };
 
-  const handleGetRiaSuggestions = () => {
-    if (!client) return;
-    setCompletion('');
+  const handleOpenRiaModal = () => {
+    setRiaModalState('initial');
     setIsRiaDialogOpen(true);
+  };
+
+  const handleFetchRiaSuggestions = async () => {
+    if (!client) return;
+    setRiaModalState('loading');
+    setIsRiaLoading(true);
+    setRiaSuggestion('');
+
+    try {
+      const token = localStorage.getItem('authToken');
+
+      const response = await fetch(`/api/clients/${clientId}/ria-suggestion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          clientName: client.nomeCompleto,
+          notes: client.notas,
+          tasks: client.tarefas,
+        }),
+      });
+
+      if (!response.body) throw new Error('A resposta da API não contém um corpo.');
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      setRiaModalState('suggestion');
+
+      while (true) { // eslint-disable-line no-constant-condition
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        setRiaSuggestion(prev => prev + chunk);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro na RIA", description: error.message });
+      setRiaModalState('initial');
+    } finally {
+      setIsRiaLoading(false);
+    }
   };
 
   const handleSaveRiaSuggestionAsNote = async () => {
@@ -226,8 +257,20 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleMarkAsLost = async () => {
-    const success = await handleUpdateClient({ overallStatus: ClientOverallStatus.Perdido, currentFunnelStage: "Perdido", preferences: `Motivo da perda: ${lostReason}` }, { successMessage: "Cliente marcado como 'Perdido'." });
-    if (success) setIsLostDialogOpen(false);
+    if (!lostDetails.reason || !lostDetails.feedback) {
+      toast({ variant: "destructive", title: "Campos obrigatórios", description: "Por favor, selecione um motivo e forneça um feedback." });
+      return;
+    }
+    const noteContent = `Cliente marcado como perdido.\nMotivo: ${lostDetails.reason}\nFeedback: ${lostDetails.feedback}`;
+    
+    // Primeiro, atualiza o status do cliente
+    const updateSuccess = await handleUpdateClient({ overallStatus: ClientOverallStatus.Perdido, currentFunnelStage: "Perdido" }, { successMessage: "Cliente marcado como 'Perdido'." });
+    
+    // Se o status foi atualizado, adiciona a anotação com os detalhes
+    if (updateSuccess) {
+      await handleAddNote(noteContent); // Adiciona a anotação
+      setIsLostDialogOpen(false); // Fecha o modal
+    }
   };
 
   const handleChangeFunnelStatus = async () => {
@@ -267,7 +310,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, due_date: new Date(taskForm.dataHora), client_id: clientId }),
+        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dataHora: new Date(taskForm.dataHora), clienteId: clientId }),
       });
       if (!response.ok) throw new Error("Falha ao criar tarefa.");
       toast({ title: "Sucesso!", description: "Tarefa criada." });
@@ -279,6 +322,14 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     }
   };
 
+  const handleRiaDialogClose = () => {
+    setIsRiaDialogOpen(false);
+    setRiaModalState('closed');
+    setRiaSuggestion('');
+  }
+
+  // --- Funções Auxiliares ---
+
   const getStatusProps = (status: string): { className?: string; style?: React.CSSProperties } => {
     if (status === ClientOverallStatus.Ganho) return { className: "bg-emerald-100 text-emerald-800" };
     if (status === ClientOverallStatus.Perdido) return { className: "bg-red-100 text-red-800" };
@@ -286,6 +337,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     if (stage?.color) return { style: { color: stage.color, backgroundColor: `${stage.color}1A` } };
     return { className: "bg-gray-100 text-gray-800" };
   };
+
+  // --- Renderização ---
 
   if (loading) {
     return (
@@ -311,8 +364,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Cabeçalho da Página */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" onClick={() => router.push("/pipeline")}><ArrowLeft className="h-4 w-4" /></Button>
           <div>
@@ -323,27 +377,90 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {client.overallStatus === ClientOverallStatus.Ativo && (
             <>
-              <Button variant="outline" className="text-green-600 hover:text-green-700" onClick={() => setIsWonDialogOpen(true)}><CheckCircle className="h-4 w-4 mr-2" /> Cliente Ganho</Button>
-              <Button variant="outline" className="text-red-600 hover:text-red-700" onClick={() => setIsLostDialogOpen(true)}><XCircle className="h-4 w-4 mr-2" /> Cliente Perdido</Button>
+              <Button variant="outline" className="text-green-600 hover:text-green-700 flex-grow sm:flex-grow-0" onClick={() => setIsWonDialogOpen(true)}><CheckCircle className="h-4 w-4 mr-2" /> Cliente Ganho</Button>
+              <Button variant="outline" className="text-red-600 hover:text-red-700 flex-grow sm:flex-grow-0" onClick={() => setIsLostDialogOpen(true)}><XCircle className="h-4 w-4 mr-2" /> Cliente Perdido</Button>
             </>
           )}
         </div>
       </div>
 
+      {/* Layout Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Coluna Esquerda (Principal) */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
+          
+          {/* Abas para Mobile: Informações e Ações Rápidas */}
+          <div className="lg:hidden">
+            <Tabs defaultValue="info" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="info">Informações</TabsTrigger>
+                <TabsTrigger value="actions">Ações Rápidas</TabsTrigger>
+              </TabsList>
+              <TabsContent value="info" className="mt-4">
+                <Card>
+                  <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
+                    <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
+                    <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
+                    <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="actions" className="mt-4">
+                <Card>
+                  <CardContent className="pt-6 space-y-2">
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2"/>Editar Cliente</Button>
+                    <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
+                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
+                    {/*
+                    <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
+                      <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
+                      {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
+                    </Button>
+                    */}
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* Card de Informações para Desktop */}
+          <Card className="hidden lg:block">
             <CardHeader><CardTitle>Informações do Cliente</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
                 <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
                 <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
                 <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
             </CardContent>
           </Card>
+
+          {/* Card de Imóvel de Interesse (Movido para cá) */}
+          <Card>
+            <CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader>
+            <CardContent>
+              {client.imovelDeInteresse ? (
+                <>
+                  <h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3>
+                  <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
+                  <p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p>
+                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}`)}>Ver Detalhes</Button>
+                  <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
+                </>
+              ) : (
+                <Button variant="outline" className="w-full" onClick={() => setIsEditPropertyDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Inserir Imóvel de Interesse</Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card de Histórico e Atividades */}
           <Card>
             <CardHeader className="flex flex-row justify-between items-center">
               <CardTitle>Histórico e Atividades</CardTitle>
@@ -354,13 +471,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </CardHeader>
             <CardContent className="p-0">
               <Tabs defaultValue="anotacoes" onValueChange={setActiveTab} className="w-full">
-                <div className="px-6">
+                <div className="px-4 sm:px-6">
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="anotacoes">Anotações</TabsTrigger>
                     <TabsTrigger value="tarefas">Tarefas</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="tarefas" className="p-6 pt-4">
+                <TabsContent value="tarefas" className="p-4 sm:p-6 pt-4">
                   <Table>
                     <TableHeader><TableRow><TableHead>Tarefa</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                     <TableBody>
@@ -368,7 +485,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                     </TableBody>
                   </Table>
                 </TabsContent>
-                <TabsContent value="anotacoes" className="p-6 pt-4">
+                <TabsContent value="anotacoes" className="p-4 sm:p-6 pt-4">
                   <div className="space-y-4">
                     {client.notas && client.notas.length > 0 ? (
                       client.notas
@@ -406,23 +523,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </CardContent>
           </Card>
         </div>
-        <div className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader>
-            <CardContent>
-              {client.imovelDeInteresse ? (
-                <>
-                  <h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3>
-                  <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
-                  <p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p>
-                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}`)}>Ver Detalhes</Button>
-                  <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
-                </>
-              ) : (
-                <Button variant="outline" className="w-full" onClick={() => setIsEditPropertyDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Inserir Imóvel de Interesse</Button>
-              )}
-            </CardContent>
-          </Card>
+
+        {/* Coluna Direita (Sidebar) */}
+        <div className="hidden lg:flex lg:flex-col lg:space-y-6">
           <Card>
               <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
               <CardContent className="space-y-2">
@@ -430,13 +533,12 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
-                  
-                  {/* Botão da RIA oculto temporariamente */}
-                  {/* <Button variant="outline" type="button" onClick={handleGetRiaSuggestions} className="w-full justify-start" disabled={isRiaLoading}>
+                  {/*
+                  <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
                     <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
                     {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
-                  </Button> */}
-
+                  </Button>
+                  */}
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
               </CardContent>
@@ -458,7 +560,17 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       
       {/* Modais */}
       <Dialog open={isWonDialogOpen} onOpenChange={setIsWonDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Ganho</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="sale_value">Valor da Venda</Label><Input id="sale_value" type="number" value={wonDetails.sale_value} onChange={e => setWonDetails({...wonDetails, sale_value: e.target.value})} /><Label htmlFor="sale_date">Data da Venda</Label><Input id="sale_date" type="date" value={wonDetails.sale_date} onChange={e => setWonDetails({...wonDetails, sale_date: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsWonDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsWon}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isLostDialogOpen} onOpenChange={setIsLostDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Perdido</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="lost_reason">Motivo da Perda</Label><Select value={lostReason} onValueChange={setLostReason}><SelectTrigger><SelectValue placeholder="Selecione um motivo..." /></SelectTrigger><SelectContent>{lostReasons.map(r => <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsLostDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsLost} variant="destructive">Confirmar Perda</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isLostDialogOpen} onOpenChange={setIsLostDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Perdido</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-4">
+          <div>
+            <Label htmlFor="lost_reason">Motivo da Perda (Obrigatório)</Label>
+            <Select value={lostDetails.reason} onValueChange={reason => setLostDetails({...lostDetails, reason})}><SelectTrigger id="lost_reason"><SelectValue placeholder="Selecione um motivo..." /></SelectTrigger><SelectContent>{lostReasons.map(r => <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>)}</SelectContent></Select>
+          </div>
+          <div>
+            <Label htmlFor="lost_feedback">Feedback (Obrigatório)</Label>
+            <Textarea id="lost_feedback" placeholder="Descreva em detalhes o porquê da perda..." value={lostDetails.feedback} onChange={e => setLostDetails({...lostDetails, feedback: e.target.value})} />
+          </div>
+        </div><DialogFooter><Button variant="outline" onClick={() => setIsLostDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsLost} variant="destructive" disabled={!lostDetails.reason || !lostDetails.feedback}>Confirmar Perda</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isFunnelDialogOpen} onOpenChange={setIsFunnelDialogOpen}><DialogContent><DialogHeader><DialogTitle>Alterar Etapa do Funil</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="funnel_status">Nova Etapa</Label><Select value={newFunnelStatus} onValueChange={setNewFunnelStatus}><SelectTrigger><SelectValue placeholder="Selecione uma etapa..." /></SelectTrigger><SelectContent>{funnelStages.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsFunnelDialogOpen(false)}>Cancelar</Button><Button onClick={handleChangeFunnelStatus}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Anotação</DialogTitle></DialogHeader><form onSubmit={handleAddNoteFromForm} className="py-4"><Textarea placeholder="Escreva sua anotação aqui..." value={newNote} onChange={e => setNewNote(e.target.value)} /><DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsNoteDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Tarefa</DialogTitle></DialogHeader>
@@ -478,36 +590,43 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
       <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um corretor..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.corretorId).map(u => <SelectItem key={u.id} value={u.id}>{u.nome} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
       
-      <Dialog open={isRiaDialogOpen} onOpenChange={setIsRiaDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog open={isRiaDialogOpen} onOpenChange={handleRiaDialogClose}>
+        <DialogContent className="sm:max-w-2xl h-[70vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary-custom" />
               Análise e Sugestões da RIA
             </DialogTitle>
           </DialogHeader>
-          <div className="py-4 max-h-[60vh] overflow-y-auto">
-            {isRiaLoading && !riaSuggestion && (
-              <div className="flex flex-col items-center justify-center text-center p-8">
-                <Loader2 className="h-10 w-10 animate-spin text-primary-custom mb-4" />
-                <p className="text-muted-foreground">Analisando histórico do cliente...</p>
-                <p className="text-xs text-muted-foreground">(Isso pode levar alguns segundos)</p>
-              </div>
-            )}
-            {riaError && <div className="text-red-500 p-4 bg-red-50 rounded-md">{riaError.message}</div>}
-            {riaSuggestion && (
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap">{riaSuggestion}</div>
-            )}
-          </div>
+          {riaModalState === 'initial' && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <p className="text-lg mb-4">Olá, vai ser um prazer te ajudar.</p>
+              <Button onClick={handleFetchRiaSuggestions} disabled={isRiaLoading}>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Avaliar Cliente
+              </Button>
+            </div>
+          )}
+          {(riaModalState === 'loading' || riaModalState === 'suggestion') && (
+            <div className="prose prose-sm max-w-none overflow-y-auto flex-grow p-1">
+              {isRiaLoading && !riaSuggestion && (
+                <div className="flex justify-center items-center h-full">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary-custom" />
+                </div>
+              )}
+              <div className="whitespace-pre-wrap">{riaSuggestion}</div>
+            </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRiaDialogOpen(false)}>Fechar</Button>
-            <Button onClick={handleSaveRiaSuggestionAsNote} disabled={isRiaLoading || !riaSuggestion}>
-              <Save className="h-4 w-4 mr-2" /> Salvar como Anotação
-            </Button>
+            <Button variant="outline" onClick={handleRiaDialogClose}>Fechar</Button>
+            {riaModalState === 'suggestion' && (
+              <Button onClick={handleSaveRiaSuggestionAsNote} disabled={isRiaLoading || !riaSuggestion}>
+                <Save className="h-4 w-4 mr-2" /> Salvar como Anotação
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-

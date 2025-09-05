@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -845,6 +845,132 @@ function DataImportTab() {
   );
 }
 
+function LostReasonsTab() {
+  const { toast } = useToast();
+  const [reasons, setReasons] = useState<{ id: string; reason: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingReason, setEditingReason] = useState<{ id: string; reason: string } | null>(null);
+  const [reasonForm, setReasonForm] = useState({ reason: '' });
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/lost-reasons', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Falha ao buscar motivos.');
+      const data = await response.json();
+      setReasons(data.reasons || []);
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const openDialog = (reason: { id: string; reason: string } | null = null) => {
+    if (reason) {
+      setEditingReason(reason);
+      setReasonForm({ reason: reason.reason });
+    } else {
+      setEditingReason(null);
+      setReasonForm({ reason: '' });
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('authToken');
+    const method = editingReason ? 'PUT' : 'POST';
+    const url = editingReason ? `/api/lost-reasons/${editingReason.id}` : '/api/lost-reasons';
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ reason: reasonForm.reason }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao salvar motivo.');
+      }
+      toast({ title: 'Sucesso!', description: `Motivo ${editingReason ? 'atualizado' : 'criado'}.` });
+      setIsDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    }
+  };
+
+  const handleDelete = async (reasonId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este motivo?')) return;
+    const token = localStorage.getItem('authToken');
+    try {
+      const response = await fetch(`/api/lost-reasons/${reasonId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao excluir motivo.');
+      }
+      toast({ title: 'Sucesso!', description: 'Motivo excluído.' });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    }
+  };
+
+  if (loading) return <Card><CardContent className="p-6">Carregando...</CardContent></Card>;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Motivos de Perda de Cliente</CardTitle>
+          <CardDescription>Adicione, edite ou remova os motivos que aparecem ao marcar um cliente como 'Perdido'.</CardDescription>
+        </div>
+        <Button onClick={() => openDialog(null)}><Plus className="h-4 w-4 mr-2" /> Novo Motivo</Button>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader><TableRow><TableHead>Motivo</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {reasons.map((reason) => (
+              <TableRow key={reason.id}>
+                <TableCell className="font-medium">{reason.reason}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => openDialog(reason)}><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(reason.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingReason ? 'Editar Motivo' : 'Novo Motivo de Perda'}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="reason">Descrição do Motivo</Label>
+              <Input id="reason" value={reasonForm.reason} onChange={(e) => setReasonForm({ reason: e.target.value })} required />
+            </div>
+            <DialogFooter><Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'marketing_adm';
@@ -857,18 +983,20 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-3'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-6' : 'grid-cols-3'}`}>
           <TabsTrigger value="profile"><UserIcon className="h-4 w-4 mr-2" />Perfil</TabsTrigger>
           {isAdmin && <TabsTrigger value="team"><Users className="h-4 w-4 mr-2" />Equipe</TabsTrigger>}
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notificações</TabsTrigger>
           <TabsTrigger value="security"><Shield className="h-4 w-4 mr-2" />Segurança</TabsTrigger>
           {isAdmin && <TabsTrigger value="import"><Upload className="h-4 w-4 mr-2" />Importação</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="lost-reasons"><ListX className="h-4 w-4 mr-2" />Motivos de Perda</TabsTrigger>}
         </TabsList>
         <TabsContent value="profile"><ProfileTab /></TabsContent>
         {isAdmin && <TabsContent value="team"><TeamManagementTab /></TabsContent>}
         <TabsContent value="notifications"><NotificationsTab /></TabsContent>
         <TabsContent value="security"><SecurityTab /></TabsContent>
         {isAdmin && <TabsContent value="import"><DataImportTab /></TabsContent>}
+        {isAdmin && <TabsContent value="lost-reasons"><LostReasonsTab /></TabsContent>}
       </Tabs>
     </div>
   );
