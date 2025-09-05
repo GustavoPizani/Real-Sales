@@ -1,23 +1,44 @@
 // app/api/dashboard/stats/route.ts
 
 import { NextResponse, NextRequest } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { getUserFromToken } from '@/lib/auth'
 import { Role } from '@prisma/client'
+
+// Força a rota a ser sempre dinâmica, resolvendo o erro de build da Vercel.
+export const dynamic = 'force-dynamic';
 
 async function getSubordinateIds(userId: string): Promise<string[]> {
   const subordinates = await prisma.usuario.findMany({
     where: { superiorId: userId },
     select: { id: true },
   })
+  let idsToProcess = [userId];
+  const allSubordinateIds = new Set<string>();
 
   const subordinateIds = subordinates.map((sub) => sub.id)
+  while (idsToProcess.length > 0) {
+    const currentLevelIds = await prisma.usuario.findMany({
+      where: { superiorId: { in: idsToProcess } },
+      select: { id: true },
+    });
 
   const nestedSubordinates = await Promise.all(
     subordinateIds.map((id) => getSubordinateIds(id)),
   )
+    const newIds = currentLevelIds.map(u => u.id);
+    if (newIds.length === 0) {
+      break;
+    }
 
   return subordinateIds.concat(...nestedSubordinates)
+    newIds.forEach(id => allSubordinateIds.add(id));
+    idsToProcess = newIds;
+  }
+
+  return Array.from(allSubordinateIds);
 }
 
 export async function GET(req: NextRequest) {
@@ -40,19 +61,35 @@ export async function GET(req: NextRequest) {
     }
 
     const user = await prisma.usuario.findUnique({ where: { id: userId } })
+    // Utiliza a função centralizada para obter o usuário, que é mais segura e limpa.
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     let userIdsForFilter: string[] = [userId]
+    let userIdsForFilter: string[] = [user.id]
     if (user.role === 'diretor' || user.role === 'gerente') {
       const subordinateIds = await getSubordinateIds(userId)
+      const subordinateIds = await getSubordinateIds(user.id)
       userIdsForFilter.push(...subordinateIds)
     }
 
     const hierarchicalTotalClients = await prisma.cliente.count({
       where: { corretorId: { in: userIdsForFilter } },
     })
+    // Agrupa as consultas para melhor performance
+    const [hierarchicalTotalClients, hierarchicalActiveClients, totalProperties] = await prisma.$transaction([
+      prisma.cliente.count({
+        where: { corretorId: { in: userIdsForFilter } },
+      }),
+      prisma.cliente.count({
+        where: { corretorId: { in: userIdsForFilter }, overallStatus: 'Ativo' },
+      }),
+      prisma.imovel.count()
+    ]);
 
     const hierarchicalActiveClients = await prisma.cliente.count({
       where: {
