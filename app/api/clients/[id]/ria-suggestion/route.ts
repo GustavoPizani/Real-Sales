@@ -1,5 +1,5 @@
-import { StreamingTextResponse, streamText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
+import { OpenAIStream, StreamingTextResponse } from 'ai';
+import OpenAI from 'openai';
 import { getUserFromToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
@@ -17,9 +17,13 @@ const taskSchema = z.object({
   dataHora: z.string().datetime(),
 });
 
-const openrouter = createOpenAI({
+const openrouter = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY_deepseek,
+  defaultHeaders: {
+    "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+    "X-Title": process.env.NEXT_PUBLIC_SITE_NAME || 'Real-Sales',
+  },
 });
 
 const riaSystemPrompt = `Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente específico (anotações e tarefas fornecidas) e sugerir os próximos passos mais eficazes para o corretor, incluindo mensagens prontas para uso.
@@ -27,14 +31,14 @@ const riaSystemPrompt = `Atue como 'RIA - Real-Sales Inteligência Artificial', 
 Mantenha um tom proativo, contextual, prático, claro e empático em todas as suas respostas. Você é a parceira estratégica do corretor no dia a dia.
 
 **Propósito e Metas:**
-* Analisar o histórico de anotações e tarefas de um cliente para entender seu momento atual na jornada de compra.
+* Analisar o histórico de anotações e tarefas de um cliente fornecido pelo usuário para entender seu momento atual na jornada de compra.
 * Fornecer ao corretor de 2 a 3 sugestões de "próximos passos" claros, acionáveis e justificados.
 * Criar exemplos de mensagens (WhatsApp e E-mail) personalizadas para cada próximo passo sugerido, prontas para o corretor copiar, colar e enviar.
 
 **Comportamentos e Regras:**
 
 1. **Análise do Histórico do Cliente:**
-    a) **Contexto é tudo:** Sua análise deve se basear **exclusivamente** no histórico de anotações e na lista de tarefas (concluídas e pendentes) fornecidos no prompt.
+    a) **Contexto é tudo:** Sua análise deve se basear **exclusivamente** no histórico de anotações e na lista de tarefas (concluídas e pendentes) fornecidos a seguir pelo usuário.
     b) **Identificar Sinais-Chave:** No histórico, procure por: interesses específicos, objeções, status das tarefas e último contato.
 
 2. **Sugestão de Próximos Passos:**
@@ -71,7 +75,7 @@ Mantenha um tom proativo, contextual, prático, claro e empático em todas as su
    * ... e assim por diante para as outras opções.
 
 **Regras de Interação:**
-* Você **NÃO** tem acesso a arquivos externos ou a qualquer informação além do histórico do cliente fornecido.`;
+* Você **NÃO** tem acesso a arquivos externos ou a qualquer informação além do histórico do cliente fornecido. Responda APENAS com a estrutura solicitada, começando por '[Análise Rápida]'. Não inclua saudações ou texto introdutório.`;
 
 export async function POST(request: Request) {
   try {
@@ -108,18 +112,21 @@ export async function POST(request: Request) {
       });
     }
 
-    const userMessage = `Por favor, analise o seguinte histórico e me forneça os próximos passos e mensagens.\n\n--- Histórico do Cliente ---\n${clientHistory}\n--- Fim do Histórico ---`;
+    const userMessage = clientHistory;
 
-    const result = await streamText({
-      model: openrouter('deepseek/deepseek-chat'),
-      system: riaSystemPrompt,
-      prompt: userMessage,
+    const response = await openrouter.chat.completions.create({
+      model: 'deepseek/deepseek-chat',
+      messages: [
+        { role: 'system', content: riaSystemPrompt },
+        { role: 'user', content: userMessage },
+      ],
       max_tokens: 1024,
       temperature: 0.7,
+      stream: true,
     });
 
-    // 3. Remover comentário obsoleto
-    return new StreamingTextResponse(result.textStream);
+    const stream = OpenAIStream(response);
+    return new StreamingTextResponse(stream);
 
   } catch (error) {
     console.error('[RIA_SUGGESTION_ERROR]', error);

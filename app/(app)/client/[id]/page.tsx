@@ -17,6 +17,8 @@ import {
   ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useChat } from 'ai/react';
+import ReactMarkdown from 'react-markdown';
 import { format, addHours } from "date-fns";
 import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa, type Usuario } from "@/lib/types";
 
@@ -73,11 +75,20 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   
-  // Estados da RIA
-  const [isRiaDialogOpen, setIsRiaDialogOpen] = useState(false);
-  const [riaModalState, setRiaModalState] = useState<RiaModalState>('closed');
-  const [isRiaLoading, setIsRiaLoading] = useState(false);
-  const [riaSuggestion, setRiaSuggestion] = useState('');
+  // --- Hook e Estados da RIA ---
+  const { messages, append, isLoading: isRiaLoading, setMessages } = useChat({
+    api: `/api/clients/${clientId}/ria-suggestion`,
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Erro na RIA",
+        description: error.message,
+      });
+    },
+  });
+
+  const [isRiaDialogOpen, setIsRiaDialogOpen] = useState(false);  
+  const riaSuggestion = messages.find(m => m.role === 'assistant')?.content || '';
 
   // Estados dos Formulários
   const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
@@ -183,47 +194,25 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleOpenRiaModal = () => {
-    setRiaModalState('initial');
+    setMessages([]); // Limpa mensagens anteriores ao abrir
     setIsRiaDialogOpen(true);
   };
 
   const handleFetchRiaSuggestions = async () => {
     if (!client) return;
-    setRiaModalState('loading');
-    setIsRiaLoading(true);
-    setRiaSuggestion('');
-
-    try {
-      const token = localStorage.getItem('authToken');
-
-      const response = await fetch(`/api/clients/${clientId}/ria-suggestion`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          clientName: client.nomeCompleto,
-          notes: client.notas,
-          tasks: client.tarefas,
-        }),
-      });
-
-      if (!response.body) throw new Error('A resposta da API não contém um corpo.');
-      
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      setRiaModalState('suggestion');
-
-      while (true) { // eslint-disable-line no-constant-condition
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        setRiaSuggestion(prev => prev + chunk);
+    
+    // O hook `useChat` precisa de uma mensagem para iniciar a conversa.
+    // O conteúdo real que a IA vai usar já é enviado no `body`.
+    await append({
+      role: 'user',
+      content: 'Gerar sugestão', // Este texto é apenas um gatilho, não é usado pela IA.
+    }, {
+      body: {
+        clientName: client.nomeCompleto,
+        notes: client.notas,
+        tasks: client.tarefas,
       }
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro na RIA", description: error.message });
-      setRiaModalState('initial');
-    } finally {
-      setIsRiaLoading(false);
-    }
+    });
   };
 
   const handleSaveRiaSuggestionAsNote = async () => {
@@ -324,8 +313,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
   const handleRiaDialogClose = () => {
     setIsRiaDialogOpen(false);
-    setRiaModalState('closed');
-    setRiaSuggestion('');
+    setMessages([]); // Limpa as mensagens ao fechar
   }
 
   // --- Funções Auxiliares ---
@@ -417,12 +405,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
-                    {/*
                     <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
                       <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
                       {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
                     </Button>
-                    */}
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
                   </CardContent>
@@ -533,12 +519,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
                   <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
-                  {/*
                   <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
                     <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
                     {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
                   </Button>
-                  */}
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
                   <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
               </CardContent>
@@ -598,28 +582,40 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               Análise e Sugestões da RIA
             </DialogTitle>
           </DialogHeader>
-          {riaModalState === 'initial' && (
+          {messages.length === 0 && !isRiaLoading && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <p className="text-lg mb-4">Olá, vai ser um prazer te ajudar.</p>
               <Button onClick={handleFetchRiaSuggestions} disabled={isRiaLoading}>
                 <Sparkles className="h-4 w-4 mr-2" />
-                Avaliar Cliente
+                {isRiaLoading ? "Analisando..." : "Avaliar Cliente"}
               </Button>
             </div>
           )}
-          {(riaModalState === 'loading' || riaModalState === 'suggestion') && (
-            <div className="prose prose-sm max-w-none overflow-y-auto flex-grow p-1">
-              {isRiaLoading && !riaSuggestion && (
+          {(isRiaLoading || riaSuggestion) && (
+            <div className="overflow-y-auto flex-grow p-1 pr-4">
+              {isRiaLoading && !riaSuggestion ? (
                 <div className="flex justify-center items-center h-full">
                   <Loader2 className="h-8 w-8 animate-spin text-primary-custom" />
                 </div>
+              ) : (
+                <ReactMarkdown
+                  components={{
+                    // Garante que o container principal tenha a estilização base
+                    wrapper: ({ children }) => <div className="prose prose-sm max-w-none">{children}</div>,
+                    // Força a quebra de linha em parágrafos
+                    p: (props) => <p {...props} className="break-words" />,
+                    // Força a quebra de linha em blocos de código
+                    pre: (props) => <pre {...props} className="whitespace-pre-wrap bg-slate-100 p-2 rounded-md" />,
+                  }}
+                >
+                  {riaSuggestion}
+                </ReactMarkdown>
               )}
-              <div className="whitespace-pre-wrap">{riaSuggestion}</div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={handleRiaDialogClose}>Fechar</Button>
-            {riaModalState === 'suggestion' && (
+            {riaSuggestion && !isRiaLoading && (
               <Button onClick={handleSaveRiaSuggestionAsNote} disabled={isRiaLoading || !riaSuggestion}>
                 <Save className="h-4 w-4 mr-2" /> Salvar como Anotação
               </Button>
