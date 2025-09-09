@@ -32,10 +32,7 @@ export default function PropertiesPage() {
     const fetchProperties = async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch('/api/properties', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetch('/api/properties');
         if (!response.ok) {
           throw new Error("Falha ao buscar imóveis");
         }

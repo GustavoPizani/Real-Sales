@@ -26,30 +26,23 @@ export async function GET(
       return NextResponse.json({ error: 'Imóvel não encontrado ou indisponível' }, { status: 404 });
     }
 
-    // Mapeamento completo dos dados do Prisma para o formato esperado pelo frontend
+    // CORREÇÃO: Mapeia os dados do Prisma para o formato exato que o frontend espera, evitando campos extras que causam erros.
     const publicPropertyData = {
       id: property.id,
       title: property.titulo,
       description: property.descricao,
-      address: "Localização privilegiada. Consulte-nos para detalhes.",
+      address: property.endereco || "Localização privilegiada. Consulte-nos para detalhes.",
       type: property.tipo,
       status: property.status,
       images: property.imagens.map(i => i.url),
       typologies: property.tipologias.map(t => ({
         id: t.id,
-        name: t.nome,
-        // price: t.valor, // Preço removido
+        nome: t.nome,
         area: t.area,
-        bedrooms: t.dormitorios,
-        bathrooms: t.suites,
-        parking_spaces: t.vagas,
-        description: t.descricao,
-        available_units: t.unidadesDisponiveis,
+        dormitorios: t.dormitorios,
+        suites: t.suites,
+        vagas: t.vagas,
       })),
-      developer: null,
-      created_at: property.createdAt.toISOString(),
-      user_id: property.usuarioId,
-      features: [],
     };
 
     return NextResponse.json(publicPropertyData);

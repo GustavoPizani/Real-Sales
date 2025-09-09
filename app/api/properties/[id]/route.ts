@@ -1,19 +1,16 @@
 // c:\Users\gusta\Real-sales\app\api\properties\[id]\route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { cookies } from 'next/headers';
+import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-
-// É uma boa prática instanciar o Prisma Client uma vez e reutilizá-lo.
-// Se você já tem um arquivo como 'lib/prisma.ts', importe-o daqui.
-// Ex: import prisma from '@/lib/prisma';
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
@@ -21,8 +18,9 @@ export async function GET(
     const property = await prisma.imovel.findUnique({
       where: { id: params.id },
       include: {
+        // CORREÇÃO: Seleciona o id e a url para consistência
         imagens: {
-          select: { url: true },
+          select: { id: true, url: true },
         },
         tipologias: true,
       },
@@ -32,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: 'Imóvel não encontrado' }, { status: 404 });
     }
 
-    // Mapeia os dados do Prisma para o formato esperado pelo frontend
+    // CORREÇÃO: Mapeia os dados para um formato unificado que atenda tanto a página de visualização quanto a de edição.
     const formattedProperty = {
       id: property.id,
       title: property.titulo,
@@ -40,22 +38,17 @@ export async function GET(
       address: property.endereco,
       type: property.tipo,
       status: property.status,
-      features: [],
-      images: property.imagens.map((i) => i.url),
+      images: property.imagens, // A página de edição espera um array de objetos { id, url }
       typologies: property.tipologias.map((t) => ({
         id: t.id,
-        name: t.nome,
-        price: Number(t.valor) || 0,
+        nome: t.nome,
+        valor: t.valor, // Mantém o nome original do schema
         area: t.area,
-        bedrooms: t.dormitorios,
-        bathrooms: t.suites,
-        parking_spaces: t.vagas,
-        description: t.descricao,
-        available_units: t.unidadesDisponiveis,
+        dormitorios: t.dormitorios,
+        suites: t.suites,
+        vagas: t.vagas,
       })),
-      developer: null,
       created_at: property.createdAt.toISOString(),
-      // user_id: property.usuarioId, // Campo removido pois não existe no schema Imovel
     };
 
     return NextResponse.json(formattedProperty);
@@ -73,7 +66,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }

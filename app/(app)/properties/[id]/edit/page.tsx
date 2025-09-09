@@ -53,31 +53,20 @@ export default function EditPropertyPage() {
     if (!propertyId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // O cookie de autenticação é enviado automaticamente pelo navegador.
+      const response = await fetch(`/api/properties/${propertyId}`);
       if (!response.ok) throw new Error("Imóvel não encontrado");
 
       const data = await response.json();
       
+      // CORREÇÃO: Mapeia os dados recebidos da API para os estados do formulário.
       setTitle(data.title);
       setDescription(data.description || "");
       setAddress(data.address || "");
       setType(data.type || "Empreendimento");
       setStatus(data.status);
-      setTypologies(data.typologies?.map((t: any) => ({
-        id: t.id,
-        nome: t.name,
-        valor: t.price,
-        area: t.area,
-        dormitorios: t.bedrooms,
-        suites: t.bathrooms,
-        vagas: t.parking_spaces,
-        unidadesDisponiveis: t.available_units,
-        descricao: t.description,
-      })) || []);
-      setImages(data.images?.map((url: string) => ({ url })) || []);
+      setTypologies(data.typologies || []); // A API já retorna no formato correto
+      setImages(data.images || []); // A API já retorna no formato { id, url }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
       toast({
@@ -97,7 +86,7 @@ export default function EditPropertyPage() {
 
   // Efeito para limpar os Object URLs das imagens para evitar memory leaks
   useEffect(() => {
-    const objectUrls = images.map(image => image.url).filter(url => url.startsWith('blob:'));
+    const objectUrls = images.map(image => image.url).filter(url => typeof url === 'string' && url.startsWith('blob:'));
     return () => {
       objectUrls.forEach(url => URL.revokeObjectURL(url));
     };
@@ -116,10 +105,9 @@ export default function EditPropertyPage() {
         imageUrls: images.map(img => img.url), // Apenas envia as URLs
       };
 
-      const token = localStorage.getItem('authToken');
       const response = await fetch(`/api/properties/${propertyId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(propertyData),
       });
 
@@ -146,22 +134,12 @@ export default function EditPropertyPage() {
     setUploading(true);
     try {
       const uploadedImages: { url: string }[] = [];
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        throw new Error("Token de autenticação não encontrado. Faça login novamente.");
-      }
 
       for (const file of Array.from(files)) {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formData,
-        });
+        const response = await fetch("/api/upload", { method: "POST", body: formData });
 
         if (!response.ok) {
           const errorData = await response.json();

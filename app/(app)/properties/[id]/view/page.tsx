@@ -37,10 +37,8 @@ export default function PropertyViewPage() {
     if (!propertyId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // O cookie de autenticação é enviado automaticamente pelo navegador.
+      const response = await fetch(`/api/properties/${propertyId}`);
       if (!response.ok) {
         throw new Error("Imóvel não encontrado ou falha ao carregar.");
       }
@@ -163,7 +161,7 @@ export default function PropertyViewPage() {
                 </div>
                 <img
                   src={
-                    property.images?.[selectedImage] || "/placeholder.jpg?height=400&width=800&text=Imagem+do+Imóvel"
+                    (property.images && property.images.length > 0 ? property.images[selectedImage].url : null) || "/placeholder.jpg?height=400&width=800&text=Imagem+do+Imóvel"
                   }
                   alt={property.title}
                   className="w-full h-96 object-cover rounded-t-lg"
@@ -222,7 +220,7 @@ export default function PropertyViewPage() {
                       <TableRow key={typology.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{typology.name}</p>
+                            <p className="font-medium">{typology.nome}</p>
                             {typology.description && (
                               <p className="text-sm text-gray-600 mt-1">{typology.description}</p>
                             )}
@@ -237,19 +235,19 @@ export default function PropertyViewPage() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Bed className="h-4 w-4 text-gray-400" />
-                            <span>{typology.bedrooms}</span>
+                            <span>{typology.dormitorios}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Bath className="h-4 w-4 text-gray-400" />
-                            <span>{typology.bathrooms}</span>
+                            <span>{typology.suites}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Car className="h-4 w-4 text-gray-400" />
-                            <span>{typology.parking_spaces}</span>
+                            <span>{typology.vagas}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -260,7 +258,7 @@ export default function PropertyViewPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <span className="font-semibold text-green-600">{formatCurrency(typology.price)}</span>
+                          <span className="font-semibold text-green-600">{formatCurrency(typology.valor)}</span>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -394,10 +392,10 @@ export default function PropertyViewPage() {
                 {property.typologies && property.typologies.length > 0 && (
                   <div className="mt-1">
                     <p className="text-sm text-gray-700">
-                      De {formatCurrency(Math.min(...property.typologies.map((t) => t.price)))}
+                      De {formatCurrency(Math.min(...property.typologies.map((t) => t.valor)))}
                     </p>
                     <p className="text-sm text-gray-700">
-                      Até {formatCurrency(Math.max(...property.typologies.map((t) => t.price)))}
+                      Até {formatCurrency(Math.max(...property.typologies.map((t) => t.valor)))}
                     </p>
                   </div>
                 )}
@@ -448,7 +446,7 @@ export default function PropertyViewPage() {
                 key={index}
                 className="relative aspect-square w-full h-auto rounded-md overflow-hidden group focus:ring-2 focus:ring-primary focus:ring-offset-2 outline-none"
                 onClick={() => {
-                  setFullScreenImage(image);
+                  setFullScreenImage(image.url);
                   setIsGalleryModalOpen(false);
                 }}
               >

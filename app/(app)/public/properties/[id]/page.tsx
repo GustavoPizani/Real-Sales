@@ -180,7 +180,7 @@ export default function PublicPropertyViewPage() {
                 <CardContent className="p-0">
                   <div className="relative">
                     <img
-                      src={property.images?.[selectedImage] || "/placeholder.jpg?height=400&width=800&text=Imagem+do+Imóvel"}
+                      src={property.images?.[selectedImage]?.url || "/placeholder.jpg?height=400&width=800&text=Imagem+do+Imóvel"}
                       alt={property.title}
                       className="w-full h-96 object-cover rounded-t-lg"
                     />
@@ -206,7 +206,7 @@ export default function PublicPropertyViewPage() {
                             className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${selectedImage === index ? "border-primary" : "border-gray-200"}`}
                           >
                             <img
-                              src={image || "/placeholder.svg"}
+                              src={image.url || "/placeholder.svg"}
                               alt={`${property.title} ${index + 1}`}
                               className="w-full h-full object-cover"
                             />
@@ -250,12 +250,12 @@ export default function PublicPropertyViewPage() {
                         {property.typologies?.map((typology) => (
                           <TableRow key={typology.id}>
                             <TableCell>
-                              <p className="font-medium">{typology.name}</p>
+                              <p className="font-medium">{typology.nome}</p>
                             </TableCell>
                             <TableCell>{typology.area}m²</TableCell>
-                            <TableCell>{typology.bedrooms}</TableCell>
-                            <TableCell>{typology.bathrooms}</TableCell>
-                            <TableCell>{typology.parking_spaces}</TableCell>
+                            <TableCell>{typology.dormitorios}</TableCell>
+                            <TableCell>{typology.suites}</TableCell>
+                            <TableCell>{typology.vagas}</TableCell>
                             <TableCell className="text-right">
                               <span className="font-medium text-gray-800">Sob consulta</span>
                             </TableCell>
