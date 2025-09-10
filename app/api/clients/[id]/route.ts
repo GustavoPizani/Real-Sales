@@ -27,7 +27,12 @@ async function getClientWithDetails(id: string) {
           },
         },
       },
-      imovelDeInteresse: true,
+      // ✅ Corrigido para incluir as tipologias do imóvel de interesse
+      imovelDeInteresse: {
+        include: {
+          tipologias: true,
+        },
+      },
       notas: {
         orderBy: {
           createdAt: 'desc',

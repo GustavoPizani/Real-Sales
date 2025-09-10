@@ -705,7 +705,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                 <>
                   <h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3>
                   <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
-                  <p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p>
                   <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}/view`)}>Ver Detalhes</Button>
                   <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
                 </>
