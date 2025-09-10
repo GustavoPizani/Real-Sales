@@ -79,7 +79,7 @@ export default function PropertyViewPage() {
 
   const handleShareClick = () => {
     if (user && propertyId) {
-      const link = `${window.location.origin}/public/properties/${propertyId}?brokerId=${user.id}`;
+      const link = `${window.location.origin}/imovel/${propertyId}?brokerId=${user.id}`;
       setShareableLink(link);
       setIsShareModalOpen(true);
     }
@@ -186,15 +186,21 @@ export default function PropertyViewPage() {
             </CardContent>
           </Card>
 
-          {/* Descrição */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Sobre o Empreendimento</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700 leading-relaxed">{property.description}</p>
-            </CardContent>
-          </Card>
+          {/* ✅ --- CARD DE DESCRIÇÃO SUBSTITUÍDO POR FEATURES --- ✅ */}
+          {property.features && property.features.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Características do Empreendimento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {property.features.map((feature, index) => (
+                    <Badge key={index} variant="secondary" className="text-sm">{feature}</Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Tipologias Disponíveis */}
           <Card>
@@ -268,24 +274,6 @@ export default function PropertyViewPage() {
             </CardContent>
           </Card>
 
-          {/* Características */}
-          {property.features && property.features.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Características do Empreendimento</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {property.features.map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                      <div className="w-2 h-2 bg-primary rounded-full"></div>
-                      <span className="text-sm text-gray-700">{feature}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* Sidebar */}

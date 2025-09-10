@@ -22,7 +22,9 @@ export async function GET(
         imagens: {
           select: { id: true, url: true },
         },
-        tipologias: true,
+        tipologias: {
+          include: { plantas: true } // Inclui as imagens das plantas
+        },
       },
     });
 
@@ -30,23 +32,25 @@ export async function GET(
       return NextResponse.json({ error: 'Imóvel não encontrado' }, { status: 404 });
     }
 
-    // CORREÇÃO: Mapeia os dados para um formato unificado que atenda tanto a página de visualização quanto a de edição.
+    // Mapeia os dados para o formato esperado pelo frontend
     const formattedProperty = {
       id: property.id,
       title: property.titulo,
-      description: property.descricao,
+      // description: property.descricao, // ❌ Removido
+      features: property.features,     // ✅ Adicionado
       address: property.endereco,
       type: property.tipo,
       status: property.status,
-      images: property.imagens, // A página de edição espera um array de objetos { id, url }
+      images: property.imagens,
       typologies: property.tipologias.map((t) => ({
         id: t.id,
         nome: t.nome,
-        valor: t.valor, // Mantém o nome original do schema
+        valor: t.valor,
         area: t.area,
         dormitorios: t.dormitorios,
         suites: t.suites,
         vagas: t.vagas,
+        plantas: t.plantas, // ✅ Garante que as plantas sejam incluídas
       })),
       created_at: property.createdAt.toISOString(),
     };
@@ -75,17 +79,15 @@ export async function PUT(
     const propertyId = params.id;
     const body = await request.json();
 
-    // Log para depuração
-    console.log('Corpo recebido para ATUALIZAÇÃO em PUT /api/properties/[id]:', JSON.stringify(body, null, 2));
-
+    // ✅ Recebe 'features' e não mais 'description'
     const {
       title,
-      description,
+      features,
       address,
       type,
       status,
-      typologies, // array de objetos
-      imageUrls,   // array de strings
+      typologies,
+      imageUrls,
     } = body;
 
     // 1. Verificar se o imóvel existe e pertence ao usuário
@@ -97,50 +99,50 @@ export async function PUT(
       return NextResponse.json({ error: 'Imóvel não encontrado' }, { status: 404 });
     }
 
-    // ATENÇÃO: A verificação de propriedade do imóvel foi removida.
-    // O schema do 'Imovel' não possui um campo 'usuarioId' para verificar quem é o dono.
-    // É altamente recomendável adicionar essa relação no schema.prisma para segurança.
-    // Ex: if (existingProperty.usuarioId !== user.id) { return NextResponse.json({ error: 'Acesso negado' }, { status: 403 }); }
-
     // 2. Usar uma transação para atualizar o imóvel e suas relações
     const updatedProperty = await prisma.$transaction(async (tx) => {
-      // Atualiza os dados escalares do imóvel
+      // Atualiza os dados do imóvel
       const property = await tx.imovel.update({
         where: { id: propertyId },
         data: {
           ...(title && { titulo: title }),
-          ...(description && { descricao: description }),
+          // ...(description && { descricao: description }), // ❌ Removido
+          ...(Array.isArray(features) && { features: features }), // ✅ Adicionado
           ...(address && { endereco: address }),
           ...(type && { tipo: type }),
           ...(status && { status: status }),
         },
       });
 
-      // Sincroniza as tipologias: apaga as antigas e cria as novas
+      // Sincroniza as tipologias
       if (Array.isArray(typologies)) {
         await tx.tipologiaImovel.deleteMany({ where: { imovelId: propertyId } });
-        await tx.tipologiaImovel.createMany({
-          data: typologies.map((t: any) => ({
-            nome: t.nome,
-            valor: Number(t.valor),
-            area: Number(t.area),
-            dormitorios: Number(t.dormitorios),
-            suites: Number(t.suites),
-            vagas: Number(t.vagas),
-            imovelId: propertyId,
-          })),
-        });
+        if (typologies.length > 0) {
+          await tx.tipologiaImovel.createMany({
+            data: typologies.map((t: any) => ({
+              nome: t.nome,
+              valor: Number(t.valor) || 0,
+              area: Number(t.area) || null,
+              dormitorios: Number(t.dormitorios) || null,
+              suites: Number(t.suites) || null,
+              vagas: Number(t.vagas) || null,
+              imovelId: propertyId,
+            })),
+          });
+        }
       }
 
-      // Sincroniza as imagens: apaga as antigas e cria as novas
+      // Sincroniza as imagens
       if (Array.isArray(imageUrls)) {
         await tx.imagemImovel.deleteMany({ where: { imovelId: propertyId } });
-        await tx.imagemImovel.createMany({
-          data: imageUrls.map((url: string) => ({
-            url: url,
-            imovelId: propertyId,
-          })),
-        });
+        if (imageUrls.length > 0) {
+          await tx.imagemImovel.createMany({
+            data: imageUrls.map((url: string) => ({
+              url: url,
+              imovelId: propertyId,
+            })),
+          });
+        }
       }
 
       return property;
@@ -149,12 +151,6 @@ export async function PUT(
     return NextResponse.json({ success: true, property: updatedProperty });
   } catch (error) {
     console.error('Erro ao ATUALIZAR imóvel:', error);
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { error: 'Corpo da requisição inválido. Esperava-se um JSON.' },
-        { status: 400 }
-      );
-    }
     return NextResponse.json(
       { error: 'Erro interno do servidor ao atualizar o imóvel.' },
       { status: 500 }

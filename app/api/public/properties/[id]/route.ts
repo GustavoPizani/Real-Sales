@@ -1,5 +1,3 @@
-// app/api/public/properties/[id]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -18,7 +16,9 @@ export async function GET(
       where: { id: propertyId },
       include: {
         tipologias: true,
-        imagens: { select: { url: true } },
+        imagens: {
+          select: { id: true, url: true } 
+        },
       },
     });
 
@@ -26,28 +26,22 @@ export async function GET(
       return NextResponse.json({ error: 'Imóvel não encontrado ou indisponível' }, { status: 404 });
     }
 
-    // CORREÇÃO: Mapeia os dados do Prisma para o formato exato que o frontend espera, evitando campos extras que causam erros.
+    // ✅ CORREÇÃO: Trocamos 'descricao' por 'features' para alinhar com o novo modelo.
     const publicPropertyData = {
       id: property.id,
-      title: property.titulo,
-      description: property.descricao,
-      address: property.endereco || "Localização privilegiada. Consulte-nos para detalhes.",
-      type: property.tipo,
+      titulo: property.titulo,
+      features: property.features, // ✅ Enviando 'features'
+      endereco: property.endereco,
+      tipo: property.tipo,
       status: property.status,
-      images: property.imagens.map(i => i.url),
-      typologies: property.tipologias.map(t => ({
-        id: t.id,
-        nome: t.nome,
-        area: t.area,
-        dormitorios: t.dormitorios,
-        suites: t.suites,
-        vagas: t.vagas,
-      })),
+      imagens: property.imagens,
+      tipologias: property.tipologias,
+      createdAt: property.createdAt.toISOString(),
     };
 
     return NextResponse.json(publicPropertyData);
   } catch (error) {
     console.error('Erro ao buscar dados públicos do imóvel:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

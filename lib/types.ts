@@ -63,7 +63,8 @@ export interface ImagemImovel {
 export interface Imovel {
   id: string;
   titulo: string;
-  descricao?: string | null;
+  // descricao?: string | null; // ❌ Removido
+  features?: string[];           // ✅ Adicionado
   endereco?: string | null;
   tipo?: string | null;
   status: StatusImovel;
@@ -108,4 +109,3 @@ export const USER_ROLE_LABELS: Record<Role, string> = {
   [Role.gerente]: "Gerente",
   [Role.corretor]: "Corretor",
 };
-

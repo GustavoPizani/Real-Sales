@@ -45,8 +45,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    // ✅ Recebe 'features' e não mais 'description'
     const {
-      title, description, type, address, status, typologies, imageUrls
+      title, features, type, address, status, typologies, imageUrls
     } = await request.json();
 
     if (!title || !type) {
@@ -60,7 +61,8 @@ export async function POST(request: NextRequest) {
       const imovel = await tx.imovel.create({
         data: {
           titulo: title,
-          descricao: description,
+          // descricao: description, // ❌ Removido
+          features: features || [], // ✅ Adicionado
           tipo: type,
           endereco: address,
           status: status || StatusImovel.Disponivel,
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
       if (typologies && typologies.length > 0) {
         await tx.tipologiaImovel.createMany({
           data: typologies.map((t: any) => ({
-            nome: t.name,
+            nome: t.nome, // Corrigido de t.name para t.nome
             valor: parseFloat(t.valor) || 0,
             area: parseFloat(t.area) || null,
             dormitorios: parseInt(t.dormitorios) || null,

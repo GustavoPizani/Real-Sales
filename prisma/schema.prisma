@@ -5,74 +5,66 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-  // 1. ALTERAÇÃO: Usando a estratégia de chaves estrangeiras nativas do banco de dados.
-  // Isso é mais robusto e recomendado para PostgreSQL.
+  provider     = "postgresql"
+  url          = env("POSTGRES_PRISMA_URL")
+  directUrl    = env("POSTGRES_URL_NON_POOLING")
   relationMode = "foreignKeys"
 }
 
 // --- Modelos Principais ---
 
 model Usuario {
-  id           String    @id @default(uuid())
+  id           String           @id @default(uuid())
   nome         String
-  email        String    @unique
+  email        String           @unique
   passwordHash String?
-  role         Role      @default(corretor)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
+  role         Role             @default(corretor)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   superiorId   String?
-  // 2. ALTERAÇÃO: Removido o `onUpdate: Cascade` que estava causando o erro de validação.
-  superior     Usuario?  @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
-  subordinados Usuario[] @relation("Hierarquia")
-
-  clientes         Cliente[]
+  superior     Usuario?         @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
+  subordinados Usuario[]        @relation("Hierarquia")
+  clientes     Cliente[]
   pushSubscription PushSubscription?
-  tarefas          Tarefa[]
-  roletas          RoletaCorretor[]
+  tarefas      Tarefa[]
+  roletas      RoletaCorretor[]
 }
 
 model Cliente {
-  id                  String    @id @default(uuid())
+  id                  String            @id @default(uuid())
   nomeCompleto        String
-  email               String?   @unique
+  email               String?           @unique
   telefone            String?
-  facebook_lead_id    String?   @unique
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
+  facebook_lead_id    String?           @unique
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
   corretorId          String
-  corretor            Usuario   @relation(fields: [corretorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-
+  corretor            Usuario           @relation(fields: [corretorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   imovelDeInteresseId String?
-  imovelDeInteresse   Imovel?   @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
-
+  imovelDeInteresse   Imovel?           @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
   budget              Float?
   preferences         String?
-  currentFunnelStage  String              @default("Contato")
+  currentFunnelStage  String            @default("Contato")
   overallStatus       ClientOverallStatus @default(Ativo)
-
   tarefas             Tarefa[]
   detalhesDeVenda     ClientWonDetails?
   notas               Nota[]
 }
 
 model Imovel {
-  id                   String            @id @default(uuid())
-  titulo               String
-  descricao            String?
-  endereco             String?
-  preco                Float?
-  tipo                 String?
-  status               StatusImovel      @default(Disponivel)
-  quartos              Int?
-  banheiros            Int?
-  area                 Int?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  id        String       @id @default(uuid())
+  titulo    String
+  // descricao String? // ❌ Removido
+  features  String[]     @default([]) // ✅ Adicionado: Array de strings, com valor padrão de array vazio
+  endereco  String?
+  preco     Float?
+  tipo      String?
+  status    StatusImovel @default(Disponivel)
+  quartos   Int?
+  banheiros Int?
+  area      Int?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   clientesComInteresse Cliente[]
   tipologias           TipologiaImovel[]
@@ -80,7 +72,7 @@ model Imovel {
 }
 
 model TipologiaImovel {
-  id          String @id @default(uuid())
+  id          String         @id @default(uuid())
   nome        String
   valor       Float
   area        Float?
@@ -88,43 +80,53 @@ model TipologiaImovel {
   suites      Int?
   vagas       Int?
   imovelId    String
-  imovel      Imovel @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  imovel      Imovel         @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  plantas     ImagemPlanta[]
 }
 
 model ImagemImovel {
   id        String   @id @default(uuid())
   url       String
   createdAt DateTime @default(now())
-
   imovelId  String
   imovel    Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
 }
 
+model ImagemPlanta {
+  id          String          @id @default(uuid())
+  url         String
+  createdAt   DateTime        @default(now())
+  tipologiaId String
+  tipologia   TipologiaImovel @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
+}
+
+// ... (Restante dos seus modelos não precisa de alteração)
 model Nota {
   id        String   @id @default(uuid())
   content   String
   createdAt DateTime @default(now())
   createdBy String
-
   clienteId String
   cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
-
 model Tarefa {
-  id        String   @id @default(uuid())
-  titulo    String
-  descricao String?
-  status    String   @default("pendente")
-  dataHora  DateTime
-  concluida Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-}
+    id        String   @id @default(uuid())
+    titulo    String
+    descricao String?
+    // ✅ CORREÇÃO: Adicionando os campos que estavam faltando no seu schema, mas que estavam sendo referenciados no seed.
+    tipo      TaskType
+    prioridade Priority
 
+    status    String   @default("pendente")
+    dataHora  DateTime
+    concluida Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    clienteId String
+    cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+    usuarioId String
+    usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
 model PushSubscription {
   id        String   @id @default(cuid())
   endpoint  String   @unique
@@ -134,7 +136,6 @@ model PushSubscription {
   user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
-
 model Roleta {
   id                String           @id @default(uuid())
   nome              String
@@ -142,28 +143,23 @@ model Roleta {
   lastAssignedIndex Int              @default(0)
   corretores        RoletaCorretor[]
 }
-
 model RoletaCorretor {
-  roletaId   String
-  roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
+  roletaId  String
+  roleta    Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
   corretorId String
   corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade)
-
   @@id([roletaId, corretorId])
 }
-
 model LostReason {
   id         String   @id @default(uuid())
   reason     String
   active     Boolean  @default(true)
   created_at DateTime @default(now())
 }
-
 model RoleSetting {
   roleName Role    @id
   isActive Boolean @default(true)
 }
-
 model FunnelStage {
   id        String   @id @default(uuid())
   name      String   @unique
@@ -171,16 +167,16 @@ model FunnelStage {
   color     String
   createdAt DateTime @default(now())
 }
-
 model ClientWonDetails {
-  id          String   @id @default(uuid())
-  sale_value  Float
-  sale_date   DateTime @default(now())
-  createdAt   DateTime @default(now())
-  clienteId   String   @unique
-  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  sale_value Float
+  sale_date  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  clienteId  String   @unique
+  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
 
+// --- ENUMS ---
 enum Role {
   marketing_adm
   diretor
@@ -192,10 +188,27 @@ enum StatusImovel {
   Disponivel
   Reservado
   Vendido
+  // ✅ Adicionado o Status LANCAMENTO que estava sendo usado no seed
+  LANCAMENTO
 }
 
 enum ClientOverallStatus {
   Ativo
   Ganho
   Perdido
+}
+
+// ✅ Adicionado os Enums que estavam faltando no seu schema
+enum TaskType {
+  LIGACAO
+  EMAIL
+  WHATSAPP
+  VISITA
+  OUTRO
+}
+
+enum Priority {
+  BAIXA
+  MEDIA
+  ALTA
 }

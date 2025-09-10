@@ -1,10 +1,10 @@
 // prisma/seed.ts
-import { PrismaClient, StatusImovel } from '@prisma/client'
+import { PrismaClient, StatusImovel, TaskType, Priority, Role, ClientOverallStatus } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-const brandColors = ['#010f27', '#aa8d44', '#023863']; // Primary, Secondary, Tertiary
+const brandColors = ['#010f27', '#aa8d44', '#023863'];
 
 const funnelStagesData = [
   { name: 'Contato', order: 0 },
@@ -27,7 +27,6 @@ async function main() {
   // 1. Cria o Admin
   const admin = await prisma.usuario.upsert({
     where: { email: 'pizaniadm@realsales.com.br' },
-    // CORREÇÃO: Força a atualização do nome e da senha se o usuário já existir.
     update: {
       nome: 'Pizani Luis',
       passwordHash: adminPasswordHash,
@@ -91,11 +90,16 @@ async function main() {
     where: { titulo: "Escape Eden - Cyrela" },
   });
 
+  const escapeEdenFeatures = [
+    "Brinquedoteca", "Elevador social", "Academia", "Lounge", "Piscina adulto",
+    "Piscina infantil", "Piscina com raia", "Portaria", "Bar", "Sauna", "Segurança", "Spa", "Terraço"
+  ];
+
   if (!escapeEdenProperty) {
     escapeEdenProperty = await prisma.imovel.create({
       data: {
         titulo: "Escape Eden - Cyrela",
-        descricao: "Entre a natureza e o extraordinário, nasce um refúgio na cidade do futuro. Um paraíso particular da Cyrela no Brooklin, com design que encanta os sentidos e um parque de 12 mil m².",
+        features: escapeEdenFeatures,
         endereco: "Avenida Roque Petroni Júnior, 576 - Brooklin, São Paulo - SP",
         status: StatusImovel.Disponivel,
         tipo: "Empreendimento",
@@ -104,7 +108,11 @@ async function main() {
     });
     console.log(`Imóvel criado: ${escapeEdenProperty.titulo}`);
   } else {
-    console.log(`Imóvel "${escapeEdenProperty.titulo}" já existe.`);
+    escapeEdenProperty = await prisma.imovel.update({
+        where: { id: escapeEdenProperty.id },
+        data: { features: escapeEdenFeatures }
+    });
+    console.log(`Imóvel "${escapeEdenProperty.titulo}" já existe. Features atualizadas.`);
   }
 
   // 6. Adiciona as tipologias ao imóvel "Escape Eden"
