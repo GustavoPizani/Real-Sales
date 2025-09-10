@@ -13,10 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter } from "lucide-react";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Tag } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
@@ -31,6 +32,12 @@ interface FunnelStage {
   id: string;
   name: string;
   order: number;
+  color: string;
+}
+
+interface Tag {
+  id: string;
+  name: string;
   color: string;
 }
 
@@ -93,6 +100,13 @@ function DraggableClientCard({ client }: { client: Cliente }) {
                 <span className="truncate">{client.email}</span>
             </div>
         )}
+        {client.tags && client.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {client.tags.map(tag => (
+              <Badge key={tag.id} style={{ backgroundColor: tag.color, color: '#fff' }} className="text-xs px-1.5 py-0.5">{tag.name}</Badge>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -127,6 +141,7 @@ export default function PipelinePage() {
   const [allClients, setAllClients] = useState<Cliente[]>([]);
   const [funnelStages, setFunnelStages] = useState<FunnelStage[]>([]);
   const [brokers, setBrokers] = useState<Broker[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeClient, setActiveClient] = useState<Cliente | null>(null);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
@@ -141,11 +156,13 @@ export default function PipelinePage() {
     status: ClientOverallStatus | 'all';
     dateRange: DateRange | undefined;
     brokerId: string;
+    tagId: string;
   }>({
     searchTerm: '',
     status: ClientOverallStatus.Ativo,
     dateRange: undefined as DateRange | undefined,
-    brokerId: 'all'
+    brokerId: 'all',
+    tagId: 'all',
   });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -170,23 +187,26 @@ export default function PipelinePage() {
       if (!token) throw new Error("Token não encontrado");
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [clientsRes, stagesRes, brokersRes] = await Promise.all([
+      const [clientsRes, stagesRes, brokersRes, tagsRes] = await Promise.all([
         fetch('/api/clients', { headers }),
         fetch('/api/funnel-stages', { headers }),
-        fetch('/api/users', { headers })
+        fetch('/api/users', { headers }),
+        fetch('/api/tags', { headers }),
       ]);
 
-      if (!clientsRes.ok || !stagesRes.ok || !brokersRes.ok) throw new Error('Falha ao carregar dados do pipeline.');
+      if (!clientsRes.ok || !stagesRes.ok || !brokersRes.ok || !tagsRes.ok) throw new Error('Falha ao carregar dados do pipeline.');
       
       const clientsData = await clientsRes.json();
       const stagesData = await stagesRes.json();
       const brokersData = await brokersRes.json();
+      const tagsData = await tagsRes.json();
 
       setAllClients(clientsData.clients || []);
       const sortedStages = stagesData.sort((a: FunnelStage, b: FunnelStage) => a.order - b.order) || [];
       setFunnelStages(sortedStages);
       setEditingStages(sortedStages);
       setBrokers(brokersData.users || []);
+      setTags(tagsData.tags || []);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Erro', description: error.message });
     } finally {
@@ -213,7 +233,9 @@ export default function PipelinePage() {
         new Date(client.createdAt) <= (filters.dateRange.to || filters.dateRange.from)
       );
 
-      return matchesSearch && matchesStatus && matchesBroker && matchesDate;
+      const matchesTag = filters.tagId === 'all' || client.tags?.some(tag => tag.id === filters.tagId);
+
+      return matchesSearch && matchesStatus && matchesBroker && matchesDate && matchesTag;
     });
   }, [allClients, filters]);
 
@@ -406,7 +428,8 @@ export default function PipelinePage() {
             </PopoverContent>
         </Popover>
         <Select value={filters.brokerId} onValueChange={(value) => setFilters(f => ({...f, brokerId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os corretores</SelectItem>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>)}</SelectContent></Select>
-        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.Ativo, dateRange: undefined, brokerId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
+        <Select value={filters.tagId} onValueChange={(value) => setFilters(f => ({...f, tagId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as etiquetas</SelectItem>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
+        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.Ativo, dateRange: undefined, brokerId: 'all', tagId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
     </div>
   );
 

@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
@@ -11,61 +10,81 @@ datasource db {
   relationMode = "foreignKeys"
 }
 
-// --- Modelos Principais ---
+// --- Modelos ---
 
 model Usuario {
-  id           String           @id @default(uuid())
-  nome         String
-  email        String           @unique
-  passwordHash String?
-  role         Role             @default(corretor)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  superiorId   String?
-  superior     Usuario?         @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
-  subordinados Usuario[]        @relation("Hierarquia")
-  clientes     Cliente[]
+  id               String           @id @default(uuid())
+  nome             String
+  email            String           @unique
+  passwordHash     String?
+  role             Role             @default(corretor)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  superiorId       String?
+  superior         Usuario?         @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
+  subordinados     Usuario[]        @relation("Hierarquia")
+  clientes         Cliente[]
   pushSubscription PushSubscription?
-  tarefas      Tarefa[]
-  roletas      RoletaCorretor[]
+  tarefas          Tarefa[]
+  roletas          RoletaCorretor[]
 }
 
 model Cliente {
-  id                  String            @id @default(uuid())
+  id                  String              @id @default(uuid())
   nomeCompleto        String
-  email               String?           @unique
+  email               String?             @unique
   telefone            String?
-  facebook_lead_id    String?           @unique
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  facebook_lead_id    String?             @unique
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   corretorId          String
-  corretor            Usuario           @relation(fields: [corretorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corretor            Usuario             @relation(fields: [corretorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   imovelDeInteresseId String?
-  imovelDeInteresse   Imovel?           @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
-  budget              Float?
-  preferences         String?
-  currentFunnelStage  String            @default("Contato")
+  imovelDeInteresse   Imovel?             @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
+  currentFunnelStage  String              @default("Contato")
   overallStatus       ClientOverallStatus @default(Ativo)
+  
+  // ✅ RELACIONAMENTO COM DOCUMENTOS ADICIONADO
+  documentos          DocumentoCliente[]
+  tags                Tag[]               @relation("ClienteTags")
+
   tarefas             Tarefa[]
   detalhesDeVenda     ClientWonDetails?
   notas               Nota[]
 }
 
-model Imovel {
-  id        String       @id @default(uuid())
-  titulo    String
-  // descricao String? // ❌ Removido
-  features  String[]     @default([]) // ✅ Adicionado: Array de strings, com valor padrão de array vazio
-  endereco  String?
-  preco     Float?
-  tipo      String?
-  status    StatusImovel @default(Disponivel)
-  quartos   Int?
-  banheiros Int?
-  area      Int?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+// ✅ NOVO MODELO PARA DOCUMENTOS
+model DocumentoCliente {
+  id        String   @id @default(uuid())
+  fileName  String
+  url       String
+  createdAt DateTime @default(now())
+  
+  clienteId String
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+}
 
+model Tag {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  color     String
+  createdAt DateTime  @default(now())
+  clientes  Cliente[] @relation("ClienteTags")
+}
+
+model Imovel {
+  id                   String       @id @default(uuid())
+  titulo               String
+  features             String[]     @default([])
+  endereco             String?
+  preco                Float?
+  tipo                 String?
+  status               StatusImovel @default(Disponivel)
+  quartos              Int?
+  banheiros            Int?
+  area                 Int?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
   clientesComInteresse Cliente[]
   tipologias           TipologiaImovel[]
   imagens              ImagemImovel[]
@@ -100,7 +119,6 @@ model ImagemPlanta {
   tipologia   TipologiaImovel @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
 }
 
-// ... (Restante dos seus modelos não precisa de alteração)
 model Nota {
   id        String   @id @default(uuid())
   content   String
@@ -109,24 +127,24 @@ model Nota {
   clienteId String
   cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
-model Tarefa {
-    id        String   @id @default(uuid())
-    titulo    String
-    descricao String?
-    // ✅ CORREÇÃO: Adicionando os campos que estavam faltando no seu schema, mas que estavam sendo referenciados no seed.
-    tipo      TaskType
-    prioridade Priority
 
-    status    String   @default("pendente")
-    dataHora  DateTime
-    concluida Boolean  @default(false)
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-    clienteId String
-    cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-    usuarioId String
-    usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+model Tarefa {
+  id          String   @id @default(uuid())
+  titulo      String
+  descricao   String?
+  status      String   @default("pendente")
+  dataHora    DateTime
+  concluida   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  clienteId   String
+  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo        TaskType
+  prioridade  Priority
 }
+
 model PushSubscription {
   id        String   @id @default(cuid())
   endpoint  String   @unique
@@ -136,6 +154,7 @@ model PushSubscription {
   user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
+
 model Roleta {
   id                String           @id @default(uuid())
   nome              String
@@ -144,22 +163,25 @@ model Roleta {
   corretores        RoletaCorretor[]
 }
 model RoletaCorretor {
-  roletaId  String
-  roleta    Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
+  roletaId   String
+  roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
   corretorId String
   corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade)
   @@id([roletaId, corretorId])
 }
+
 model LostReason {
   id         String   @id @default(uuid())
   reason     String
   active     Boolean  @default(true)
   created_at DateTime @default(now())
 }
+
 model RoleSetting {
   roleName Role    @id
   isActive Boolean @default(true)
 }
+
 model FunnelStage {
   id        String   @id @default(uuid())
   name      String   @unique
@@ -167,6 +189,7 @@ model FunnelStage {
   color     String
   createdAt DateTime @default(now())
 }
+
 model ClientWonDetails {
   id         String   @id @default(uuid())
   sale_value Float
@@ -188,7 +211,6 @@ enum StatusImovel {
   Disponivel
   Reservado
   Vendido
-  // ✅ Adicionado o Status LANCAMENTO que estava sendo usado no seed
   LANCAMENTO
 }
 
@@ -198,7 +220,6 @@ enum ClientOverallStatus {
   Perdido
 }
 
-// ✅ Adicionado os Enums que estavam faltando no seu schema
 enum TaskType {
   LIGACAO
   EMAIL

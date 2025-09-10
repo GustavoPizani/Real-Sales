@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2 } from "lucide-react";
-import { type Imovel, StatusImovel } from "@/lib/types"; // CORREÇÃO: Importado StatusImovel
+import { type Imovel, StatusImovel, type TipologiaImovel } from "@/lib/types"; // CORREÇÃO: Importado StatusImovel
 import { useToast } from "@/components/ui/use-toast";
 
 const PropertiesEmptyState = dynamic(() =>
@@ -71,12 +71,14 @@ export default function PropertiesPage() {
     return <Badge variant={variants[status] || "default"}>{status}</Badge>;
   };
 
-  const formatCurrency = (value: number | null | undefined) => {
-    if (value == null) return "N/A";
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
+  const getPriceRange = (typologies: TipologiaImovel[] | undefined) => {
+    if (!typologies || typologies.length === 0) {
+      return "N/A";
+    }
+    const prices = typologies.map(t => t.valor).filter(v => v > 0);
+    if (prices.length === 0) return "N/A";
+    const minPrice = Math.min(...prices);
+    return `A partir de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(minPrice)}`;
   };
 
   if (loading) {
@@ -178,7 +180,7 @@ export default function PropertiesPage() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <DollarSign className="h-4 w-4 text-gray-400" />
-                      {formatCurrency(property.preco)}
+                      {getPriceRange(property.tipologias)}
                     </div>
                   </TableCell>
                   <TableCell>

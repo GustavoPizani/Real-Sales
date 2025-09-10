@@ -38,6 +38,10 @@ async function getClientWithDetails(id: string) {
           dataHora: 'desc',
         },
       },
+      // ✅ Adicionado para buscar as tags junto com o cliente
+      tags: {
+        select: { id: true, name: true, color: true }
+      },
     },
   });
 }
@@ -91,12 +95,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.email !== undefined) dataToUpdate.email = body.email;
     if (body.telefone !== undefined) dataToUpdate.telefone = body.telefone;
 
-    // Adicionado suporte para outros campos de atualização
     if (body.currentFunnelStage !== undefined) dataToUpdate.currentFunnelStage = body.currentFunnelStage;
     if (body.imovelDeInteresseId !== undefined) dataToUpdate.imovelDeInteresseId = body.imovelDeInteresseId;
     if (body.overallStatus !== undefined) dataToUpdate.overallStatus = body.overallStatus;
-    if (body.sale_value !== undefined) dataToUpdate.sale_value = body.sale_value;
-    if (body.sale_date !== undefined) dataToUpdate.sale_date = new Date(body.sale_date);
+    if (body.detalhesDeVenda !== undefined) {
+        dataToUpdate.detalhesDeVenda = {
+            upsert: {
+                create: body.detalhesDeVenda,
+                update: body.detalhesDeVenda,
+            }
+        };
+    }
     if (body.preferences !== undefined) dataToUpdate.preferences = body.preferences;
     if (body.corretorId !== undefined) {
       // Lógica de permissão para transferência
@@ -116,6 +125,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           },
         });
       }
+    }
+
+    // ✅ --- LÓGICA PARA ATUALIZAR AS ETIQUETAS --- ✅
+    if (body.tagIds !== undefined && Array.isArray(body.tagIds)) {
+      dataToUpdate.tags = {
+        set: body.tagIds.map((tagId: string) => ({ id: tagId })),
+      };
     }
 
     if (Object.keys(dataToUpdate).length === 0) {

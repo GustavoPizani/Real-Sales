@@ -30,7 +30,11 @@ export async function GET(request: NextRequest) {
     const clients = await prisma.cliente.findMany({
       where,
       include: { 
-        corretor: { select: { nome: true, id: true } }
+        corretor: { select: { nome: true, id: true } },
+        // ✅ Adicionado para incluir as tags na listagem de clientes
+        tags: {
+          select: { id: true, name: true, color: true },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });

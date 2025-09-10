@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
 
     const properties = await prisma.imovel.findMany({
       include: {
-        imagens: true, // Inclui as imagens relacionadas
+        imagens: true,
+        tipologias: true, // ✅ Inclui as tipologias para calcular a faixa de preço
       },
       orderBy: {
         createdAt: 'desc',

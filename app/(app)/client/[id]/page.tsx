@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,25 +10,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save
+  ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useChat } from 'ai/react';
 import ReactMarkdown from 'react-markdown';
 import { format, addHours } from "date-fns";
-import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa, type Usuario } from "@/lib/types";
+import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa, type Usuario, type DocumentoCliente, type Tag } from "@/lib/types";
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 // --- Tipos e Constantes ---
 
 type RiaModalState = 'initial' | 'loading' | 'suggestion' | 'closed';
 
+const TAG_COLORS = [
+    '#4B5563', '#EF4444', '#F97316', '#F59E0B', '#84CC16', '#22C55E',
+    '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6', '#6366F1',
+    '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#F43F5E',
+];
+
 const formatCurrency = (value: number | null | undefined) => {
-    if (value == null) return "N/A";
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  if (value == null) return "N/A";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 };
 
 // --- Componente Principal ---
@@ -61,8 +71,24 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [funnelStages, setFunnelStages] = useState<any[]>([]);
   const [users, setUsers] = useState<Usuario[]>([]);
   const [lostReasons, setLostReasons] = useState<any[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // ✅ --- ESTADOS PARA DOCUMENTAÇÃO ---
+  const [isDocumentsModalOpen, setIsDocumentsModalOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // ------------------------------------------
+
+  // ✅ --- ESTADOS PARA ETIQUETAS (TAGS) ---
+  const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState("");
+  const [tagPopoverView, setTagPopoverView] = useState('list'); // 'list', 'create', or 'edit'
+  const [newTagData, setNewTagData] = useState({ name: '', color: TAG_COLORS[12] });
+  const [editingTag, setEditingTag] = useState<Tag | null>(null);
+  // ------------------------------------------
 
   // Estados dos Modais
   const [isWonDialogOpen, setIsWonDialogOpen] = useState(false);
@@ -74,7 +100,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
-  
+  // ✅ --- ESTADOS PARA EDIÇÃO DE NOTAS ---
+  const [editingNote, setEditingNote] = useState<Nota | null>(null);
+  const [isEditNoteDialogOpen, setIsEditNoteDialogOpen] = useState(false);
+
   // --- Hook e Estados da RIA ---
   const { messages, append, isLoading: isRiaLoading, setMessages } = useChat({
     api: `/api/clients/${clientId}/ria-suggestion`,
@@ -87,7 +116,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     },
   });
 
-  const [isRiaDialogOpen, setIsRiaDialogOpen] = useState(false);  
+  const [isRiaDialogOpen, setIsRiaDialogOpen] = useState(false);
   const riaSuggestion = messages.find(m => m.role === 'assistant')?.content || '';
 
   // Estados dos Formulários
@@ -111,12 +140,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const token = localStorage.getItem('authToken');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const [clientRes, stagesRes, reasonsRes, propertiesRes, usersRes] = await Promise.all([
+      const [clientRes, stagesRes, reasonsRes, propertiesRes, usersRes, tagsRes] = await Promise.all([
         fetch(`/api/clients/${clientId}`, { headers }),
         fetch('/api/funnel-stages', { headers }),
         fetch('/api/lost-reasons', { headers }),
         fetch('/api/properties', { headers }),
-        fetch('/api/users', { headers })
+        fetch('/api/users', { headers }),
+        fetch('/api/tags', { headers }),
       ]);
 
       if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
@@ -126,19 +156,21 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const reasonsData = await reasonsRes.json();
       const propertiesData = await propertiesRes.json();
       const usersData = await usersRes.json();
+      const tagsData = await tagsRes.json();
 
       setClient(clientData.client);
       setUsers(usersData.users || []);
       setFunnelStages(stagesData || []);
       setLostReasons(reasonsData.reasons || []);
       setProperties(propertiesData || []);
+      setAllTags(tagsData.tags || []);
 
       if (clientData.client) {
         setNewFunnelStatus(clientData.client.currentFunnelStage);
         setEditClientForm({
-            nomeCompleto: clientData.client.nomeCompleto,
-            email: clientData.client.email || "",
-            telefone: clientData.client.telefone || ""
+          nomeCompleto: clientData.client.nomeCompleto,
+          email: clientData.client.email || "",
+          telefone: clientData.client.telefone || ""
         });
         setNewPropertyId(clientData.client.imovelDeInteresseId || "");
       }
@@ -175,13 +207,178 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     }
   };
 
+  const handleToggleTag = async (tagId: string) => {
+    if (!client) return;
+
+    const currentTagIds = client.tags?.map(t => t.id) || [];
+    const newTagIds = currentTagIds.includes(tagId)
+      ? currentTagIds.filter(id => id !== tagId)
+      : [...currentTagIds, tagId];
+
+    // Otimisticamente atualiza a UI
+    const updatedTags = allTags.filter(tag => newTagIds.includes(tag.id));
+    setClient(prev => prev ? { ...prev, tags: updatedTags } : null);
+
+    // Envia a atualização para a API
+    await handleUpdateClient(
+      { tagIds: newTagIds },
+      { successMessage: "Etiquetas atualizadas." }
+    );
+  };
+
+  const handleCreateTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTagData.name || !newTagData.color) {
+        toast({ variant: "destructive", title: "Erro", description: "O nome e a cor da etiqueta são obrigatórios." });
+        return;
+    }
+    try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch('/api/tags', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ name: newTagData.name, color: newTagData.color }),
+        });
+        if (!response.ok) throw new Error('Falha ao criar etiqueta.');
+
+        const createdTag = await response.json();
+        toast({ title: "Sucesso!", description: `Etiqueta "${newTagData.name}" criada.` });
+        
+        await fetchData(); // Garante que allTags está atualizado
+        await handleToggleTag(createdTag.id); // Aplica a nova tag ao cliente
+
+        setNewTagData({ name: '', color: TAG_COLORS[12] });
+        setTagPopoverView('list');
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  const handleEditTag = (tag: Tag) => {
+    setEditingTag(tag);
+    setNewTagData({ name: tag.name, color: tag.color });
+    setTagPopoverView('edit');
+  };
+
+  const handleUpdateTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTag || !newTagData.name || !newTagData.color) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/tags/${editingTag.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ name: newTagData.name, color: newTagData.color }),
+      });
+
+      if (!response.ok) throw new Error('Falha ao atualizar etiqueta.');
+
+      toast({ title: "Sucesso!", description: "Etiqueta atualizada." });
+      await fetchData(); // Re-busca para garantir consistência
+      setTagPopoverView('list');
+      setEditingTag(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  const handleDeleteTag = async () => {
+    if (!editingTag) return;
+    if (!window.confirm(`Tem certeza que deseja excluir a etiqueta "${editingTag.name}"? Ela será removida de todos os clientes.`)) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/tags/${editingTag.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Falha ao excluir etiqueta.');
+
+      toast({ title: "Sucesso!", description: "Etiqueta excluída." });
+      await fetchData();
+      setTagPopoverView('list');
+      setEditingTag(null);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  // ✅ --- FUNÇÕES PARA GERENCIAR DOCUMENTOS ---
+
+  const handleFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleUploadFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    toast({ title: "Iniciando upload...", description: `Enviando ${files.length} arquivo(s).` });
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const uploadPromises = Array.from(files).map(file => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return fetch(`/api/clients/${clientId}/documents/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+        });
+      });
+
+      const results = await Promise.all(uploadPromises);
+
+      const failedUploads = results.filter(res => !res.ok);
+      if (failedUploads.length > 0) {
+        throw new Error(`${failedUploads.length} arquivo(s) não puderam ser enviados.`);
+      }
+
+      toast({ title: "Sucesso!", description: "Todos os documentos foram enviados." });
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro no Upload", description: error.message });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownloadAllAsZip = async () => {
+    if (!client?.documentos || client.documentos.length === 0) return;
+    setIsDownloading(true);
+    toast({ title: "Preparando download...", description: "Baixando e compactando arquivos." });
+
+    try {
+      const zip = new JSZip();
+
+      const filePromises = client.documentos.map(async (doc) => {
+        const response = await fetch(doc.url);
+        if (!response.ok) throw new Error(`Falha ao baixar ${doc.fileName}`);
+        const blob = await response.blob();
+        zip.file(doc.fileName, blob);
+      });
+
+      await Promise.all(filePromises);
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipBlob, `documentos_${client.nomeCompleto.replace(/\s/g, '_')}.zip`);
+
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro no Download", description: error.message });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
   // --- Handlers de Ações ---
 
   const handleEditClientSubmit = async () => {
     const success = await handleUpdateClient(editClientForm, { successMessage: "Dados do cliente atualizados." });
     if (success) setIsEditClientDialogOpen(false);
   };
-  
+
   const handleEditPropertySubmit = async () => {
     const success = await handleUpdateClient({ imovelDeInteresseId: newPropertyId }, { successMessage: "Imóvel de interesse atualizado." });
     if (success) setIsEditPropertyDialogOpen(false);
@@ -200,7 +397,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
   const handleFetchRiaSuggestions = async () => {
     if (!client) return;
-    
+
     // O hook `useChat` precisa de uma mensagem para iniciar a conversa.
     // O conteúdo real que a IA vai usar já é enviado no `body`.
     await append({
@@ -219,8 +416,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     if (!riaSuggestion) return;
     const success = await handleAddNote(riaSuggestion);
     if (success) {
-        toast({ title: "Sucesso!", description: "Sugestão da RIA salva como anotação." });
-        setIsRiaDialogOpen(false);
+      toast({ title: "Sucesso!", description: "Sugestão da RIA salva como anotação." });
+      setIsRiaDialogOpen(false);
     }
   };
 
@@ -235,7 +432,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     const title = `Visita ao empreendimento ${client.imovelDeInteresse.titulo}`;
     const location = client.imovelDeInteresse.endereco;
     const details = `Visita agendada com o cliente ${client.nomeCompleto} para conhecer o imóvel ${client.imovelDeInteresse.titulo}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
-    const url = [ "https://www.google.com/calendar/render?action=TEMPLATE", `text=${encodeURIComponent(title)}`, `dates=${formatDate(startDate)}/${formatDate(endDate)}`, `details=${encodeURIComponent(details)}`, `location=${encodeURIComponent(location || '')}`, `add=${encodeURIComponent(client.email)}`, "reminders=30", "reminders=1440" ].join("&");
+    const url = ["https://www.google.com/calendar/render?action=TEMPLATE", `text=${encodeURIComponent(title)}`, `dates=${formatDate(startDate)}/${formatDate(endDate)}`, `details=${encodeURIComponent(details)}`, `location=${encodeURIComponent(location || '')}`, `add=${encodeURIComponent(client.email)}`, "reminders=30", "reminders=1440"].join("&");
     window.open(url, "_blank");
     setIsScheduleVisitOpen(false);
   };
@@ -251,10 +448,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       return;
     }
     const noteContent = `Cliente marcado como perdido.\nMotivo: ${lostDetails.reason}\nFeedback: ${lostDetails.feedback}`;
-    
+
     // Primeiro, atualiza o status do cliente
     const updateSuccess = await handleUpdateClient({ overallStatus: ClientOverallStatus.Perdido, currentFunnelStage: "Perdido" }, { successMessage: "Cliente marcado como 'Perdido'." });
-    
+
     // Se o status foi atualizado, adiciona a anotação com os detalhes
     if (updateSuccess) {
       await handleAddNote(noteContent); // Adiciona a anotação
@@ -290,6 +487,59 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const handleAddNoteFromForm = (e: React.FormEvent) => {
     e.preventDefault();
     handleAddNote(newNote);
+  };
+
+  const openEditNoteDialog = (note: Nota) => {
+    setEditingNote(note);
+    setIsEditNoteDialogOpen(true);
+  };
+
+  const handleUpdateNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNote || !editingNote.content) {
+      toast({ variant: "destructive", title: "Erro", description: "O conteúdo não pode estar vazio." });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/notes/${editingNote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ content: editingNote.content }),
+      });
+
+      if (!response.ok) throw new Error("Falha ao atualizar a anotação.");
+
+      toast({ title: "Sucesso!", description: "Anotação atualizada." });
+      setIsEditNoteDialogOpen(false);
+      setEditingNote(null);
+      fetchData(); // Re-busca os dados para refletir a alteração
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  const handleDeleteNote = async () => {
+    if (!editingNote) return;
+    if (!window.confirm("Tem certeza que deseja excluir esta anotação?")) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/notes/${editingNote.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error("Falha ao excluir a anotação.");
+
+      toast({ title: "Sucesso!", description: "Anotação excluída." });
+      setIsEditNoteDialogOpen(false);
+      setEditingNote(null);
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -377,10 +627,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
       {/* Layout Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Coluna Esquerda (Principal) */}
         <div className="lg:col-span-2 space-y-6">
-          
+
           {/* Abas para Mobile: Informações e Ações Rápidas */}
           <div className="lg:hidden">
             <Tabs defaultValue="info" className="w-full">
@@ -401,16 +651,22 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <TabsContent value="actions" className="mt-4">
                 <Card>
                   <CardContent className="pt-6 space-y-2">
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2"/>Editar Cliente</Button>
-                    <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
-                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
+                    {/* ✅ --- BOTÃO DE DOCUMENTAÇÃO ADICIONADO AO MOBILE --- ✅ */}
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsDocumentsModalOpen(true)}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Documentação
+                    </Button>
+                    <Separator />
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
+                    <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
+                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
                     <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
-                      <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
+                      <Sparkles className="h-4 w-4 mr-2 text-primary-custom" />
                       {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
                     </Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -418,13 +674,26 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           </div>
 
           {/* Card de Informações para Desktop */}
+          {/* ✅ --- CARD DE INFORMAÇÕES ATUALIZADO (DESKTOP) --- ✅ */}
           <Card className="hidden lg:block">
-            <CardHeader><CardTitle>Informações do Cliente</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Informações do Cliente</CardTitle>
+              {/* ✅ Botão de Documentos movido para cá */}
+              <Dialog open={isDocumentsModalOpen} onOpenChange={setIsDocumentsModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Documentação
+                  </Button>
+                </DialogTrigger>
+                {/* O DialogContent para os documentos será adicionado no final do JSX */}
+              </Dialog>
+            </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
-                <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
-                <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
-                <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
+              <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
+              <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
+              <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
+              <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
             </CardContent>
           </Card>
 
@@ -437,7 +706,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   <h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3>
                   <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
                   <p className="font-bold mt-2">{formatCurrency(client.imovelDeInteresse.preco)}</p>
-                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}`)}>Ver Detalhes</Button>
+                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}/view`)}>Ver Detalhes</Button>
                   <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
                 </>
               ) : (
@@ -458,10 +727,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <CardContent className="p-0">
               <Tabs defaultValue="anotacoes" onValueChange={setActiveTab} className="w-full">
                 <div className="px-4 sm:px-6">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="anotacoes">Anotações</TabsTrigger>
-                    <TabsTrigger value="tarefas">Tarefas</TabsTrigger>
-                  </TabsList>
+                  <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="anotacoes">Anotações</TabsTrigger><TabsTrigger value="tarefas">Tarefas</TabsTrigger></TabsList>
                 </div>
                 <TabsContent value="tarefas" className="p-4 sm:p-6 pt-4">
                   <Table>
@@ -492,6 +758,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                                   </p>
                                 </div>
                               </div>
+                              {/* ✅ --- BOTÃO DE EDITAR NOTA --- ✅ */}
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditNoteDialog(note)}>
+                                <Pencil className="h-4 w-4 text-muted-foreground" />
+                              </Button>
                             </CardHeader>
                             <CardContent className="p-4 pt-0">
                               <p className="text-sm text-gray-700 whitespace-pre-wrap">
@@ -512,47 +782,149 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
         {/* Coluna Direita (Sidebar) */}
         <div className="hidden lg:flex lg:flex-col lg:space-y-6">
+          {/* ✅ --- CARD DE ETIQUETAS --- ✅ */}
           <Card>
-              <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2"/>Editar Cliente</Button>
-                  <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2"/>Enviar E-mail</a></Button>
-                  <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2"/>Enviar WhatsApp</a></Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2"/>Transferir Lead</Button>
-                  <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
-                    <Sparkles className="h-4 w-4 mr-2 text-primary-custom"/>
-                    {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2"/>Agendar Visita</Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2"/>Alterar Etapa do Funil</Button>
-              </CardContent>
+            <CardHeader>
+              <CardTitle>Etiquetas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2 items-center">
+                {client.tags?.map(tag => (
+                  <Badge key={tag.id} style={{ backgroundColor: tag.color, color: '#fff' }} className="text-white">
+                    {tag.name}
+                  </Badge>
+                ))}
+                <Popover open={isTagPopoverOpen} onOpenChange={(isOpen) => {
+                  setIsTagPopoverOpen(isOpen);
+                  if (!isOpen) {
+                    setTimeout(() => { setTagPopoverView('list'); setEditingTag(null); }, 150);
+                  }
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-6 w-6 rounded-full">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0">
+                    {tagPopoverView === 'list' ? (
+                      <div>
+                        <div className="p-2 text-center border-b"><span className="text-sm font-semibold">Etiquetas</span></div>
+                        <div className="p-2"><Input type="text" placeholder="Buscar etiquetas..." value={tagSearch} onChange={e => setTagSearch(e.target.value)} className="h-8 text-sm" /></div>
+                        <Command>
+                          <CommandList className="max-h-40">
+                            <CommandGroup>
+                              {allTags.filter(t => t.name.toLowerCase().includes(tagSearch.toLowerCase())).map(tag => (
+                                <div key={tag.id} className="flex items-center pr-2">
+                                  <CommandItem onSelect={() => handleToggleTag(tag.id)} className="flex-grow flex items-center cursor-pointer">
+                                    <div className="w-5 h-5 rounded-sm mr-2" style={{ backgroundColor: tag.color }}></div>
+                                    <span className="flex-grow text-sm">{tag.name}</span>
+                                    {client.tags?.some(t => t.id === tag.id) && <CheckCircle className="h-4 w-4 text-primary" />}
+                                  </CommandItem>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTag(tag)}><Pencil className="h-3 w-3 text-muted-foreground" /></Button>
+                                </div>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                        <div className="p-2 border-t">
+                          <Button onClick={() => setTagPopoverView('create')} className="w-full h-8 text-sm" variant="ghost">Criar uma nova etiqueta</Button>
+                        </div>
+                      </div>
+                    ) : tagPopoverView === 'create' ? (
+                      <div>
+                        <div className="flex items-center p-2 text-center border-b relative">
+                          <Button onClick={() => setTagPopoverView('list')} className="absolute left-1 h-6 w-6" variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+                          <span className="text-sm font-semibold flex-1">Criar Etiqueta</span>
+                        </div>
+                        <form onSubmit={handleCreateTag} className="p-3 space-y-3">
+                          <div>
+                            <Label htmlFor="new-tag-name" className="text-sm font-medium text-gray-700">Título</Label>
+                            <Input id="new-tag-name" type="text" value={newTagData.name} onChange={e => setNewTagData({ ...newTagData, name: e.target.value })} className="mt-1 w-full h-8 text-sm" />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Selecionar uma cor</Label>
+                            <div className="grid grid-cols-6 gap-2 mt-2">
+                              {TAG_COLORS.map(color => (
+                                <button key={color} type="button" onClick={() => setNewTagData({ ...newTagData, color })} className={`w-full h-7 rounded-md border-2 ${newTagData.color === color ? 'border-primary' : 'border-transparent'}`} style={{ backgroundColor: color }} />
+                              ))}
+                            </div>
+                          </div>
+                          <Button type="submit" disabled={!newTagData.name} className="w-full h-9 text-sm">Criar</Button>
+                        </form>
+                      </div>
+                    ) : ( // 'edit' view
+                      <div>
+                        <div className="flex items-center p-2 text-center border-b relative">
+                          <Button onClick={() => setTagPopoverView('list')} className="absolute left-1 h-6 w-6" variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+                          <span className="text-sm font-semibold flex-1">Editar Etiqueta</span>
+                        </div>
+                        <form onSubmit={handleUpdateTag} className="p-3 space-y-3">
+                          <div>
+                            <Label htmlFor="edit-tag-name" className="text-sm font-medium text-gray-700">Título</Label>
+                            <Input id="edit-tag-name" type="text" value={newTagData.name} onChange={e => setNewTagData({ ...newTagData, name: e.target.value })} className="mt-1 w-full h-8 text-sm" />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Selecionar uma cor</Label>
+                            <div className="grid grid-cols-6 gap-2 mt-2">
+                              {TAG_COLORS.map(color => (
+                                <button key={color} type="button" onClick={() => setNewTagData({ ...newTagData, color })} className={`w-full h-7 rounded-md border-2 ${newTagData.color === color ? 'border-primary' : 'border-transparent'}`} style={{ backgroundColor: color }} />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="button" variant="destructive" size="icon" onClick={handleDeleteTag}><Trash2 className="h-4 w-4" /></Button>
+                            <Button type="submit" disabled={!newTagData.name} className="w-full h-9 text-sm">Salvar</Button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
+              <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
+              <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
+              <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
+                {/* ❌ Botão de Documentação REMOVIDO daqui ❌ */}
+                <Sparkles className="h-4 w-4 mr-2 text-primary-custom" />
+                {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
+              </Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
+            </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center justify-between"><span>Status Atual</span><Badge {...getStatusProps(client.overallStatus)}>{client.overallStatus ?? 'N/A'}</Badge></div>
               <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.corretor?.nome ?? 'N/A'}</span></div>
-              <Separator/>
+              <Separator />
               <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notas?.length ?? 0}</span></div>
               <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tarefas?.filter(t => !t.concluida).length ?? 0}</span></div>
-              <Separator/>
+              <Separator />
               <div className="flex justify-between"><span>Cliente desde</span><span className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</span></div>
             </CardContent>
           </Card>
         </div>
       </div>
-      
+
       {/* Modais */}
-      <Dialog open={isWonDialogOpen} onOpenChange={setIsWonDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Ganho</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="sale_value">Valor da Venda</Label><Input id="sale_value" type="number" value={wonDetails.sale_value} onChange={e => setWonDetails({...wonDetails, sale_value: e.target.value})} /><Label htmlFor="sale_date">Data da Venda</Label><Input id="sale_date" type="date" value={wonDetails.sale_date} onChange={e => setWonDetails({...wonDetails, sale_date: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsWonDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsWon}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isWonDialogOpen} onOpenChange={setIsWonDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Ganho</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="sale_value">Valor da Venda</Label><Input id="sale_value" type="number" value={wonDetails.sale_value} onChange={e => setWonDetails({ ...wonDetails, sale_value: e.target.value })} /><Label htmlFor="sale_date">Data da Venda</Label><Input id="sale_date" type="date" value={wonDetails.sale_date} onChange={e => setWonDetails({ ...wonDetails, sale_date: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsWonDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsWon}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isLostDialogOpen} onOpenChange={setIsLostDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Perdido</DialogTitle></DialogHeader>
         <div className="space-y-4 py-4">
           <div>
             <Label htmlFor="lost_reason">Motivo da Perda (Obrigatório)</Label>
-            <Select value={lostDetails.reason} onValueChange={reason => setLostDetails({...lostDetails, reason})}><SelectTrigger id="lost_reason"><SelectValue placeholder="Selecione um motivo..." /></SelectTrigger><SelectContent>{lostReasons.map(r => <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>)}</SelectContent></Select>
+            <Select value={lostDetails.reason} onValueChange={reason => setLostDetails({ ...lostDetails, reason })}><SelectTrigger id="lost_reason"><SelectValue placeholder="Selecione um motivo..." /></SelectTrigger><SelectContent>{lostReasons.map(r => <SelectItem key={r.id} value={r.reason}>{r.reason}</SelectItem>)}</SelectContent></Select>
           </div>
           <div>
             <Label htmlFor="lost_feedback">Feedback (Obrigatório)</Label>
-            <Textarea id="lost_feedback" placeholder="Descreva em detalhes o porquê da perda..." value={lostDetails.feedback} onChange={e => setLostDetails({...lostDetails, feedback: e.target.value})} />
+            <Textarea id="lost_feedback" placeholder="Descreva em detalhes o porquê da perda..." value={lostDetails.feedback} onChange={e => setLostDetails({ ...lostDetails, feedback: e.target.value })} />
           </div>
         </div><DialogFooter><Button variant="outline" onClick={() => setIsLostDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsLost} variant="destructive" disabled={!lostDetails.reason || !lostDetails.feedback}>Confirmar Perda</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isFunnelDialogOpen} onOpenChange={setIsFunnelDialogOpen}><DialogContent><DialogHeader><DialogTitle>Alterar Etapa do Funil</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="funnel_status">Nova Etapa</Label><Select value={newFunnelStatus} onValueChange={setNewFunnelStatus}><SelectTrigger><SelectValue placeholder="Selecione uma etapa..." /></SelectTrigger><SelectContent>{funnelStages.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsFunnelDialogOpen(false)}>Cancelar</Button><Button onClick={handleChangeFunnelStatus}>Salvar</Button></DialogFooter></DialogContent></Dialog>
@@ -560,20 +932,20 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Tarefa</DialogTitle></DialogHeader>
         <form onSubmit={handleAddTask} className="space-y-4 py-4">
           <Label>Título</Label>
-          <Input value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} required />
+          <Input value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} required />
           <Label>Descrição</Label>
-          <Textarea value={taskForm.description || ''} onChange={e => setTaskForm({...taskForm, description: e.target.value})} />
+          <Textarea value={taskForm.description || ''} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} />
           <Label>Data e Hora</Label>
-          <Input type="datetime-local" value={taskForm.dataHora} onChange={e => setTaskForm({...taskForm, dataHora: e.target.value})} required />
+          <Input type="datetime-local" value={taskForm.dataHora} onChange={e => setTaskForm({ ...taskForm, dataHora: e.target.value })} required />
           <DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsTaskDialogOpen(false)}>Cancelar</Button><Button type="submit">Criar Tarefa</Button></DialogFooter>
         </form>
       </DialogContent></Dialog>
-      <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.nomeCompleto} onChange={e => setEditClientForm({...editClientForm, nomeCompleto: e.target.value})} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({...editClientForm, email: e.target.value})} /><Label>Telefone</Label><Input value={editClientForm.telefone} onChange={e => setEditClientForm({...editClientForm, telefone: e.target.value})} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.nomeCompleto} onChange={e => setEditClientForm({ ...editClientForm, nomeCompleto: e.target.value })} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({ ...editClientForm, email: e.target.value })} /><Label>Telefone</Label><Input value={editClientForm.telefone} onChange={e => setEditClientForm({ ...editClientForm, telefone: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um corretor..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.corretorId).map(u => <SelectItem key={u.id} value={u.id}>{u.nome} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
-      
+
       <Dialog open={isRiaDialogOpen} onOpenChange={handleRiaDialogClose}>
         <DialogContent className="sm:max-w-2xl h-[70vh] flex flex-col">
           <DialogHeader>
@@ -621,6 +993,76 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ --- MODAL DE DOCUMENTAÇÃO --- ✅ */}
+      <Dialog open={isDocumentsModalOpen} onOpenChange={setIsDocumentsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Documentação do Cliente</DialogTitle>
+            <DialogDescription>Gerencie os arquivos de {client.nomeCompleto}.</DialogDescription>
+          </DialogHeader>
+
+          {/* Input de arquivo escondido */}
+          <input
+            type="file"
+            multiple
+            ref={fileInputRef}
+            onChange={handleUploadFiles}
+            className="hidden"
+          />
+
+          {client.documentos && client.documentos.length > 0 ? (
+            <div className="space-y-4 py-4">
+              <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
+                {client.documentos.map(doc => (
+                  <div key={doc.id} className="flex items-center justify-between p-2 border rounded-md">
+                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate">
+                      {doc.fileName}
+                    </a>
+                    <span className="text-xs text-muted-foreground">{format(new Date(doc.createdAt), 'dd/MM/yy')}</span>
+                  </div>
+                ))}
+              </div>
+              <Separator />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={handleDownloadAllAsZip} className="flex-1" disabled={isDownloading}>
+                  {isDownloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                  Baixar Todos (.zip)
+                </Button>
+                <Button onClick={handleFileSelect} variant="secondary" className="flex-1" disabled={isUploading}>
+                  {isUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UploadCloud className="h-4 w-4 mr-2" />}
+                  Subir Novos
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center py-10"><p className="text-muted-foreground mb-4">Nenhum documento encontrado.</p><Button onClick={handleFileSelect} disabled={isUploading}>{isUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UploadCloud className="h-4 w-4 mr-2" />}Fazer Upload de Documentação</Button></div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ --- MODAL DE EDIÇÃO DE NOTA --- ✅ */}
+      <Dialog open={isEditNoteDialogOpen} onOpenChange={setIsEditNoteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Anotação</DialogTitle>
+          </DialogHeader>
+          {editingNote && (
+            <form onSubmit={handleUpdateNote} className="py-4">
+              <Textarea
+                placeholder="Edite sua anotação aqui..."
+                value={editingNote.content}
+                onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
+                rows={6}
+              />
+              <DialogFooter className="pt-4 justify-between">
+                <Button type="button" variant="destructive" onClick={handleDeleteNote}><Trash2 className="mr-2 h-4 w-4" /> Excluir</Button>
+                <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setIsEditNoteDialogOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></div>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
