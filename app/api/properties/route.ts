@@ -19,8 +19,13 @@ export async function GET(request: NextRequest) {
 
     const properties = await prisma.imovel.findMany({
       include: {
-        imagens: true,
-        tipologias: true, // ✅ Inclui as tipologias para calcular a faixa de preço
+        imagens: {
+          take: 1, // Pega apenas a primeira imagem
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+        tipologias: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -67,6 +72,8 @@ export async function POST(request: NextRequest) {
           tipo: type,
           endereco: address,
           status: status || StatusImovel.Disponivel,
+          creatorId: user.id, // ✅ Salva quem criou
+          updaterId: user.id, // ✅ Salva quem atualizou pela primeira vez
         },
       });
 

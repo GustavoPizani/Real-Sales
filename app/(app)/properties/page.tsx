@@ -151,6 +151,7 @@ export default function PropertiesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[80px]">Imagem</TableHead>
                 <TableHead>Empreendimento</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
@@ -161,6 +162,13 @@ export default function PropertiesPage() {
             <TableBody>
               {filteredProperties.map((property) => (
                 <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/properties/${property.id}/view`)}>
+                  <TableCell>
+                    <img
+                      src={property.imagens?.[0]?.url || '/placeholder.svg'}
+                      alt={property.titulo}
+                      className="h-12 w-12 object-cover rounded-md"
+                    />
+                  </TableCell>
                   <TableCell>
                     <div>
                       <p className="font-medium">{property.titulo}</p>

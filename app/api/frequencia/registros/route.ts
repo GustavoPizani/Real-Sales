@@ -4,6 +4,7 @@ import { getUserFromToken } from '@/lib/auth';
 import { Role } from '@prisma/client';
 import { haversineDistance, isTimeWithinIntervals } from '@/lib/geolocation';
 import { z } from 'zod';
+import { format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,9 @@ export async function GET(request: NextRequest) {
             role: true,
           },
         },
+        config: { // ✅ Inclui os dados da configuração associada
+          select: { nome: true }
+        }
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -63,9 +67,6 @@ export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || ![Role.corretor, Role.gerente].includes(user.role)) {
-      return NextResponse.json({ error: 'Não autorizado para registar frequência' }, { status: 401 });
-    }
 
     const body = await request.json();
 
@@ -73,9 +74,26 @@ export async function POST(request: NextRequest) {
     const registroSchema = z.object({
       latitude: z.number({ required_error: "Latitude é obrigatória." }),
       longitude: z.number({ required_error: "Longitude é obrigatória." }),
+      userId: z.string().optional(), // ✅ Adicionado para registro manual
+      horarioManual: z.string().optional(), // ✅ Adicionado para o horário do registro manual
     });
 
     const { latitude, longitude } = registroSchema.parse(body);
+
+    let targetUserId = user.id;
+    // Se um userId for fornecido e o usuário for admin, use esse ID.
+    if (body.userId && user.role === Role.marketing_adm) {
+      targetUserId = body.userId;
+    } else if (![Role.corretor, Role.gerente, Role.marketing_adm].includes(user.role)) {
+      return NextResponse.json({ error: 'Não autorizado para registar frequência' }, { status: 403 });
+    }
+
+    // ✅ Se for um registro manual com horário, usa a data atual com a hora fornecida
+    let registrationTime = new Date();
+    if (body.horarioManual && user.role === Role.marketing_adm) {
+        const [hours, minutes] = body.horarioManual.split(':').map(Number);
+        registrationTime.setHours(hours, minutes, 0, 0);
+    }
 
     // 1. Encontrar configurações de frequência ativas
     const activeConfigs = await prisma.frequenciaConfig.findMany({
@@ -85,14 +103,21 @@ export async function POST(request: NextRequest) {
     let distancia = -1;
     let dentroDoRaio = false;
     let configFound = false;
+    let matchedConfigId: string | null = null;
 
     for (const config of activeConfigs) {
-      // Check if current time is within any of the configured intervals
+      // ✅ CORREÇÃO: Verifica se o horário atual está dentro de algum dos intervalos configurados
       const horarios = config.horarios as Array<{ inicio: string; fim: string }>;
-      if (!isTimeWithinIntervals(horarios)) {
+      const now = registrationTime; // Usa o tempo de registro (manual ou atual)
+      const currentDay = now.getDay(); // Pega o dia da semana (0-6)
+      const currentTime = format(now, 'HH:mm'); // Pega a hora (HH:mm)
+
+      const isWithinSchedule = config.diasDaSemana.includes(currentDay) && horarios.some(h => currentTime >= h.inicio && currentTime <= h.fim);
+
+      if (!isWithinSchedule) {
         continue; // Skip if outside time interval for this config
       }
-
+      
       configFound = true;
       const calculatedDistance = haversineDistance(
         config.latitude,
@@ -104,6 +129,7 @@ export async function POST(request: NextRequest) {
 
       if (calculatedDistance <= config.raio) {
         dentroDoRaio = true;
+        matchedConfigId = config.id; // ✅ Salva o ID da configuração correspondente
         break; // Found a matching active config within radius and time, no need to check others
       }
     }
@@ -114,11 +140,13 @@ export async function POST(request: NextRequest) {
 
     const newRegistro = await prisma.frequenciaRegistro.create({
       data: {
-        userId: user.id,
+        userId: targetUserId,
         latitude,
         longitude,
         distancia,
         dentroDoRaio,
+        configId: matchedConfigId, // ✅ Adiciona o ID ao criar o registro
+        createdAt: registrationTime, // ✅ Usa o tempo de registro definido
       },
     });
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { Home, Building, Kanban, Settings, LogOut, CheckSquare, X, Phone, RotateCcw } from 'lucide-react';
+import { Home, Building, Kanban, Settings, LogOut, CheckSquare, X, Phone, RotateCcw, Target, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Role } from '@prisma/client';
@@ -13,7 +13,8 @@ import { Role } from '@prisma/client';
 const navigationLinks = [
   { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Roleta', href: '/roleta', icon: RotateCcw, roles: ['marketing_adm'] },
+  { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
   { name: 'Imóveis', href: '/properties', icon: Building, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },

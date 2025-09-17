@@ -49,6 +49,14 @@ model Usuario {
 
   // ✅ --- RELAÇÃO DE ACESSO AO FUNIL ---
   funnelAccess UserFunnelAccess[]
+  
+ // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO DE IMÓVEIS ---
+  createdImoveis Imovel[] @relation("CreatedImoveis")
+  updatedImoveis Imovel[] @relation("UpdatedImoveis")
+
+  // ✅ --- RELAÇÕES DO BOLSÃO DE LEADS ---
+  leadsQualificadosParaMim Cliente[] @relation("QualificadoPara")
+  bolsoesPermitidos       BolsaoUsuario[]
 }
 
 model Cliente {
@@ -80,6 +88,12 @@ model Cliente {
   funnel      Funnel      @relation(fields: [funnelId], references: [id])
   funnelStageId String
   funnelStage FunnelStage @relation(fields: [funnelStageId], references: [id])
+
+  // ✅ --- CAMPOS PARA QUALIFICAÇÃO E BOLSÃO ---
+  statusDeQualificacao StatusQualificacao @default(Aguardando)
+  qualificadoParaId    String?
+  qualificadoPara      Usuario?           @relation("QualificadoPara", fields: [qualificadoParaId], references: [id], onDelete: SetNull)
+  entrouNoBolsaoEm     DateTime?
 }
 
 // ✅ NOVO MODELO PARA DOCUMENTOS
@@ -117,6 +131,12 @@ model Imovel {
   clientesComInteresse Cliente[]
   tipologias           TipologiaImovel[]
   imagens              ImagemImovel[]
+
+  // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO ---
+  creatorId            String?
+  creator              Usuario?          @relation("CreatedImoveis", fields: [creatorId], references: [id], onDelete: SetNull)
+  updaterId            String?
+  updater              Usuario?          @relation("UpdatedImoveis", fields: [updaterId], references: [id], onDelete: SetNull)
 }
 
 model TipologiaImovel {
@@ -297,9 +317,37 @@ model FrequenciaConfig {
   longitude Float
   raio      Int // Raio em metros
   horarios  Json // Ex: [{ inicio: "10:00", fim: "12:00" }, { inicio: "14:00", fim: "16:00" }]
+  diasDaSemana Int[]    @default([]) // ✅ Adicionado para salvar os dias da semana (0-6)
   ativo     Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  registros FrequenciaRegistro[] // ✅ Adicionado para completar a relação
+}
+
+
+// --- NOVOS MODELOS PARA O BOLSÃO DE LEADS ---
+
+model ConfiguracaoBolsao {
+  id                            String   @id @default(cuid())
+  raioAtribuicaoMetros          Int      @default(5000)
+  tempoAteBolsaoPrioritarioMinutos Int      @default(60)
+  tempoAteBolsaoGeralMinutos    Int      @default(120)
+  updatedAt                     DateTime @updatedAt
+}
+
+model Bolsao {
+  id        String          @id @default(cuid())
+  nome      String          @unique // "Prioritário" ou "Geral"
+  ativo     Boolean         @default(true)
+  usuarios  BolsaoUsuario[]
+}
+
+model BolsaoUsuario {
+  bolsaoId String
+  bolsao   Bolsao  @relation(fields: [bolsaoId], references: [id], onDelete: Cascade)
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  @@id([bolsaoId, usuarioId])
 }
 
 model FrequenciaRegistro {
@@ -310,6 +358,8 @@ model FrequenciaRegistro {
   longitude    Float
   distancia    Int // Distância calculada do ponto central
   dentroDoRaio Boolean
+  configId     String? // ✅ Adicionado para saber a qual config o registro pertence
+  config       FrequenciaConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 }
 
@@ -352,4 +402,11 @@ enum ActiveOfferClientStatus {
   Contactado
   NaoAtendeu
   Descartado
+}
+
+enum StatusQualificacao {
+  Aguardando
+  NoBolsaoPrioritario
+  NoBolsaoGeral
+  Atribuido
 }

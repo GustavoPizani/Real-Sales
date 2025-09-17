@@ -111,6 +111,7 @@ export async function PUT(
           ...(address && { endereco: address }),
           ...(type && { tipo: type }),
           ...(status && { status: status }),
+          updaterId: user.id, // ✅ Salva quem atualizou
         },
       });
 

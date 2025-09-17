@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
@@ -26,6 +26,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { GoogleMapsPicker } from "@/components/google-maps-picker";
 
 // --- Interfaces ---
 interface User extends BaseUser {
@@ -77,6 +78,9 @@ interface FrequenciaRegistro {
     longitude: number;
     distancia: number;
     dentroDoRaio: boolean;
+    config?: { // ✅ Adicionado para receber o nome do local
+        nome: string;
+    } | null;
     createdAt: string;
 }
 
@@ -132,7 +136,7 @@ const useFrequenciaData = (user, selectedReportUserId, reportDateRange) => {
 
     const fetchAllData = useCallback(() => {
         if (!user) return;
-
+        
         const isAdminOrDirector = ['marketing_adm', 'diretor'].includes(user.role);
 
         if (user.role === 'marketing_adm') {
@@ -142,6 +146,8 @@ const useFrequenciaData = (user, selectedReportUserId, reportDateRange) => {
                 .catch(err => toast({ variant: 'destructive', title: 'Erro (Configurações)', description: err.message }))
                 .finally(() => setLoading(prev => ({ ...prev, configs: false })));
         } else {
+            // ✅ CORREÇÃO: Para outros usuários, não tentamos buscar as configurações,
+            // evitando o erro 401. Apenas marcamos como 'não carregando'.
             setLoading(prev => ({ ...prev, configs: false }));
         }
 
@@ -154,7 +160,7 @@ const useFrequenciaData = (user, selectedReportUserId, reportDateRange) => {
         }
         fetcher(`/api/frequencia/registros?${params.toString()}`)
             .then(data => setRegistros(data))
-            .catch(err => toast({ variant: 'destructive', title: 'Erro (Registos)', description: err.message }))
+            .catch(err => toast({ variant: 'destructive', title: 'Erro (Registros)', description: err.message }))
             .finally(() => setLoading(prev => ({ ...prev, registros: false })));
 
         if (isAdminOrDirector) {
@@ -219,7 +225,7 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
         <Card>
             <CardHeader>
                 <CardTitle>Relatório de Frequência</CardTitle>
-                <CardDescription>Visualize os registos de frequência da equipa.</CardDescription>
+                <CardDescription>Visualize os registros de frequência da equipe.</CardDescription>
             </CardHeader>
             <CardContent>
                 {(user?.role === 'marketing_adm' || user?.role === 'diretor') && (
@@ -228,7 +234,9 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
                             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Todos os Usuários" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Todos os Usuários</SelectItem>
-                                {reportUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
+                                {reportUsers
+                                    .filter(u => u.role === 'corretor' || u.role === 'gerente')
+                                    .map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                             </SelectContent>
                         </Select>
                         <Popover>
@@ -253,21 +261,21 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
                 {loading ? (
                     <div className="flex justify-center items-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : Object.keys(groupedRegistros).length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum registo de frequência encontrado.</p>
+                    <p className="text-center text-muted-foreground py-8">Nenhum registro de frequência encontrado.</p>
                 ) : (
                     <div className="space-y-6">
                         {Object.entries(groupedRegistros).map(([weekKey, weekRegistros]) => (
                             <div key={weekKey}>
                                 <h3 className="text-lg font-semibold mb-3">Semana de {weekKey}</h3>
                                 <Table>
-                                    <TableHeader><TableRow>{(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableHead>Usuário</TableHead>}<TableHead>Data/Hora</TableHead><TableHead>Distância</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                    <TableHeader><TableRow>{(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableHead>Usuário</TableHead>}<TableHead>Data/Hora</TableHead><TableHead>Distância</TableHead><TableHead>Local</TableHead></TableRow></TableHeader>
                                     <TableBody>
                                         {weekRegistros.map(registro => (
                                             <TableRow key={registro.id}>
                                                 {(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableCell>{registro.usuario.nome}</TableCell>}
                                                 <TableCell>{format(parseISO(registro.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                                                 <TableCell>{registro.distancia}m</TableCell>
-                                                <TableCell><Badge variant={registro.dentroDoRaio ? 'default' : 'destructive'}>{registro.dentroDoRaio ? 'Dentro do Raio' : 'Fora do Raio'}</Badge></TableCell>
+                                                <TableCell>{registro.config?.nome || 'N/A'}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -281,18 +289,74 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
     );
 }
 
-function FrequenciaUserView({ registros, loading, onRegister, isRegistering, geolocationError }) {
+function FrequenciaUserView({ configs, registros, loading, onRegister, isRegistering, geolocationError }) {
+    const [isCheckinAvailable, setIsCheckinAvailable] = useState(false);
+    const [nextCheckinTime, setNextCheckinTime] = useState<string | null>(null);
+    const [availabilityLoading, setAvailabilityLoading] = useState(true);
+    const [selectedRegistro, setSelectedRegistro] = useState<FrequenciaRegistro | null>(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [loadingAddress, setLoadingAddress] = useState(false);
+
+    useEffect(() => {
+        const checkAvailability = async () => {
+            setAvailabilityLoading(true);
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch('/api/frequencia/check-availability', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                setIsCheckinAvailable(data.available);
+            } catch (error) {
+                console.error("Erro ao verificar disponibilidade de check-in:", error);
+                setIsCheckinAvailable(false);
+            } finally {
+                setAvailabilityLoading(false);
+            }
+        };
+
+        checkAvailability();
+        const interval = setInterval(checkAvailability, 60000); // Verifica a cada minuto
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleRowClick = async (registro: FrequenciaRegistro) => {
+        setSelectedRegistro({ ...registro, address: 'A carregar endereço...' });
+        setIsDetailModalOpen(true);
+        setLoadingAddress(true);
+        try {
+            const response = await fetch(`/api/geocode?lat=${registro.latitude}&lng=${registro.longitude}`);
+            const data = await response.json();
+            setSelectedRegistro(prev => prev ? { ...prev, address: data.address || 'Não foi possível obter o endereço.' } : null);
+        } catch (error) {
+            setSelectedRegistro(prev => prev ? { ...prev, address: 'Erro ao obter endereço.' } : null);
+        } finally {
+            setLoadingAddress(false);
+        }
+    };
+
+    const closeDetailModal = () => {
+        setIsDetailModalOpen(false);
+        setSelectedRegistro(null);
+    };
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Registar Frequência</CardTitle>
-                <CardDescription>Registe a sua presença em locais estratégicos.</CardDescription>
+                <CardTitle>Registrar Frequência</CardTitle>
+                <CardDescription>Registre a sua presença.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <Button onClick={onRegister} disabled={isRegistering} className="w-full">
+                <Button onClick={onRegister} disabled={isRegistering || availabilityLoading || !isCheckinAvailable} className="w-full">
                     {isRegistering ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MapPin className="h-4 w-4 mr-2" />}
-                    {isRegistering ? 'A registar...' : 'Registar Minha Frequência'}
+                    {availabilityLoading ? 'A verificar...' : isRegistering ? 'A registrar...' : 'Registrar Minha Frequência'}
                 </Button>
+                {!availabilityLoading && !isCheckinAvailable && (
+                    <Alert variant="default" className="text-center">
+                        <AlertDescription>
+                            Você já registrou a presença neste horário ou está fora do período de check-in.
+                        </AlertDescription>
+                    </Alert>
+                )}
                 {geolocationError && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
@@ -300,19 +364,20 @@ function FrequenciaUserView({ registros, loading, onRegister, isRegistering, geo
                     </Alert>
                 )}
                 <Separator />
-                <h3 className="text-lg font-semibold">Meus Registos Recentes</h3>
+                <h3 className="text-lg font-semibold">Meus Registros Recentes</h3>
                 {loading ? (
                     <div className="flex justify-center items-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
                 ) : registros.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum registo de frequência encontrado.</p>
+                    <p className="text-center text-muted-foreground py-8">Nenhum registro de frequência encontrado.</p>
                 ) : (
                     <Table>
-                        <TableHeader><TableRow><TableHead>Data/Hora</TableHead><TableHead>Distância</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Local</TableHead><TableHead>Horário</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {registros.map(registro => (
-                                <TableRow key={registro.id}>
-                                    <TableCell>{format(parseISO(registro.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
-                                    <TableCell>{registro.distancia}m</TableCell>
+                            {registros.map((registro) => (
+                                <TableRow key={registro.id} onClick={() => handleRowClick(registro)} className="cursor-pointer">
+                                    <TableCell className="font-medium">{registro.config?.nome || 'N/A'}</TableCell>
+                                    <TableCell>{format(parseISO(registro.createdAt), 'HH:mm')}</TableCell>
+                                    <TableCell>{format(parseISO(registro.createdAt), 'dd/MM/yy')}</TableCell>
                                     <TableCell><Badge variant={registro.dentroDoRaio ? 'default' : 'destructive'}>{registro.dentroDoRaio ? 'Dentro do Raio' : 'Fora do Raio'}</Badge></TableCell>
                                 </TableRow>
                             ))}
@@ -320,6 +385,39 @@ function FrequenciaUserView({ registros, loading, onRegister, isRegistering, geo
                     </Table>
                 )}
             </CardContent>
+
+            {/* Modal de Detalhes do Registro */}
+            <Dialog open={isDetailModalOpen} onOpenChange={closeDetailModal}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Detalhes do Registro</DialogTitle>
+                        <DialogDescription>
+                            Informações capturadas no momento do registro de frequência.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {selectedRegistro && (
+                        <div className="space-y-4 pt-4">
+                            <div className="h-64 w-full rounded-md overflow-hidden">
+                                <GoogleMapsPicker
+                                    latitude={selectedRegistro.latitude}
+                                    longitude={selectedRegistro.longitude}
+                                    radius={0}
+                                    onLocationChange={() => {}}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <p><strong className="font-semibold">Local:</strong> {selectedRegistro.config?.nome || 'Não especificado'}</p>
+                                <p><strong className="font-semibold">Horário:</strong> {safeFormatDateTime(selectedRegistro.createdAt)}</p>
+                                <p><strong className="font-semibold">Endereço Aproximado:</strong> {loadingAddress ? <Loader2 className="inline-block h-4 w-4 animate-spin" /> : selectedRegistro.address}</p>
+                                <p><strong className="font-semibold">Dispositivo:</strong> <span className="text-xs text-muted-foreground">{navigator.userAgent}</span></p>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button onClick={closeDetailModal}>Fechar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }
@@ -338,6 +436,8 @@ function FrequenciaTabContent() {
     const [geolocationError, setGeolocationError] = useState<string | null>(null);
     const [selectedReportUserId, setSelectedReportUserId] = useState<string>('all');
     const [reportDateRange, setReportDateRange] = useState<DateRange | undefined>({ from: startOfWeek(new Date(), { locale: ptBR }), to: endOfWeek(new Date(), { locale: ptBR }) });
+    const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+    const [isManualRegisterModalOpen, setIsManualRegisterModalOpen] = useState(false);
 
     const { configs, registros, reportUsers, loading, refetch } = useFrequenciaData(user, selectedReportUserId, reportDateRange);
 
@@ -357,22 +457,6 @@ function FrequenciaTabContent() {
 
     const addHorario = () => setConfigForm(prev => ({ ...prev, horarios: [...prev.horarios, { inicio: '', fim: '' }] }));
     const removeHorario = (index: number) => setConfigForm(prev => ({ ...prev, horarios: prev.horarios.filter((_, i) => i !== index) }));
-
-    useEffect(() => {
-        if (!isConfigModalOpen) return;
-        const placePicker = document.querySelector('gmpx-place-picker');
-        const handlePlaceChange = () => {
-            const place = (placePicker as any)?.value;
-            if (place?.location) {
-                setConfigForm(prev => ({ ...prev, latitude: String(place.location.lat), longitude: String(place.location.lng) }));
-            }
-        };
-        const timer = setTimeout(() => placePicker?.addEventListener('gmpx-placechange', handlePlaceChange), 500);
-        return () => {
-            clearTimeout(timer);
-            placePicker?.removeEventListener('gmpx-placechange', handlePlaceChange);
-        };
-    }, [isConfigModalOpen]);
 
     const openConfigModal = (config: FrequenciaConfig | null = null) => {
         if (config) {
@@ -449,10 +533,10 @@ function FrequenciaTabContent() {
                 });
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.error || 'Falha ao registar.');
+                    throw new Error(errorData.error || 'Falha ao registrar.');
                 }
                 const registro = await response.json();
-                toast({ title: 'Sucesso!', description: `Presença registada ${registro.dentroDoRaio ? 'dentro' : 'fora'} do raio.` });
+                toast({ title: 'Sucesso!', description: `Presença registrada ${registro.dentroDoRaio ? 'dentro' : 'fora'} do raio.` });
                 refetch();
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro', description: error.message });
@@ -464,6 +548,38 @@ function FrequenciaTabContent() {
             toast({ variant: 'destructive', title: 'Erro de Geolocalização', description: error.message });
             setIsRegistering(false);
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    };
+
+    const handleManualRegister = async (selectedUserId: string, selectedConfigId: string, selectedHorario: string) => {
+        const config = configs.find(c => c.id === selectedConfigId);
+        if (!config) {
+            toast({ variant: 'destructive', title: 'Erro', description: 'Configuração não encontrada.' });
+            return;
+        }
+        if (!selectedHorario) { toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, selecione um horário.' }); return; }
+
+        setIsRegistering(true);
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch('/api/frequencia/registros', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    latitude: config.latitude,
+                    longitude: config.longitude,
+                    userId: selectedUserId,
+                    horarioManual: selectedHorario,
+                }),
+            });
+            if (!response.ok) throw new Error('Falha ao registrar manualmente.');
+            toast({ title: 'Sucesso!', description: 'Presença manual registrada.' });
+            refetch();
+            setIsManualRegisterModalOpen(false);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Erro', description: error.message });
+        } finally {
+            setIsRegistering(false);
+        }
     };
 
     const handleReportDatePreset = (preset: 'currentWeek' | 'lastWeek' | 'currentMonth' | 'lastMonth') => {
@@ -498,7 +614,10 @@ function FrequenciaTabContent() {
                 <Tabs defaultValue="report" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="report"><List className="h-4 w-4 mr-2" /> Relatório</TabsTrigger>
-                        <TabsTrigger value="config"><Settings className="h-4 w-4 mr-2" /> Configurações</TabsTrigger>
+                        <div className="relative">
+                            <TabsTrigger value="config" className="w-full"><Settings className="h-4 w-4 mr-2" /> Configurações</TabsTrigger>
+                            <Button size="sm" className="absolute right-2 top-1/2 -translate-y-1/2 h-7" onClick={() => setIsManualRegisterModalOpen(true)}>Registro Manual</Button>
+                        </div>
                     </TabsList>
                     <TabsContent value="report" className="mt-6"><FrequenciaReportView {...reportViewProps} /></TabsContent>
                     <TabsContent value="config" className="mt-6">
@@ -514,6 +633,7 @@ function FrequenciaTabContent() {
                 <FrequenciaReportView {...reportViewProps} />
             ) : (
                 <FrequenciaUserView
+                    configs={configs}
                     registros={registros}
                     loading={loading.registros}
                     onRegister={registerPresence}
@@ -523,21 +643,19 @@ function FrequenciaTabContent() {
             )}
 
             <Dialog open={isConfigModalOpen} onOpenChange={setIsConfigModalOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>{editingConfig ? 'Editar' : 'Nova'} Configuração</DialogTitle></DialogHeader>
-                    <form onSubmit={handleConfigSubmit} className="space-y-4 pt-4">
+                    <div className="pt-4">
+                        <form onSubmit={handleConfigSubmit} className="space-y-4">
                         <div><Label htmlFor="nome">Nome do Local</Label><Input id="nome" name="nome" value={configForm.nome} onChange={(e) => setConfigForm(prev => ({ ...prev, nome: e.target.value }))} required /></div>
                         <div>
                             <Label>Localização</Label>
-                            <div className="h-[300px] w-full rounded-md overflow-hidden border mt-1">
-                                <gmp-map center={configForm.latitude && configForm.longitude ? `${configForm.latitude},${configForm.longitude}` : "-23.55,-46.63"} zoom={configForm.latitude && configForm.longitude ? "15" : "10"} map-id="DEMO_MAP_ID">
-                                    <div slot="control-block-start-inline-start" className="p-2"><gmpx-place-picker placeholder="Digite um endereço"></gmpx-place-picker></div>
-                                    {configForm.latitude && configForm.longitude && <gmp-advanced-marker position={`${configForm.latitude},${configForm.longitude}`} title={configForm.nome || "Local"}></gmp-advanced-marker>}
-                                </gmp-map>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 mt-2">
-                                <Input name="latitude" type="text" value={configForm.latitude} placeholder="Latitude" readOnly className="bg-muted" />
-                                <Input name="longitude" type="text" value={configForm.longitude} placeholder="Longitude" readOnly className="bg-muted" />
+                            <div className="flex items-center gap-2 mt-1">
+                                <Input value={configForm.latitude && configForm.longitude ? `${configForm.latitude}, ${configForm.longitude}` : "Nenhuma localização definida"} readOnly className="bg-muted" />
+                                <Button type="button" variant="outline" onClick={() => setIsMapModalOpen(true)}>
+                                    <MapPin className="h-4 w-4 mr-2" />
+                                    Selecionar
+                                </Button>
                             </div>
                         </div>
                         <div><Label htmlFor="raio">Raio (metros)</Label><Input id="raio" name="raio" type="number" value={configForm.raio} onChange={(e) => setConfigForm(prev => ({ ...prev, raio: e.target.value }))} required /></div>
@@ -552,9 +670,9 @@ function FrequenciaTabContent() {
                             ))}
                             <Button type="button" variant="outline" className="mt-2 w-full" onClick={addHorario}><Plus className="h-4 w-4 mr-2" /> Adicionar Horário</Button>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div>
                             <Label>Dias da Semana</Label>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 mt-2">
                                 {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((dia, index) => (
                                     <Button key={index} type="button" variant={diasDaSemana.includes(index) ? "default" : "outline"} size="icon" className="h-8 w-8" onClick={() => handleDiaSemanaChange(index)}>
                                         {dia}
@@ -569,6 +687,74 @@ function FrequenciaTabContent() {
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsConfigModalOpen(false)}>Cancelar</Button>
                             <Button type="submit">Salvar</Button>
+                        </DialogFooter>
+                        </form>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal do Mapa */}
+            <Dialog open={isMapModalOpen} onOpenChange={setIsMapModalOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Selecionar Localização</DialogTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Use a busca ou dê um duplo clique no mapa para definir o pino.
+                        </p>
+                    </DialogHeader>
+                    <GoogleMapsPicker
+                        latitude={parseFloat(configForm.latitude) || 0}
+                        longitude={parseFloat(configForm.longitude) || 0}
+                        radius={parseInt(configForm.raio, 10) || 0}
+                        onLocationChange={({ lat, lng }) => {
+                            setConfigForm(prev => ({ ...prev, latitude: String(lat), longitude: String(lng) }));
+                        }}
+                    />
+                    <DialogFooter><Button onClick={() => setIsMapModalOpen(false)}>Concluir</Button></DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de Registro Manual */}
+            <Dialog open={isManualRegisterModalOpen} onOpenChange={setIsManualRegisterModalOpen}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Registro de Frequência Manual</DialogTitle></DialogHeader>
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const formData = new FormData(e.currentTarget);
+                        const userId = formData.get('userId') as string;
+                        const configId = formData.get('configId') as string;
+                        const horario = formData.get('horario') as string;
+                        handleManualRegister(userId, configId);
+                        handleManualRegister(userId, configId, horario);
+                    }} className="space-y-4 pt-4">
+                        <div>
+                            <Label htmlFor="userId">Usuário</Label>
+                            <Select name="userId" required><SelectTrigger><SelectValue placeholder="Selecione um usuário" /></SelectTrigger>
+                                <SelectContent>{reportUsers
+                                    .filter(u => u.role === 'corretor' || u.role === 'gerente')
+                                    .map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label htmlFor="configId">Local de Frequência</Label>
+                            <Select name="configId" required onValueChange={(value) => {
+                                const selected = configs.find(c => c.id === value);
+                                setConfigForm(prev => ({ ...prev, horarios: selected?.horarios || [] }));
+                            }}><SelectTrigger><SelectValue placeholder="Selecione um local" /></SelectTrigger>
+                                <SelectContent>{configs.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        {configForm.horarios.length > 1 && (
+                            <div>
+                                <Label htmlFor="horario">Horário do Registro</Label>
+                                <Select name="horario" required><SelectTrigger><SelectValue placeholder="Selecione um horário" /></SelectTrigger>
+                                    <SelectContent>{configForm.horarios.map((h, i) => <SelectItem key={i} value={h.inicio}>{`${h.inicio} - ${h.fim}`}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsManualRegisterModalOpen(false)}>Cancelar</Button>
+                            <Button type="submit" disabled={isRegistering}>{isRegistering ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Registrar'}</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -842,11 +1028,13 @@ export default function RoletaPage() {
             {message && <Alert className="mb-4"><AlertDescription>{message}</AlertDescription></Alert>}
 
             <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="overview">Ordem de Atendimento</TabsTrigger>
-                    <TabsTrigger value="manage">Gerenciar Roletas</TabsTrigger>
-                    <TabsTrigger value="frequencia">Frequência</TabsTrigger>
-                </TabsList>
+                <TabsList className={`grid w-full ${user?.role === 'marketing_adm' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    <TabsTrigger value="overview">Ordem de Atendimento</TabsTrigger>                    
+                    {user?.role === 'marketing_adm' && (
+                        <TabsTrigger value="manage">Gerenciar Roletas</TabsTrigger>
+                    )}
+                    <TabsTrigger value="frequencia">Frequência</TabsTrigger>                    
+                </TabsList> 
 
                 <TabsContent value="overview" className="mt-6">
                     <div className="flex justify-center">
@@ -855,7 +1043,7 @@ export default function RoletaPage() {
                             const nextCorretorIndex = roleta.usuarios.length > 0 ? (roleta.last_assigned_index + 1) % roleta.usuarios.length : 0;
                             return (
                                 <Card key={roleta.id} className="w-full max-w-2xl">
-                                    <CardHeader><CardTitle className="text-xl">{roleta.nome}</CardTitle><CardDescription>{safeFormatDateTime(roleta.validFrom)}</CardDescription></CardHeader>
+                                    <CardHeader><CardTitle className="text-xl">{roleta.nome}</CardTitle><CardDescription>{roleta.funnel?.name || 'Sem funil associado'}</CardDescription></CardHeader>
                                     <CardContent>
                                         <div className="space-y-1">
                                             {roleta.usuarios.map((corretor, index) => {
@@ -886,9 +1074,11 @@ export default function RoletaPage() {
                                 <CardTitle className="flex items-center gap-2 text-primary-custom"><RotateCcw className="h-5 w-5" />Roletas Configuradas</CardTitle>
                                 <CardDescription>Gerencie as roletas de distribuição de leads</CardDescription>
                             </div>
+                        {user?.role === 'marketing_adm' && (
                             <Button onClick={() => { setShowCreateModal(true); setParticipantOrder([]); setFormData({ nome: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' }) }} className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                                 <Plus className="h-4 w-4 mr-2" />Nova Roleta
                             </Button>
+                        )}
                         </CardHeader>
                         <CardContent>
                             {loading ? (
@@ -939,8 +1129,12 @@ export default function RoletaPage() {
                                                     <TableCell>{safeFormatDate(roleta.created_at, "dd/MM/yyyy")}</TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
-                                                            <Button size="sm" variant="ghost" onClick={() => openEditModal(roleta)}><Edit className="h-4 w-4" /></Button>
-                                                            <Button size="sm" variant="ghost" onClick={() => handleDeleteRoleta(roleta.id)} className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                                                        {user?.role === 'marketing_adm' && (
+                                                            <>
+                                                                <Button size="sm" variant="ghost" onClick={() => openEditModal(roleta)}><Edit className="h-4 w-4" /></Button>
+                                                                <Button size="sm" variant="ghost" onClick={() => handleDeleteRoleta(roleta.id)} className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                                                            </>
+                                                        )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>

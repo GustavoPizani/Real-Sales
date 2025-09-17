@@ -8,7 +8,26 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowLeft, MapPin, Building, Home, Car, Bath, Bed, Square, Users, Phone, Mail, Pencil, Loader2, Share2, Copy, Camera, X } from "lucide-react"
-import type { Property } from "@/lib/types"
+import { type Imovel, type TipologiaImovel, type ImagemImovel, type Developer } from "@prisma/client";
+
+// ✅ Interface local mais completa para o imóvel, incluindo todas as relações.
+interface Property extends Imovel {
+  imagens: ImagemImovel[];
+  tipologias: (TipologiaImovel & {
+    plantas: any[]; // Ajuste conforme o tipo real de 'plantas' se necessário
+    available_units?: number; // Campo opcional que parece ser usado na UI
+    description?: string; // Campo opcional que parece ser usado na UI // ✅ CORREÇÃO: Adicionado 'created_at' que estava faltando
+  })[];
+  developer?: Developer | null; // Adiciona a construtora
+  updater?: { // ✅ Adicionado para receber os dados de quem atualizou
+    nome: string;
+  } | null;
+  creator?: { // ✅ Adicionado para receber os dados de quem criou
+    address?: string | null; // ✅ Adicionado para receber o endereço
+    nome: string;
+  } | null;
+}
+
 import { useToast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -36,9 +55,12 @@ export default function PropertyViewPage() {
   const fetchProperty = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
+    const token = localStorage.getItem('authToken');
     try {
       // O cookie de autenticação é enviado automaticamente pelo navegador.
-      const response = await fetch(`/api/properties/${propertyId}`);
+      const response = await fetch(`/api/properties/${propertyId}/details`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!response.ok) {
         throw new Error("Imóvel não encontrado ou falha ao carregar.");
       }
@@ -161,7 +183,7 @@ export default function PropertyViewPage() {
                 </div>
                 <img
                   src={
-                    (property.images && property.images.length > 0 ? property.images[selectedImage].url : null) || "/placeholder.jpg?height=400&width=800&text=Imagem+do+Imóvel"
+                    (property.imagens && property.imagens.length > 0 ? property.imagens[selectedImage].url : null) || "/placeholder.jpg?height=400&width=800&text=Imagem+do+Imóvel"
                   }
                   alt={property.title}
                   className="w-full h-96 object-cover rounded-t-lg"
@@ -222,13 +244,13 @@ export default function PropertyViewPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {property.typologies?.map((typology) => (
+                    {property.tipologias && property.tipologias.map((typology) => (
                       <TableRow key={typology.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{typology.nome}</p>
-                            {typology.description && (
-                              <p className="text-sm text-gray-600 mt-1">{typology.description}</p>
+                            <p className="font-medium">{typology.nome || 'N/A'}</p>
+                            {typology.description && ( // Mantido caso você use este campo
+                              <p className="text-sm text-gray-600 mt-1">{typology.description}</p> 
                             )}
                           </div>
                         </TableCell>
@@ -237,23 +259,23 @@ export default function PropertyViewPage() {
                             <Square className="h-4 w-4 text-gray-400" />
                             <span>{typology.area}m²</span>
                           </div>
-                        </TableCell>
+                        </TableCell> 
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Bed className="h-4 w-4 text-gray-400" />
-                            <span>{typology.dormitorios}</span>
+                            <span>{typology.dormitorios || 0}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Bath className="h-4 w-4 text-gray-400" />
-                            <span>{typology.suites}</span>
+                            <span>{typology.suites || 0}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Car className="h-4 w-4 text-gray-400" />
-                            <span>{typology.vagas}</span>
+                            <span>{typology.vagas || 0}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -287,7 +309,7 @@ export default function PropertyViewPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-700">{property.address}</p>
+              <p className="text-gray-700">{property.endereco || "Endereço não informado"}</p>
             </CardContent>
           </Card>
 
@@ -361,39 +383,18 @@ export default function PropertyViewPage() {
 
               <Separator />
 
-              <div>
-                <p className="text-sm text-gray-600">Total de Tipologias</p>
-                <p className="text-2xl font-bold text-primary">{property.typologies?.length || 0}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Unidades Disponíveis</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {property.typologies?.reduce((total, typ) => total + (typ.available_units || 0), 0) || 0}
-                </p>
-              </div>
+              {(property.updater || property.creator) && (
+                <div>
+                  <p className="text-sm text-gray-600">Última edição feita por</p>
+                  <p className="font-medium">{property.updater?.nome || property.creator?.nome}</p>
+                </div>
+              )}
 
               <Separator />
 
               <div>
-                <p className="text-sm text-gray-600">Faixa de Preços</p>
-                {property.typologies && property.typologies.length > 0 && (
-                  <div className="mt-1">
-                    <p className="text-sm text-gray-700">
-                      De {formatCurrency(Math.min(...property.typologies.map((t) => t.valor)))}
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      Até {formatCurrency(Math.max(...property.typologies.map((t) => t.valor)))}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              <div>
-                <p className="text-sm text-gray-600">Cadastrado em</p>
-                <p className="font-medium">{new Date(property.created_at).toLocaleDateString("pt-BR")}</p>
+                <p className="text-sm text-gray-600">Data de atualização</p>
+                <p className="font-medium">{new Date(property.updatedAt).toLocaleDateString("pt-BR")}</p>
               </div>
             </CardContent>
           </Card>
@@ -429,7 +430,7 @@ export default function PropertyViewPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto p-1 flex-1">
-            {property.images?.map((image, index) => (
+            {property.imagens?.map((image, index) => (
               <button
                 key={index}
                 className="relative aspect-square w-full h-auto rounded-md overflow-hidden group focus:ring-2 focus:ring-primary focus:ring-offset-2 outline-none"
@@ -439,7 +440,7 @@ export default function PropertyViewPage() {
                 }}
               >
                 <img
-                  src={image || "/placeholder.svg"}
+                  src={image.url || "/placeholder.svg"}
                   alt={`${property.title} ${index + 1}`}
                   className="w-full h-full object-cover transition-transform group-hover:scale-105"
                 />

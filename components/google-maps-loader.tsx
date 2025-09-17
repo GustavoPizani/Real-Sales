@@ -1,4 +1,4 @@
-"use client";
+"use client"; // ✅ ESSENCIAL: Garante que os componentes customizados sejam reconhecidos.
 
 import React from 'react';
 
