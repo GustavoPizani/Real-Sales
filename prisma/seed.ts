@@ -1,22 +1,8 @@
 // prisma/seed.ts
-import { PrismaClient, StatusImovel, TaskType, Priority, Role, ClientOverallStatus } from '@prisma/client'
+import { PrismaClient, StatusImovel, Role, FunnelAccessLevel } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
-
-const brandColors = ['#010f27', '#aa8d44', '#023863'];
-
-const funnelStagesData = [
-  { name: 'Contato', order: 0 },
-  { name: 'Diagnóstico', order: 1 },
-  { name: 'Agendado', order: 2 },
-  { name: 'Visitado', order: 3 },
-  { name: 'Proposta', order: 4 },
-  { name: 'Contrato', order: 5 },
-].map((stage, index) => ({
-  ...stage,
-  color: brandColors[index % brandColors.length],
-}));
 
 async function main() {
   console.log('Iniciando o seeding...');
@@ -83,9 +69,75 @@ async function main() {
     },
   });
   
-  console.log('Usuários criados/atualizados:', { admin, thaina, herculano, gustavo });
+  // 5. Cria o SDR (Pré-Vendas), subordinado ao Admin
+  const mia = await prisma.usuario.upsert({
+    where: { email: 'mia@realsales.com.br' },
+    update: {
+      passwordHash: defaultPasswordHash,
+    },
+    create: {
+      nome: 'Mia',
+      email: 'mia@realsales.com.br',
+      passwordHash: defaultPasswordHash,
+      role: 'pre_vendas',
+      superiorId: admin.id,
+    },
+  });
+  console.log('Usuários criados/atualizados:', { admin, thaina, herculano, gustavo, mia });
 
-  // 5. Cria o novo Imóvel "Escape Eden"
+  // Define a estrutura do seu funil principal
+  const brandColors = ['#010f27', '#aa8d44', '#023863'];
+  const mainFunnelStagesData = [
+    { name: 'Contato', order: 1, color: brandColors[0] },
+    { name: 'Diagnóstico', order: 2, color: brandColors[1] },
+    { name: 'Agendado', order: 3, color: brandColors[2] },
+    { name: 'Visitado', order: 4, color: brandColors[0] },
+    { name: 'Proposta', order: 5, color: brandColors[1] },
+    { name: 'Contrato', order: 6, color: brandColors[2] },
+  ];
+
+  // 6. Cria os Funis e suas Etapas
+  console.log('Criando Funis e Etapas...');
+
+  // Funil de Pré-Vendas (será o padrão de entrada)
+  const preVendasFunnel = await prisma.funnel.upsert({
+    where: { name: 'Pré-Vendas' },
+    update: {},
+    create: {
+      name: 'Pré-Vendas',
+      isDefaultEntry: true, // Define como funil de entrada padrão
+      stages: {
+        create: [
+          { name: 'Novo Lead', order: 1, color: brandColors[0] },
+          { name: 'Em Qualificação', order: 2, color: brandColors[1] },
+          { name: 'Qualificado', order: 3, color: brandColors[2] },
+        ]
+      }
+    },
+    include: { stages: true }
+  });
+  console.log(`Funil "${preVendasFunnel.name}" criado com ${preVendasFunnel.stages.length} etapas.`);
+
+  // Funil de Vendas Principal
+  const vendasFunnel = await prisma.funnel.upsert({
+    where: { name: 'Vendas Principal' },
+    update: {},
+    create: {
+      name: 'Vendas Principal',
+      isDefaultEntry: false,
+      stages: { create: mainFunnelStagesData }
+    },
+    include: { stages: true }
+  });
+  console.log(`Funil "${vendasFunnel.name}" criado com ${vendasFunnel.stages.length} etapas.`);
+
+  // Obter a primeira etapa do funil de entrada padrão
+  const firstStageOfDefaultFunnel = preVendasFunnel.stages.find(s => s.order === 1);
+  if (!firstStageOfDefaultFunnel) {
+    throw new Error("Não foi possível encontrar a primeira etapa do funil de Pré-Vendas.");
+  }
+
+  // 7. Cria o novo Imóvel "Escape Eden"
   let escapeEdenProperty = await prisma.imovel.findFirst({
     where: { titulo: "Escape Eden - Cyrela" },
   });
@@ -115,7 +167,7 @@ async function main() {
     console.log(`Imóvel "${escapeEdenProperty.titulo}" já existe. Features atualizadas.`);
   }
 
-  // 6. Adiciona as tipologias ao imóvel "Escape Eden"
+  // 8. Adiciona as tipologias ao imóvel "Escape Eden"
   await prisma.tipologiaImovel.createMany({
     data: [
       { nome: 'Apartamento 50m²', valor: 1045729, area: 50, dormitorios: 1, suites: 0, vagas: 1, imovelId: escapeEdenProperty.id },
@@ -127,7 +179,7 @@ async function main() {
   });
   console.log('Tipologias do imóvel Escape Eden criadas/verificadas.');
 
-  // 7. Adiciona a cliente Nelma
+  // 9. Adiciona a cliente Nelma
   if (gustavo) {
     await prisma.cliente.upsert({
       where: { email: 'nelmaaguiadourada@gmail.com' },
@@ -138,31 +190,43 @@ async function main() {
         nomeCompleto: 'Nelma',
         email: 'nelmaaguiadourada@gmail.com',
         telefone: '+5514991210778',
-        currentFunnelStage: 'Contato',
-        overallStatus: 'Ativo',
         corretorId: gustavo.id,
         imovelDeInteresseId: escapeEdenProperty.id,
+        // Associa o cliente ao funil e à etapa corretos
+        funnelId: firstStageOfDefaultFunnel.funnelId,
+        funnelStageId: firstStageOfDefaultFunnel.id,
       }
     });
     console.log('Cliente Nelma criada e atribuída a Gustavo com interesse no imóvel Escape Eden.');
   }
 
-  // 8. Cria os estágios do funil
-  console.log('Criando/atualizando estágios do funil...');
-  for (const stage of funnelStagesData) {
-    await prisma.funnelStage.upsert({
-      where: { name: stage.name },
-      update: {},
-      create: {
-        name: stage.name,
-        order: stage.order,
-        color: stage.color,
-      },
-    });
-  }
-  console.log('Estágios do funil criados/atualizados.');
+  // 10. Atribui permissões de acesso aos funis
+  console.log('Atribuindo permissões de acesso aos funis...');
+  // Dar acesso total ao funil de vendas para o corretor Gustavo
+  await prisma.userFunnelAccess.upsert({
+    where: { userId_funnelId: { userId: gustavo.id, funnelId: vendasFunnel.id } },
+    update: {},
+    create: { userId: gustavo.id, funnelId: vendasFunnel.id, accessLevel: FunnelAccessLevel.full }
+  });
+  console.log(`Permissão de acesso total ao funil "${vendasFunnel.name}" para o usuário ${gustavo.nome}.`);
+  
+  // Dar acesso total ao funil de Pré-Vendas para a SDR Mia
+  await prisma.userFunnelAccess.upsert({
+    where: { userId_funnelId: { userId: mia.id, funnelId: preVendasFunnel.id } },
+    update: {},
+    create: { userId: mia.id, funnelId: preVendasFunnel.id, accessLevel: FunnelAccessLevel.full }
+  });
+  console.log(`Permissão de acesso total ao funil "${preVendasFunnel.name}" para a usuária ${mia.nome}.`);
 
-  // 9. Inicializa as configurações dos cargos
+  // Dar acesso de APENAS LEITURA do funil de Vendas para a SDR Mia
+  await prisma.userFunnelAccess.upsert({
+    where: { userId_funnelId: { userId: mia.id, funnelId: vendasFunnel.id } },
+    update: {},
+    create: { userId: mia.id, funnelId: vendasFunnel.id, accessLevel: FunnelAccessLevel.readonly }
+  });
+  console.log(`Permissão de leitura ao funil "${vendasFunnel.name}" para a usuária ${mia.nome}.`);
+
+  // 11. Inicializa as configurações dos cargos (mantido como estava)
   await prisma.roleSetting.upsert({
     where: { roleName: 'diretor' },
     update: {},

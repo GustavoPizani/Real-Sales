@@ -4,19 +4,23 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 // GET: Busca todas as roletas e os corretores associados
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.split(' ')[1];
+    const user = await getUserFromToken(token);
+
     if (!user || user.role !== 'marketing_adm') {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     const roletas = await prisma.roleta.findMany({
       include: {
-        // Inclui os registros da tabela de junção
+        funnel: true, // --- NOVO --- Inclui o funil associado
         corretores: {
-          // E para cada registro, inclui os dados do corretor (usuário)
           include: {
             corretor: {
               select: {
@@ -33,13 +37,26 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Formata a resposta para o frontend, simplificando a estrutura de usuários
-    const formattedRoletas = roletas.map(roleta => ({
-      ...roleta,
-      usuarios: roleta.corretores.map(rc => ({
-          ...rc.corretor,
-          name: rc.corretor.nome // Garante a propriedade 'name' que o frontend pode esperar
-      }))
+    const formattedRoletas = await Promise.all(roletas.map(async roleta => {
+      const usuariosComContagem = await Promise.all(roleta.corretores.map(async rc => {
+        const leadCount = await prisma.cliente.count({
+          where: {
+            corretorId: rc.corretor.id,
+          },
+        });
+        return {
+          id: rc.corretor.id,
+          name: rc.corretor.nome,
+          email: rc.corretor.email,
+          leadCount: leadCount,
+        };
+      }));
+
+      return {
+        ...roleta,
+        created_at: roleta.createdAt, // --- CORRIGIDO --- Garante que a data de criação é enviada
+        usuarios: usuariosComContagem,
+      };
     }));
 
     return NextResponse.json(formattedRoletas);
@@ -52,14 +69,17 @@ export async function GET(request: NextRequest) {
 // POST: Cria uma nova roleta e associa os corretores
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.split(' ')[1];
+    if (!token) return NextResponse.json({ error: 'Token não fornecido' }, { status: 401 });
+
+    const user = await getUserFromToken(token);
     if (!user || user.role !== 'marketing_adm') {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { nome, usuarios } = await request.json();
-
-    if (!nome || !usuarios || !Array.isArray(usuarios) || usuarios.length === 0) {
+    const { nome, usuarios, validFrom, validUntil, funnelId } = await request.json(); // --- MODIFICADO ---
+    if (!nome || !usuarios || !Array.isArray(usuarios)) {
       return NextResponse.json(
         { error: 'Nome e pelo menos um usuário são obrigatórios.' },
         { status: 400 }
@@ -69,7 +89,9 @@ export async function POST(request: NextRequest) {
     const newRoleta = await prisma.roleta.create({
       data: {
         nome,
-        // Conecta os corretores selecionados através da tabela de junção
+        validFrom: validFrom ? new Date(validFrom) : null,
+        validUntil: validUntil ? new Date(validUntil) : null,
+        funnelId: funnelId || null, // --- NOVO ---
         corretores: {
           create: usuarios.map((userId: string) => ({
             corretor: {
@@ -86,3 +108,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
   }
 }
+

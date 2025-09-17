@@ -48,12 +48,14 @@ export async function GET(request: NextRequest) {
 
 // Schema de validação para a criação de um novo cliente
 const createClientSchema = z.object({
-  nomeCompleto: z.string().min(1, { message: "Nome completo é obrigatório." }),
-  corretorId: z.string().uuid({ message: "ID do corretor inválido." }),
-  currentFunnelStage: z.string().min(1, { message: "Estágio do funil é obrigatório." }),
-  email: z.string().email({ message: "Email inválido." }).optional().or(z.literal('')),
-  telefone: z.string().optional(),
+    nomeCompleto: z.string().min(1, { message: "Nome completo é obrigatório." }),
+    corretorId: z.string().uuid({ message: "ID do corretor inválido." }),
+    funnelId: z.string().uuid({ message: "ID do funil é obrigatório." }),
+    funnelStageId: z.string().uuid({ message: "ID da etapa do funil é obrigatório." }),
+    email: z.string().email({ message: "Email inválido." }).optional().or(z.literal('')),
+    telefone: z.string().optional(),
 });
+
 
 export async function POST(request: NextRequest) {
     try {
@@ -65,24 +67,22 @@ export async function POST(request: NextRequest) {
         
         const body = await request.json();
 
-        // <<--- SCAN INSTALADO AQUI --- >>
-        console.log('[API /api/clients] Received body for validation:', JSON.stringify(body, null, 2));
-        
         // Valida os dados recebidos com o schema do Zod
         const validation = createClientSchema.safeParse(body);
         if (!validation.success) {
           // Retorna um erro detalhado se a validação falhar
           return NextResponse.json({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, { status: 400 });
         }
-
-        const { nomeCompleto, email, telefone, corretorId, currentFunnelStage } = validation.data;
+        
+        const { nomeCompleto, email, telefone, corretorId, funnelId, funnelStageId } = validation.data;
 
         const newClient = await prisma.cliente.create({
             data: {
                 nomeCompleto,
                 email: email || null, // Garante que o email seja null se for uma string vazia
                 telefone,
-                currentFunnelStage,
+                funnelId,
+                funnelStageId,
                 corretorId, // Usa o corretorId validado do corpo da requisição
             }
         });

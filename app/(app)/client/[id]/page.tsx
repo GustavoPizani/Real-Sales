@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,9 +68,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   // --- Estados ---
   const [client, setClient] = useState<Cliente | null>(null);
   const [properties, setProperties] = useState<Imovel[]>([]);
-  const [funnelStages, setFunnelStages] = useState<any[]>([]);
+  const [funnels, setFunnels] = useState<any[]>([]); // Alterado de funnelStages para funnels
   const [users, setUsers] = useState<Usuario[]>([]);
   const [lostReasons, setLostReasons] = useState<any[]>([]);
+  const [activeRoletas, setActiveRoletas] = useState<any[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -99,6 +100,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [isEditClientDialogOpen, setIsEditClientDialogOpen] = useState(false);
   const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
+  // ✅ --- ESTADOS PARA QUALIFICAÇÃO ---
+  const [isQualifyModalOpen, setIsQualifyModalOpen] = useState(false);
+  const [targetRoletaId, setTargetRoletaId] = useState<string>('');
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   // ✅ --- ESTADOS PARA EDIÇÃO DE NOTAS ---
   const [editingNote, setEditingNote] = useState<Nota | null>(null);
@@ -122,7 +126,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   // Estados dos Formulários
   const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
   const [lostDetails, setLostDetails] = useState({ reason: "", feedback: "" });
-  const [newFunnelStatus, setNewFunnelStatus] = useState("");
+  const [newFunnelStageId, setNewFunnelStageId] = useState(""); // Alterado de newFunnelStatus para newFunnelStageId
   const [newNote, setNewNote] = useState("");
   const [taskForm, setTaskForm] = useState({ title: "", description: "", dataHora: "" });
   const [editClientForm, setEditClientForm] = useState({ nomeCompleto: "", email: "", telefone: "" });
@@ -132,6 +136,11 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [activeTab, setActiveTab] = useState("anotacoes");
 
   // --- Funções de Busca e Atualização de Dados ---
+  const isInPreSalesFunnel = useMemo(() => {
+    if (!client || !client.funnel) return false;
+    return client.funnel.name === 'Pré-Vendas';
+  }, [client]);
+
 
   const fetchData = useCallback(async () => {
     if (!clientId) return;
@@ -140,33 +149,36 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const token = localStorage.getItem('authToken');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const [clientRes, stagesRes, reasonsRes, propertiesRes, usersRes, tagsRes] = await Promise.all([
+      const [clientRes, funnelsRes, reasonsRes, propertiesRes, usersRes, tagsRes, roletasRes] = await Promise.all([
         fetch(`/api/clients/${clientId}`, { headers }),
-        fetch('/api/funnel-stages', { headers }),
+        fetch('/api/funnels', { headers }), // Alterado para buscar funis completos
         fetch('/api/lost-reasons', { headers }),
         fetch('/api/properties', { headers }),
         fetch('/api/users', { headers }),
         fetch('/api/tags', { headers }),
+        fetch('/api/roletas?status=active', { headers }), // Busca roletas ativas
       ]);
 
       if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
 
       const clientData = await clientRes.json();
-      const stagesData = await stagesRes.json();
+      const funnelsData = await funnelsRes.json();
       const reasonsData = await reasonsRes.json();
       const propertiesData = await propertiesRes.json();
       const usersData = await usersRes.json();
       const tagsData = await tagsRes.json();
+      const roletasData = await roletasRes.json();
 
       setClient(clientData.client);
       setUsers(usersData.users || []);
-      setFunnelStages(stagesData || []);
+      setFunnels(funnelsData.funnels || []); // Armazena a lista de funis
       setLostReasons(reasonsData.reasons || []);
+      setActiveRoletas(roletasData || []);
       setProperties(propertiesData || []);
       setAllTags(tagsData.tags || []);
 
       if (clientData.client) {
-        setNewFunnelStatus(clientData.client.currentFunnelStage);
+        setNewFunnelStageId(clientData.client.funnelStageId); // Inicializa com o ID da etapa atual
         setEditClientForm({
           nomeCompleto: clientData.client.nomeCompleto,
           email: clientData.client.email || "",
@@ -460,10 +472,33 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleChangeFunnelStatus = async () => {
-    const success = await handleUpdateClient({ currentFunnelStage: newFunnelStatus }, { successMessage: "Etapa do funil alterada." });
-    if (success) setIsFunnelDialogOpen(false);
+    const success = await handleUpdateClient({ funnelStageId: newFunnelStageId }, { successMessage: "Etapa do funil alterada." });
+    if (success) { setIsFunnelDialogOpen(false); }
   };
 
+  const handleQualifyClient = async () => {
+    if (!targetRoletaId) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, selecione uma roleta de destino.' });
+      return;
+    }
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/clients/${clientId}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ roletaId: targetRoletaId }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao qualificar o cliente.');
+      }
+      toast({ title: 'Sucesso!', description: 'Cliente qualificado e movido para o novo funil.' });
+      setIsQualifyModalOpen(false);
+      fetchData(); // Re-busca os dados para atualizar a UI
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro na Qualificação', description: error.message });
+    }
+  };
   const handleAddNote = async (content: string) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -571,10 +606,17 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const getStatusProps = (status: string): { className?: string; style?: React.CSSProperties } => {
     if (status === ClientOverallStatus.Ganho) return { className: "bg-emerald-100 text-emerald-800" };
     if (status === ClientOverallStatus.Perdido) return { className: "bg-red-100 text-red-800" };
-    const stage = funnelStages.find(s => s.name === status);
+    const stage = stagesForCurrentFunnel.find(s => s.name === status);
     if (stage?.color) return { style: { color: stage.color, backgroundColor: `${stage.color}1A` } };
     return { className: "bg-gray-100 text-gray-800" };
   };
+
+  // --- Funções de Lógica de UI ---
+  const stagesForCurrentFunnel = useMemo(() => {
+    if (!client || !client.funnelId || !funnels) return [];
+    const currentFunnel = funnels.find(f => f.id === client.funnelId);
+    return currentFunnel?.stages || [];
+  }, [client, funnels]);
 
   // --- Renderização ---
 
@@ -610,7 +652,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{client.nomeCompleto}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <Badge {...getStatusProps(client.currentFunnelStage)}>{client.currentFunnelStage}</Badge>
+              <Badge {...getStatusProps(client.funnelStage?.name ?? '')}>
+                {client.funnel?.name} &gt; {client.funnelStage?.name}
+              </Badge>
+              <span className="hidden sm:block text-sm text-gray-500">|</span>
               <span className="text-sm text-gray-600">Corretor: {client.corretor?.nome}</span>
             </div>
           </div>
@@ -651,7 +696,12 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <TabsContent value="actions" className="mt-4">
                 <Card>
                   <CardContent className="pt-6 space-y-2">
-                    {/* ✅ --- BOTÃO DE DOCUMENTAÇÃO ADICIONADO AO MOBILE --- ✅ */}
+                    {isInPreSalesFunnel && (
+                      <Button variant="outline" className="w-full justify-start text-green-600 hover:text-green-700" onClick={() => setIsQualifyModalOpen(true)}>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Qualificar
+                      </Button>
+                    )}
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsDocumentsModalOpen(true)}>
                       <FileText className="h-4 w-4 mr-2" />
                       Documentação
@@ -885,17 +935,18 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           <Card>
             <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
             <CardContent className="space-y-2">
+              {isInPreSalesFunnel && (
+                <>
+                  <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setIsQualifyModalOpen(true)}>
+                    <CheckCircle className="h-4 w-4 mr-2" />Qualificar e Avançar
+                  </Button>
+                  <Separator />
+                </>
+              )}
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
-              <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
-                {/* ❌ Botão de Documentação REMOVIDO daqui ❌ */}
-                <Sparkles className="h-4 w-4 mr-2 text-primary-custom" />
-                {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
-              </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Sparkles className="h-4 w-4 mr-2 text-primary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
             </CardContent>
           </Card>
           <Card>
@@ -926,7 +977,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <Textarea id="lost_feedback" placeholder="Descreva em detalhes o porquê da perda..." value={lostDetails.feedback} onChange={e => setLostDetails({ ...lostDetails, feedback: e.target.value })} />
           </div>
         </div><DialogFooter><Button variant="outline" onClick={() => setIsLostDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsLost} variant="destructive" disabled={!lostDetails.reason || !lostDetails.feedback}>Confirmar Perda</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isFunnelDialogOpen} onOpenChange={setIsFunnelDialogOpen}><DialogContent><DialogHeader><DialogTitle>Alterar Etapa do Funil</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="funnel_status">Nova Etapa</Label><Select value={newFunnelStatus} onValueChange={setNewFunnelStatus}><SelectTrigger><SelectValue placeholder="Selecione uma etapa..." /></SelectTrigger><SelectContent>{funnelStages.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsFunnelDialogOpen(false)}>Cancelar</Button><Button onClick={handleChangeFunnelStatus}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isFunnelDialogOpen} onOpenChange={setIsFunnelDialogOpen}><DialogContent><DialogHeader><DialogTitle>Alterar Etapa do Funil</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="funnel_status">Nova Etapa</Label><Select value={newFunnelStageId} onValueChange={setNewFunnelStageId}><SelectTrigger><SelectValue placeholder="Selecione uma etapa..." /></SelectTrigger><SelectContent>{stagesForCurrentFunnel.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsFunnelDialogOpen(false)}>Cancelar</Button><Button onClick={handleChangeFunnelStatus}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Anotação</DialogTitle></DialogHeader><form onSubmit={handleAddNoteFromForm} className="py-4"><Textarea placeholder="Escreva sua anotação aqui..." value={newNote} onChange={e => setNewNote(e.target.value)} /><DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsNoteDialogOpen(false)}>Cancelar</Button><Button type="submit">Adicionar</Button></DialogFooter></form></DialogContent></Dialog>
       <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nova Tarefa</DialogTitle></DialogHeader>
         <form onSubmit={handleAddTask} className="space-y-4 py-4">
@@ -1042,6 +1093,25 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* ✅ --- MODAL DE QUALIFICAÇÃO --- ✅ */}
+      <Dialog open={isQualifyModalOpen} onOpenChange={setIsQualifyModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Qualificar e Enviar para Roleta</DialogTitle>
+            <DialogDescription>Selecione a roleta que fará a distribuição deste lead.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="target-roleta">Roleta de Destino</Label>
+            <Select value={targetRoletaId} onValueChange={setTargetRoletaId}>
+              <SelectTrigger id="target-roleta"><SelectValue placeholder="Selecione uma roleta..." /></SelectTrigger>
+              <SelectContent>
+                {activeRoletas.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setIsQualifyModalOpen(false)}>Cancelar</Button><Button onClick={handleQualifyClient} disabled={!targetRoletaId}>Confirmar e Enviar</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* ✅ --- MODAL DE EDIÇÃO DE NOTA --- ✅ */}
       <Dialog open={isEditNoteDialogOpen} onOpenChange={setIsEditNoteDialogOpen}>
         <DialogContent>

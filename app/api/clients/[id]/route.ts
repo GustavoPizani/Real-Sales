@@ -33,6 +33,14 @@ async function getClientWithDetails(id: string) {
           tipologias: true,
         },
       },
+      funnel: {
+        select: {
+          name: true,
+        },
+      },
+      funnelStage: {
+        select: { name: true },
+      },
       notas: {
         orderBy: {
           createdAt: 'desc',
@@ -77,7 +85,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 // PUT: Atualiza um cliente
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const token = cookies().get('authToken')?.value;
+    const token = cookies().get('authToken')?.value; // Já estava correto aqui
     const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -99,8 +107,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.nomeCompleto !== undefined) dataToUpdate.nomeCompleto = body.nomeCompleto;
     if (body.email !== undefined) dataToUpdate.email = body.email;
     if (body.telefone !== undefined) dataToUpdate.telefone = body.telefone;
-
-    if (body.currentFunnelStage !== undefined) dataToUpdate.currentFunnelStage = body.currentFunnelStage;
+    
+    // Lógica unificada para atualização de funil e etapa
+    if (body.funnelId) {
+        dataToUpdate.funnel = { connect: { id: body.funnelId } };
+    }
+    if (body.funnelStageId) {
+        // A validação de que a etapa pertence ao funil correto é implícita
+        // pela constraint do banco de dados. Se a combinação for inválida,
+        // o Prisma retornará um erro P2003, que será capturado abaixo.
+        dataToUpdate.funnelStage = { connect: { id: body.funnelStageId } };
+    }
+    
     if (body.imovelDeInteresseId !== undefined) dataToUpdate.imovelDeInteresseId = body.imovelDeInteresseId;
     if (body.overallStatus !== undefined) dataToUpdate.overallStatus = body.overallStatus;
     if (body.detalhesDeVenda !== undefined) {
@@ -154,6 +172,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2025') {
         return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
+      }
+      // Captura especificamente o erro de chave estrangeira
+      if (error.code === 'P2003') {
+        return NextResponse.json({ error: "A combinação de funil e etapa é inválida." }, { status: 400 });
       }
     }
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });

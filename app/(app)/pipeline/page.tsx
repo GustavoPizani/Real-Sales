@@ -1,8 +1,9 @@
 // app/(app)/pipeline/page.tsx
+// app/(app)/pipeline/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import dynamic from 'next/dynamic';
+import Link from "next/link";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DndContext, type DragEndEvent, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -17,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Tag } from "lucide-react";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
@@ -28,6 +29,13 @@ import { useMobileHeader } from "@/contexts/mobile-header-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // --- Tipos ---
+interface Funnel {
+  id: string;
+  name: string;
+  isDefaultEntry: boolean;
+  stages: FunnelStage[];
+}
+
 interface FunnelStage {
   id: string;
   name: string;
@@ -44,7 +52,7 @@ interface Tag {
 // --- Componente do Card Arrastável ---
 function DraggableClientCard({ client }: { client: Cliente }) {
   const router = useRouter();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stage: client.currentFunnelStage } });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stageId: client.funnelStageId } });
   
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -114,9 +122,9 @@ function DraggableClientCard({ client }: { client: Cliente }) {
 
 // --- Componente da Coluna do Funil ---
 function FunnelColumn({ stage, clients }: { stage: FunnelStage; clients: Cliente[] }) {
-    const { setNodeRef } = useSortable({ id: stage.name, data: { isContainer: true } });
+    const { setNodeRef } = useSortable({ id: stage.id, data: { isContainer: true } });
     return (
-        <div ref={setNodeRef} className="flex flex-col bg-gray-100 rounded-lg h-full w-[280px] flex-shrink-0">
+        <div ref={setNodeRef} className="flex flex-col bg-gray-100 rounded-lg h-full w-[300px] flex-shrink-0">
             <div className="p-3 font-semibold text-center text-white rounded-t-lg sticky top-0 z-10" style={{ backgroundColor: stage.color }}>
                 {stage.name} ({clients.length})
             </div>
@@ -139,7 +147,8 @@ export default function PipelinePage() {
   const router = useRouter();
   
   const [allClients, setAllClients] = useState<Cliente[]>([]);
-  const [funnelStages, setFunnelStages] = useState<FunnelStage[]>([]);
+  const [funnels, setFunnels] = useState<Funnel[]>([]);
+  const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,24 +196,29 @@ export default function PipelinePage() {
       if (!token) throw new Error("Token não encontrado");
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [clientsRes, stagesRes, brokersRes, tagsRes] = await Promise.all([
+      const [clientsRes, funnelsRes, brokersRes, tagsRes] = await Promise.all([
         fetch('/api/clients', { headers }),
-        fetch('/api/funnel-stages', { headers }),
+        fetch('/api/funnels', { headers }),
         fetch('/api/users', { headers }),
         fetch('/api/tags', { headers }),
       ]);
 
-      if (!clientsRes.ok || !stagesRes.ok || !brokersRes.ok || !tagsRes.ok) throw new Error('Falha ao carregar dados do pipeline.');
+      if (!clientsRes.ok || !funnelsRes.ok || !brokersRes.ok || !tagsRes.ok) throw new Error('Falha ao carregar dados do pipeline.');
       
       const clientsData = await clientsRes.json();
-      const stagesData = await stagesRes.json();
+      const funnelsData = await funnelsRes.json();
       const brokersData = await brokersRes.json();
       const tagsData = await tagsRes.json();
 
       setAllClients(clientsData.clients || []);
-      const sortedStages = stagesData.sort((a: FunnelStage, b: FunnelStage) => a.order - b.order) || [];
-      setFunnelStages(sortedStages);
-      setEditingStages(sortedStages);
+      setFunnels(funnelsData.funnels || []);
+
+      if (funnelsData.funnels && funnelsData.funnels.length > 0 && !selectedFunnelId) {
+        setSelectedFunnelId(funnelsData.funnels[0].id);
+      }
+
+      // Manter a lógica de edição de estágios, mas agora precisa ser por funil
+      // setEditingStages(sortedStages);
       setBrokers(brokersData.users || []);
       setTags(tagsData.tags || []);
     } catch (error: any) {
@@ -213,6 +227,13 @@ export default function PipelinePage() {
       setLoading(false);
     }
   }, [toast]);
+
+  const selectedFunnel = useMemo(() => {
+    if (!selectedFunnelId) return null;
+    return funnels.find(f => f.id === selectedFunnelId);
+  }, [funnels, selectedFunnelId]);
+
+  const funnelStages = selectedFunnel?.stages || [];
 
   useEffect(() => { if (user) fetchData(); }, [user, fetchData]);
 
@@ -237,7 +258,7 @@ export default function PipelinePage() {
 
       return matchesSearch && matchesStatus && matchesBroker && matchesDate && matchesTag;
     });
-  }, [allClients, filters]);
+  }, [allClients, filters, selectedFunnelId]);
 
   const handleDragStart = (event: DragEndEvent) => {
     const { active } = event;
@@ -248,18 +269,24 @@ export default function PipelinePage() {
     const { active, over } = event;
     setActiveClient(null);
 
-    if (over && over.data.current?.isContainer && active.data.current?.stage !== over.id) {
+    if (over && over.data.current?.isContainer && active.data.current?.stageId !== over.id.toString() && selectedFunnel) {
         const originalClients = [...allClients];
-        const newStatus = over.id as string;
+        const newStageId = over.id as string; // Este é o ID da etapa de destino
+        const newFunnelId = selectedFunnel.id; // ID do funil atualmente selecionado
         
-        setAllClients(prev => prev.map(c => c.id === active.id ? { ...c, currentFunnelStage: newStatus } : c));
+        // Atualiza o estado local para refletir a mudança imediatamente
+        setAllClients(prev => prev.map(c => 
+            c.id === active.id 
+                ? { ...c, funnelId: newFunnelId, funnelStageId: newStageId } 
+                : c
+        ));
 
         try {
             const token = localStorage.getItem('authToken');
             const response = await fetch(`/api/clients/${active.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ currentFunnelStage: newStatus }),
+                body: JSON.stringify({ funnelId: newFunnelId, funnelStageId: newStageId }),
             });
             if (!response.ok) throw new Error('Falha ao atualizar o status.');
             toast({ title: 'Sucesso!', description: 'Cliente movido para um novo estágio.' });
@@ -286,6 +313,13 @@ export default function PipelinePage() {
         return;
     }
 
+    const defaultFunnel = funnels.find(f => f.isDefaultEntry) || funnels[0];
+    if (!defaultFunnel || !defaultFunnel.stages.length > 0) {
+        toast({ variant: "destructive", title: "Configuração necessária", description: "Nenhum funil de entrada padrão foi configurado." });
+        return;
+    }
+    const firstStageOfDefaultFunnel = defaultFunnel.stages[0];
+
     try {
         const token = localStorage.getItem('authToken');
         const response = await fetch('/api/clients', {
@@ -295,7 +329,10 @@ export default function PipelinePage() {
                 nomeCompleto: newClientForm.nomeCompleto,
                 telefone: newClientForm.telefone,
                 email: newClientForm.email,
-                currentFunnelStage: funnelStages[0]?.name || 'Contato',
+                // Atribui ao funil e etapa padrão
+                funnelId: defaultFunnel.id,
+                funnelStageId: firstStageOfDefaultFunnel.id,
+                // Mantém a lógica de atribuição de corretor
                 corretorId: corretorId
             }),
         });
@@ -438,12 +475,23 @@ export default function PipelinePage() {
       <header className="p-4 border-b bg-white flex-shrink-0">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold text-gray-900">Pipeline de Vendas</h1>
+                <h1 className="text-xl font-bold text-gray-900 hidden sm:block">Pipeline de Vendas</h1>
+                <Select value={selectedFunnelId || ''} onValueChange={setSelectedFunnelId}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Selecione um funil..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {funnels.map(funnel => <SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
                 {user?.role === 'marketing_adm' && (
-                    <Button variant="outline" size="sm" onClick={() => setIsStageDialogOpen(true)}>
-                        <Pencil className="h-3 w-3 mr-2" />
-                        Editar Estágios do Funil
-                    </Button>
+                  <Link href="/settings/funnels">
+                      <Button variant="outline" size="sm">
+                          <Pencil className="h-3 w-3 mr-2" />
+                          Gerenciar Funis
+                      </Button>
+                  </Link>
                 )}
             </div>
             <div className="hidden lg:block">
@@ -457,7 +505,7 @@ export default function PipelinePage() {
                           <div><Label htmlFor="nomeCompleto">Nome Completo</Label><Input id="nomeCompleto" value={newClientForm.nomeCompleto} onChange={(e) => setNewClientForm(p => ({...p, nomeCompleto: e.target.value}))} required /></div>
                           <div><Label htmlFor="telefone">Telefone</Label><Input id="telefone" value={newClientForm.telefone} onChange={(e) => setNewClientForm(p => ({...p, telefone: e.target.value}))} /></div>
                           <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm(p => ({...p, email: e.target.value}))} /></div>
-                        {user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role) && (
+                        {user && ['marketing_adm', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
                           <div>
                             <Label htmlFor="corretor">Corretor Responsável</Label>
                             <Select
@@ -491,7 +539,7 @@ export default function PipelinePage() {
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 h-full">
             {funnelStages.map((stage) => (
-              <FunnelColumn key={stage.id} stage={stage} clients={filteredClients.filter(c => c.currentFunnelStage === stage.name)} />
+              <FunnelColumn key={stage.id} stage={stage} clients={filteredClients.filter(c => c.funnelStageId === stage.id)} />
             ))}
           </div>
           <DragOverlay>
@@ -506,17 +554,17 @@ export default function PipelinePage() {
           <div className="px-4 flex-shrink-0">
             <TabsList className="w-full overflow-x-auto justify-start">
               {funnelStages.map((stage) => (
-                <TabsTrigger key={stage.id} value={stage.name}>
-                  {stage.name} ({filteredClients.filter(c => c.currentFunnelStage === stage.name).length})
+                <TabsTrigger key={stage.id} value={stage.id}>
+                  {stage.name} ({filteredClients.filter(c => c.funnelStageId === stage.id).length})
                 </TabsTrigger>
               ))}
             </TabsList>
           </div>
           <div className="flex-1 overflow-y-auto">
             {funnelStages.map((stage) => (
-              <TabsContent key={stage.id} value={stage.name} className="p-4 space-y-2">
+              <TabsContent key={stage.id} value={stage.id} className="p-4 space-y-2">
                 {filteredClients
-                  .filter(c => c.currentFunnelStage === stage.name)
+                  .filter(c => c.funnelStageId === stage.id)
                   .map(client => (
                     <DraggableClientCard key={client.id} client={client} />
                   ))}
@@ -536,7 +584,7 @@ export default function PipelinePage() {
 
       <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
           <DialogContent className="max-w-2xl">
-              <DialogHeader><DialogTitle>Editar Estágios do Funil</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Editar Estágios do Funil: {selectedFunnel?.name}</DialogTitle></DialogHeader>
               <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
                   {editingStages.map((stage, index) => (
                       <div key={stage.id} className="flex items-center gap-2 p-2 border rounded-lg">

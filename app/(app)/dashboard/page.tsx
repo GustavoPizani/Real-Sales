@@ -100,7 +100,7 @@ export default function DashboardPage() {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [statsRes, overdueClientsRes, tasksRes, allClientsRes, brokersRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?userId=${user.id}`, { headers }),
+        fetch(`/api/dashboard/stats`, { headers }),
         fetch("/api/dashboard/overdue-clients", { headers }),
         fetch("/api/tasks", { headers }),
         fetch("/api/clients", { headers }),

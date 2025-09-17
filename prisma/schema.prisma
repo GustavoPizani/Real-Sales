@@ -10,6 +10,20 @@ datasource db {
   relationMode = "foreignKeys"
 }
 
+// --- ENUMS ---
+enum Role {
+  marketing_adm
+  diretor
+  gerente
+  corretor
+  pre_vendas // Novo perfil
+}
+
+enum FunnelAccessLevel {
+  full
+  readonly
+}
+
 // --- Modelos ---
 
 model Usuario {
@@ -17,7 +31,7 @@ model Usuario {
   nome             String
   email            String           @unique
   passwordHash     String?
-  role             Role             @default(corretor)
+  role             Role             @default(corretor) // Atualizado para usar o novo Enum
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   superiorId       String?
@@ -27,6 +41,14 @@ model Usuario {
   pushSubscription PushSubscription?
   tarefas          Tarefa[]
   roletas          RoletaCorretor[]
+  frequencias      FrequenciaRegistro[]
+
+  // ✅ --- RELAÇÕES DE OFERTA ATIVA ADICIONADAS ---
+  createdOffers    ActiveOffer[]       @relation("CreatedOffers")
+  assignedCalls    ActiveOfferClient[] @relation("AssignedCalls")
+
+  // ✅ --- RELAÇÃO DE ACESSO AO FUNIL ---
+  funnelAccess UserFunnelAccess[]
 }
 
 model Cliente {
@@ -38,19 +60,26 @@ model Cliente {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   corretorId          String
-  corretor            Usuario             @relation(fields: [corretorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corretor            Usuario             @relation(fields: [corretorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   imovelDeInteresseId String?
   imovelDeInteresse   Imovel?             @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
-  currentFunnelStage  String              @default("Contato")
   overallStatus       ClientOverallStatus @default(Ativo)
-  
+
   // ✅ RELACIONAMENTO COM DOCUMENTOS ADICIONADO
   documentos          DocumentoCliente[]
   tags                Tag[]               @relation("ClienteTags")
-
   tarefas             Tarefa[]
   detalhesDeVenda     ClientWonDetails?
   notas               Nota[]
+
+  // ✅ --- RELACIONAMENTO COM OFERTA ATIVA ---
+  activeOfferClients ActiveOfferClient[]
+
+  // ✅ --- CAMPOS DE FUNIL ATUALIZADOS ---
+  funnelId    String
+  funnel      Funnel      @relation(fields: [funnelId], references: [id])
+  funnelStageId String
+  funnelStage FunnelStage @relation(fields: [funnelStageId], references: [id])
 }
 
 // ✅ NOVO MODELO PARA DOCUMENTOS
@@ -59,7 +88,7 @@ model DocumentoCliente {
   fileName  String
   url       String
   createdAt DateTime @default(now())
-  
+
   clienteId String
   cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
@@ -159,9 +188,14 @@ model Roleta {
   id                String           @id @default(uuid())
   nome              String
   ativa             Boolean          @default(true)
+  validFrom         DateTime? // Data e hora de início da validade
+  validUntil        DateTime? // Data e hora de fim da validade
   lastAssignedIndex Int              @default(0)
   corretores        RoletaCorretor[]
+  funnelId          String?
+  funnel            Funnel?          @relation(fields: [funnelId], references: [id], onDelete: SetNull)
 }
+
 model RoletaCorretor {
   roletaId   String
   roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
@@ -182,14 +216,6 @@ model RoleSetting {
   isActive Boolean @default(true)
 }
 
-model FunnelStage {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  order     Int
-  color     String
-  createdAt DateTime @default(now())
-}
-
 model ClientWonDetails {
   id         String   @id @default(uuid())
   sale_value Float
@@ -199,14 +225,95 @@ model ClientWonDetails {
   cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
 
-// --- ENUMS ---
-enum Role {
-  marketing_adm
-  diretor
-  gerente
-  corretor
+// --- NOVOS MODELOS PARA OFERTA ATIVA ---
+
+model ActiveOffer {
+  id        String              @id @default(uuid())
+  name      String
+  status    ActiveOfferStatus   @default(Pendente)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  createdById String
+  createdBy   Usuario           @relation("CreatedOffers", fields: [createdById], references: [id])
+  clients   ActiveOfferClient[]
 }
 
+model ActiveOfferClient {
+  id            String                 @id @default(uuid())
+  status        ActiveOfferClientStatus @default(Pendente)
+  notes         String?
+  contactedAt   DateTime?
+  activeOfferId String
+  activeOffer   ActiveOffer            @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
+  clienteId     String
+  cliente       Cliente                @relation(fields: [clienteId], references: [id], onDelete:Cascade)
+  assignedToId  String
+  assignedTo    Usuario                @relation("AssignedCalls", fields: [assignedToId], references: [id])
+}
+
+// --- NOVOS MODELOS PARA MÚLTIPLOS FUNIS ---
+
+model Funnel {
+  id             String             @id @default(uuid())
+  name           String             @unique
+  isPreSales     Boolean            @default(false)
+  isDefaultEntry Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  stages         FunnelStage[]
+  userAccess     UserFunnelAccess[]
+  clients        Cliente[]
+  roletas        Roleta[]
+}
+
+model FunnelStage {
+  id        String   @id @default(uuid())
+  name      String
+  order     Int
+  color     String
+  funnelId  String
+  funnel    Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  clients   Cliente[]
+
+  @@unique([funnelId, name])
+}
+
+model UserFunnelAccess {
+  userId      String
+  user        Usuario           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  funnelId    String
+  funnel      Funnel            @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  accessLevel FunnelAccessLevel
+
+  @@id([userId, funnelId])
+}
+
+model FrequenciaConfig {
+  id        String   @id @default(cuid())
+  nome      String // Ex: "Stand de Vendas - Lançamento X"
+  latitude  Float
+  longitude Float
+  raio      Int // Raio em metros
+  horarios  Json // Ex: [{ inicio: "10:00", fim: "12:00" }, { inicio: "14:00", fim: "16:00" }]
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FrequenciaRegistro {
+  id           String   @id @default(cuid())
+  userId       String
+  usuario      Usuario  @relation(fields: [userId], references: [id])
+  latitude     Float
+  longitude    Float
+  distancia    Int // Distância calculada do ponto central
+  dentroDoRaio Boolean
+  createdAt    DateTime @default(now())
+}
+
+// --- ENUMS ---
 enum StatusImovel {
   Disponivel
   Reservado
@@ -232,4 +339,17 @@ enum Priority {
   BAIXA
   MEDIA
   ALTA
+}
+
+enum ActiveOfferStatus {
+  Pendente
+  EmAndamento
+  Concluida
+}
+
+enum ActiveOfferClientStatus {
+  Pendente
+  Contactado
+  NaoAtendeu
+  Descartado
 }

@@ -31,7 +31,7 @@ async function getSubordinateIds(userId: string): Promise<string[]> {
   return Array.from(allSubordinateIds);
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     // Utiliza a função centralizada para obter o usuário, que é mais segura e limpa.
     const token = cookies().get('authToken')?.value;
@@ -40,19 +40,29 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    let userIdsForFilter: string[] = [user.id]
-    if (user.role === 'diretor' || user.role === 'gerente') {
-      const subordinateIds = await getSubordinateIds(user.id)
-      userIdsForFilter.push(...subordinateIds)
+    let userIdsForFilter: string[] = [];
+
+    if (user.role === Role.marketing_adm) {
+      // Admin vê todos. Deixar o filtro `in` vazio busca de todos os usuários.
+      // Se corretorId for opcional, precisamos de uma lógica diferente.
+      // Assumindo que queremos todos os clientes com um corretor atribuído.
+    } else if (user.role === Role.diretor || user.role === Role.gerente) {
+      userIdsForFilter = [user.id, ...(await getSubordinateIds(user.id))];
+    } else { // Para corretor, pre_vendas, etc.
+      userIdsForFilter = [user.id];
     }
 
     // Agrupa as consultas para melhor performance
     const [hierarchicalTotalClients, hierarchicalActiveClients, totalProperties] = await prisma.$transaction([
       prisma.cliente.count({
-        where: { corretorId: { in: userIdsForFilter } },
+        where: { 
+          ...(userIdsForFilter.length > 0 && { corretorId: { in: userIdsForFilter } })
+        },
       }),
       prisma.cliente.count({
-        where: { corretorId: { in: userIdsForFilter }, overallStatus: 'Ativo' },
+        where: { 
+          ...(userIdsForFilter.length > 0 && { corretorId: { in: userIdsForFilter } }),
+          overallStatus: 'Ativo' },
       }),
       prisma.imovel.count()
     ]);
