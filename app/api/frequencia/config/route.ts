@@ -34,7 +34,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { nome, latitude, longitude, raio, horarios, ativo } = await request.json();
     const { nome, latitude, longitude, raio, horarios, diasDaSemana, ativo } = await request.json();
 
     if (!nome || latitude === undefined || longitude === undefined || raio === undefined || !horarios) {

@@ -379,7 +379,6 @@ function FrequenciaTabContent() {
             setEditingConfig(config);
             setConfigForm({
                 nome: config.nome, latitude: String(config.latitude), longitude: String(config.longitude),
-                raio: String(config.raio), horarios: config.horarios, ativo: config.ativo,
                 raio: String(config.raio), horarios: config.horarios || [{ inicio: '', fim: '' }], ativo: config.ativo,
             });
             setDiasDaSemana(config.diasDaSemana || []);
