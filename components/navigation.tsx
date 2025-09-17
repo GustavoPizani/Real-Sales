@@ -66,11 +66,12 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
 
       <aside 
         className={cn(
-          "bg-primary-custom text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
+          "bg-black text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
           // Lógica para Mobile: controlado por isMobileOpen
-          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
+          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64", 
           // Lógica para Desktop: sobrepõe a lógica mobile
           "lg:translate-x-0",
+          "overflow-y-auto overflow-x-hidden", // ✅ Garante que o scroll vertical seja possível e esconde o horizontal
           isDesktopExpanded ? "lg:w-64" : "lg:w-16"
         )}
         onMouseEnter={() => !isMobileOpen && setIsDesktopExpanded(true)}
@@ -79,9 +80,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
         {/* Logo */}
         <div className="p-4 flex-shrink-0 border-b border-tertiary-custom/50 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center justify-start gap-3">
-            <div className="bg-secondary-custom rounded-xl w-8 h-8 flex items-center justify-center flex-shrink-0">
-              <span className="text-md font-bold text-white tracking-widest">RS</span>
-            </div>
+            <img src="/rs-logo.png" alt="Real Sales Logo" className="w-8 h-8" />
             <div className={cn(
               "flex flex-col transition-opacity duration-200 whitespace-nowrap",
               isExpanded ? "opacity-100" : "opacity-0"
@@ -96,7 +95,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
         </div>
         
         {/* Navigation Links */}
-        <nav className="flex-1 px-2 py-4 overflow-y-auto">
+        <nav className="flex-grow px-2 py-4">
           <ul className="space-y-2">
             {filteredNavigation.map((item) => {
               const Icon = item.icon;
@@ -108,10 +107,10 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                     href={item.href}
                     onClick={() => isMobileOpen && setIsMobileOpen(false)} // Fecha o menu ao clicar num link no mobile
                     className={cn(
-                      "flex items-center p-3 text-sm font-medium rounded-lg transition-colors duration-200 group relative border-l-4",
+                      "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 group relative border-l-4",
                       isActive
                         ? "bg-secondary-custom text-primary-custom border-secondary-custom"
-                        : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white"
+                        : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:shadow-lg hover:shadow-secondary-custom/20"
                     )}
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />

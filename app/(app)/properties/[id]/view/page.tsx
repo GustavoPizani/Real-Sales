@@ -10,22 +10,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, MapPin, Building, Home, Car, Bath, Bed, Square, Users, Phone, Mail, Pencil, Loader2, Share2, Copy, Camera, X } from "lucide-react"
 import { type Imovel, type TipologiaImovel, type ImagemImovel, type Developer } from "@prisma/client";
 
-// ✅ Interface local mais completa para o imóvel, incluindo todas as relações.
+// ✅ Interface ajustada para corresponder aos dados da API
 interface Property extends Imovel {
-  imagens: ImagemImovel[];
-  tipologias: (TipologiaImovel & {
-    plantas: any[]; // Ajuste conforme o tipo real de 'plantas' se necessário
-    available_units?: number; // Campo opcional que parece ser usado na UI
-    description?: string; // Campo opcional que parece ser usado na UI // ✅ CORREÇÃO: Adicionado 'created_at' que estava faltando
+  images: ImagemImovel[]; // 'imagens' foi renomeado para 'images' na API
+  typologies: (TipologiaImovel & {
+    plantas: any[];
   })[];
-  developer?: Developer | null; // Adiciona a construtora
-  updater?: { // ✅ Adicionado para receber os dados de quem atualizou
-    nome: string;
-  } | null;
-  creator?: { // ✅ Adicionado para receber os dados de quem criou
-    address?: string | null; // ✅ Adicionado para receber o endereço
-    nome: string;
-  } | null;
+  // Campos que a API formata e envia:
+  title: string;
+  address: string;
+  type: string;
+  status: string;
+  creatorName: string;
+  updaterName: string;
+  created_at: string;
+  updated_at: string; // ✅ Adicionado para receber a data de atualização
 }
 
 import { useToast } from "@/components/ui/use-toast"
@@ -188,7 +187,7 @@ export default function PropertyViewPage() {
                   alt={property.title}
                   className="w-full h-96 object-cover rounded-t-lg"
                 />
-                {property.images && property.images.length > 1 && (
+                {property.images && property.images.length > 1 && ( // ✅ Corrigido de 'images' para 'imagens'
                   <div className="absolute bottom-4 left-4 flex gap-2">
                     {property.images.map((_, index) => (
                       <button
@@ -244,8 +243,8 @@ export default function PropertyViewPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {property.tipologias && property.tipologias.map((typology) => (
-                      <TableRow key={typology.id}>
+                    {property.typologies && property.typologies.map((typology) => ( // ✅ Corrigido de 'tipologias' para 'typologies'
+                      <TableRow key={typology.id}> 
                         <TableCell>
                           <div>
                             <p className="font-medium">{typology.nome || 'N/A'}</p>
@@ -279,11 +278,8 @@ export default function PropertyViewPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={typology.available_units && typology.available_units > 0 ? "default" : "secondary"}
-                          >
-                            {typology.available_units} disponíveis
-                          </Badge>
+                          {/* O campo available_units não está sendo enviado pela API, então foi removido por enquanto */}
+                          <Badge variant="secondary">N/A</Badge>
                         </TableCell>
                         <TableCell>
                           <span className="font-semibold text-green-600">{formatCurrency(typology.valor)}</span>
@@ -310,55 +306,10 @@ export default function PropertyViewPage() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-700">{property.endereco || "Endereço não informado"}</p>
-            </CardContent>
-          </Card>
+            </CardContent> 
+          </Card> 
 
-          {/* Construtora */}
-          {property.developer && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building className="h-5 w-5" />
-                  Construtora
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="font-medium text-lg">{property.developer.name}</p>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Gerente de Parcerias</p>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-gray-500" />
-                    <span className="font-medium">{property.developer.partnership_manager}</span>
-                  </div>
-                </div>
-
-                {property.developer.phone && (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Telefone</p>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-gray-500" />
-                      <span>{property.developer.phone}</span>
-                    </div>
-                  </div>
-                )}
-
-                {property.developer.email && (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">E-mail</p>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">{property.developer.email}</span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* ✅ O card de Construtora foi removido pois o modelo `Developer` não está sendo usado/buscado */}
 
           {/* Informações Gerais */}
           <Card>
@@ -385,16 +336,16 @@ export default function PropertyViewPage() {
 
               {(property.updater || property.creator) && (
                 <div>
-                  <p className="text-sm text-gray-600">Última edição feita por</p>
-                  <p className="font-medium">{property.updater?.nome || property.creator?.nome}</p>
+                  <p className="text-sm text-gray-600">Última edição por</p>
+                  <p className="font-medium">{property.updaterName || property.creatorName}</p>
                 </div>
               )}
 
               <Separator />
 
               <div>
-                <p className="text-sm text-gray-600">Data de atualização</p>
-                <p className="font-medium">{new Date(property.updatedAt).toLocaleDateString("pt-BR")}</p>
+                <p className="text-sm text-gray-600">Atualizado em</p>
+                <p className="font-medium">{new Date(property.updated_at).toLocaleDateString("pt-BR")}</p>
               </div>
             </CardContent>
           </Card>
@@ -430,7 +381,7 @@ export default function PropertyViewPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto p-1 flex-1">
-            {property.imagens?.map((image, index) => (
+            {property.images?.map((image, index) => ( // ✅ Corrigido de 'imagens' para 'images'
               <button
                 key={index}
                 className="relative aspect-square w-full h-auto rounded-md overflow-hidden group focus:ring-2 focus:ring-primary focus:ring-offset-2 outline-none"

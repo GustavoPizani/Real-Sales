@@ -37,7 +37,7 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-    --primary-custom: #010f27;
+    --primary-custom: #000000;
     --secondary-custom: #aa8d44;
     --tertiary-custom: #023863;
   }
@@ -98,7 +98,7 @@
   }
 
   .shadow-custom-lg {
-    box-shadow: 0 10px 15px -3px rgba(1, 15, 39, 0.1), 0 4px 6px -2px rgba(1, 15, 39, 0.05);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 
   .text-primary-custom {
@@ -240,7 +240,7 @@
   background-color: var(--primary-custom);
   color: white;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(1, 15, 39, 0.2);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .btn-hover-secondary:hover {
@@ -406,7 +406,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(1, 15, 39, 0.5);
+  background-color: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   z-index: 50;
   display: flex;
@@ -418,7 +418,7 @@
 .modal-content {
   background-color: white;
   border-radius: 0.5rem;
-  box-shadow: 0 20px 25px -5px rgba(1, 15, 39, 0.1), 0 10px 10px -5px rgba(1, 15, 39, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
@@ -483,7 +483,7 @@
 }
 
 .shadow-custom {
-  box-shadow: 0 4px 6px -1px rgba(1, 15, 39, 0.1), 0 2px 4px -1px rgba(1, 15, 39, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 /* Print styles */

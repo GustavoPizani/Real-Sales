@@ -18,13 +18,15 @@ export async function GET(
     const property = await prisma.imovel.findUnique({
       where: { id: params.id },
       include: {
-        // CORREÇÃO: Seleciona o id e a url para consistência
         imagens: {
           select: { id: true, url: true },
         },
         tipologias: {
           include: { plantas: true } // Inclui as imagens das plantas
         },
+        // ✅ Adicionado para buscar os nomes do criador e atualizador
+        creator: { select: { nome: true } },
+        updater: { select: { nome: true } },
       },
     });
 
@@ -37,7 +39,7 @@ export async function GET(
       id: property.id,
       title: property.titulo,
       // description: property.descricao, // ❌ Removido
-      features: property.features,     // ✅ Adicionado
+      features: property.features,
       address: property.endereco,
       type: property.tipo,
       status: property.status,
@@ -52,6 +54,9 @@ export async function GET(
         vagas: t.vagas,
         plantas: t.plantas, // ✅ Garante que as plantas sejam incluídas
       })),
+      // ✅ Adicionado para retornar os nomes do criador e atualizador
+      creatorName: property.creator?.nome || 'N/A',
+      updaterName: property.updater?.nome || 'N/A',
       created_at: property.createdAt.toISOString(),
     };
 

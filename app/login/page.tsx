@@ -41,13 +41,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-custom to-tertiary-custom p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-black to-tertiary-custom p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
-            <div className="w-16 h-16 bg-primary-custom rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-2xl">R</span>
-            </div>
+            <img src="/rs-logo.png" alt="Real Sales Logo" className="w-20 h-20" />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold text-primary-custom">Real Sales CRM</CardTitle>
