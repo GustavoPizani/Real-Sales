@@ -1,40 +1,76 @@
-// c:\Users\gusta\Real-sales\app\api\clients\template\route.ts
-import { NextResponse } from 'next/server';
-import { ClientOverallStatus } from '@prisma/client';
+import { NextResponse, type NextRequest } from 'next/server';
+import { prisma } from "@/lib/prisma";
+import ExcelJS from 'exceljs';
 
-export async function GET() {
-  // Obtém os valores válidos dos Enums para incluir nas instruções
-  const validOverallStatuses = Object.values(ClientOverallStatus).join(', ');
-  // Nota: Os estágios do funil (currentFunnelStage) são dinâmicos. 
-  // Para uma solução ideal, eles seriam buscados do banco de dados.
-  // Por simplicidade, vamos usar um valor padrão e explicar no comentário.
-  const funnelStagesExample = "Contato, Prospecção, Negociação";
+export async function GET(request: NextRequest) {
+    try {
+        // 1. Buscar dados do banco
+        const [users, funnels] = await Promise.all([
+            prisma.usuario.findMany({
+                select: { nome: true, email: true, role: true },
+                orderBy: { nome: 'asc' }
+            }),
+            prisma.funil.findMany({
+                include: { etapas: { orderBy: { ordem: 'asc' } } },
+                orderBy: { nome: 'asc' }
+            })
+        ]);
 
-  const instructions = [
-    "# INSTRUÇÕES PARA PREENCHIMENTO:",
-    "# 1. A coluna 'nomeCompleto' é OBRIGATÓRIA.",
-    "# 2. A coluna 'corretor_email' é opcional. Se deixada em branco, o cliente será atribuído a você.",
-    "# 3. As demais colunas são opcionais.",
-    `# 4. Para a coluna 'overallStatus', utilize um dos seguintes valores: ${validOverallStatuses}`,
-    `# 5. Para a coluna 'currentFunnelStage', utilize um dos estágios de funil configurados no seu sistema (ex: ${funnelStagesExample}).`,
-    "# 6. Se 'overallStatus' for deixado em branco, o cliente será cadastrado como 'Ativo'.",
-    "# 7. Se 'currentFunnelStage' for deixado em branco, será 'Contato'.",
-    "# 8. Apague estas linhas de instrução antes de fazer o upload.",
-    "# ----------------------------------------------------------------------------------",
-  ].join('\n');
+        // 2. Criar o Workbook e as Planilhas
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Real Sales';
+        workbook.created = new Date();
 
-  const headers = "nomeCompleto,email,telefone,budget,preferences,currentFunnelStage,overallStatus,corretor_email";
-  
-  const exampleRow1 = "Maria Souza,maria.souza@email.com,(21) 99999-8888,500000,Apartamento 3 quartos,Negociação,Ativo,corretor.chefe@email.com";
-  const exampleRow2 = "Carlos Pereira,carlos.p@email.com,(11) 88888-7777,,,,,";
+        // --- Aba 1: Importação de Clientes ---
+        const importSheet = workbook.addWorksheet('Importação de Clientes');
+        importSheet.columns = [
+            { header: 'nomeCompleto', key: 'nomeCompleto', width: 30 },
+            { header: 'email', key: 'email', width: 30 },
+            { header: 'telefone', key: 'telefone', width: 20 },
+            { header: 'proprietarioEmail', key: 'proprietarioEmail', width: 30 },
+            { header: 'funilNome', key: 'funilNome', width: 25 },
+            { header: 'etapaNome', key: 'etapaNome', width: 25 },
+            { header: 'cpf', key: 'cpf', width: 20 },
+            { header: 'cnpj', key: 'cnpj', width: 20 },
+            { header: 'dataNascimento', key: 'dataNascimento', width: 20 },
+            { header: 'cidade', key: 'cidade', width: 25 },
+            { header: 'estado', key: 'estado', width: 10 },
+            { header: 'cep', key: 'cep', width: 15 },
+            { header: 'origem', key: 'origem', width: 20 },
+        ];
+        importSheet.getRow(1).font = { bold: true };
 
-  const csvContent = `${instructions}\n${headers}\n${exampleRow1}\n${exampleRow2}`;
+        // --- Aba 2: Dados de Apoio ---
+        const dataSheet = workbook.addWorksheet('Dados de Apoio');
+        dataSheet.addTable({
+            name: 'Usuarios',
+            ref: 'A1',
+            headerRow: true,
+            columns: [{ name: 'Nome do Usuário' }, { name: 'Email do Usuário (para preencher em proprietarioEmail)' }, { name: 'Cargo' }],
+            rows: users.map(u => [u.nome, u.email, u.role]),
+        });
+        dataSheet.addTable({
+            name: 'FunisEtapas',
+            ref: 'E1',
+            headerRow: true,
+            columns: [{ name: 'Nome do Funil (para preencher em funilNome)' }, { name: 'Nome da Etapa (para preencher em etapaNome)' }],
+            rows: funnels.flatMap(f => f.etapas.map(e => [f.nome, e.nome])),
+        });
+        dataSheet.columns.forEach(column => { column.width = 40; });
 
-  return new NextResponse(csvContent, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="modelo_clientes.csv"',
-    },
-  });
+        // 3. Gerar o buffer do arquivo
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        return new NextResponse(buffer, {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': 'attachment; filename="modelo_clientes.xlsx"',
+            },
+        });
+
+    } catch (error) {
+        console.error("Erro ao gerar planilha modelo:", error);
+        return NextResponse.json({ error: "Erro interno ao gerar a planilha." }, { status: 500 });
+    }
 }

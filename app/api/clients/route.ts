@@ -17,15 +17,25 @@ export async function GET(request: NextRequest) {
     }
 
     const where: Prisma.ClienteWhereInput = {};
-    if (user.role === Role.corretor) {
-      where.corretorId = user.id;
-    } else if (user.role === Role.gerente) {
+    if (user.role === Role.gerente) {
       const subordinateIds = (await prisma.usuario.findMany({ 
         where: { superiorId: user.id },
         select: { id: true }
       })).map(u => u.id);
-      where.corretorId = { in: [user.id, ...subordinateIds] };
+      where.proprietarioId = { in: [user.id, ...subordinateIds] };
+    } else if (user.role === Role.corretor) {
+      where.proprietarioId = user.id;
+    } else if (user.role === Role.pre_vendas) {
+        // Pré-vendas só vê clientes no funil de pré-vendas
+        const preSalesFunnel = await prisma.funil.findFirst({ where: { isPreSales: true }});
+        if (preSalesFunnel) {
+            where.funilId = preSalesFunnel.id;
+        } else {
+            // Se não houver funil de pré-vendas, eles não veem ninguém.
+            where.id = '-1'; // Condição impossível
+        }
     }
+    // Admins e Diretores não têm 'where' clause, então veem todos os clientes, incluindo os sem proprietário.
 
     const clients = await prisma.cliente.findMany({
       where,

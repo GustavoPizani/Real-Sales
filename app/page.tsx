@@ -1,6 +1,3 @@
-// app/page.tsx - VERSÃO CORRIGIDA E COMPLETA
-
-import React from 'react' // <--- LINHA ADICIONADA PARA CORRIGIR O ERRO
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { LogIn, Target, BarChart2, Briefcase } from 'lucide-react'
@@ -8,22 +5,19 @@ import { LogIn, Target, BarChart2, Briefcase } from 'lucide-react'
 export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen bg-white">
-      {/* Header Simplificado */}
-      <header className="px-4 lg:px-6 h-16 flex items-center shadow-sm">
+      <header className="px-4 lg:px-6 h-16 flex items-center justify-center shadow-sm">
         <Link href="/" className="flex items-center justify-center">
           <div className="w-8 h-8 bg-primary-custom rounded-lg flex items-center justify-center mr-2">
             <span className="text-white font-bold text-lg">R</span>
           </div>
           <span className="text-xl font-bold text-primary-custom">Real Sales CRM</span>
         </Link>
-        {/* Links removidos da navegação */}
       </header>
 
-      {/* Seção Principal (Hero) - CENTRALIZAÇÃO OTIMIZADA */}
-      <main className="flex-1 flex justify-center items-center">
-        <section className="w-full py-20 md:py-32">
+      <main className="flex justify-center items-center">
+        <section className="py-10 md:py-16">
           <div className="container px-4 md:px-6">
-            <div className="flex flex-col items-center space-y-8 text-center"> {/* Espaçamento maior */}
+            <div className="flex flex-col items-center justify-center space-y-8 text-center">
               <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl text-gray-900">
                 O CRM definitivo para o mercado imobiliário
               </h1>
@@ -36,7 +30,7 @@ export default function LandingPage() {
                     size="lg"
                     className="bg-primary-custom text-white hover:bg-primary-custom/90 shadow-lg px-10 py-7 text-lg" 
                   >
-                    <LogIn className="mr-2 h-5 w-5" />
+                    <LogIn className="h-5 w-5" />
                     Acessar o CRM
                   </Button>
                 </Link>
@@ -46,10 +40,9 @@ export default function LandingPage() {
         </section>
       </main>
 
-      {/* Seção de Funcionalidades (Movida para fora da <main> para melhor estrutura) */}
-      <section className="w-full pb-12 md:pb-24 lg:pb-32 bg-gray-50 border-t">
-        <div className="container px-4 md:px-6">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12 pt-12">
+      <section className="w-full py-12 bg-gray-50 border-t flex-1">
+        <div className="container mx-auto px-4 md:px-6">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12">
             <div className="flex flex-col items-center text-center">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-custom/10">
                 <Target className="h-8 w-8 text-primary-custom" />
@@ -81,10 +74,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer Simplificado */}
-      <footer className="flex py-6 w-full shrink-0 items-center justify-center px-4 md:px-6 border-t bg-white">
+      <footer className="flex py-6 shrink-0 items-center justify-center px-4 md:px-6 border-t bg-white">
         <p className="text-xs text-gray-600">© {new Date().getFullYear()} Real Sales CRM. Todos os direitos reservados.</p>
-        {/* Links de privacidade e termos removidos */}
       </footer>
     </div>
   )

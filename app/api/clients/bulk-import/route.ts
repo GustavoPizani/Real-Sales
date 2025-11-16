@@ -1,154 +1,152 @@
 // c:\Users\gusta\Real-sales\app\api\clients\bulk-import\route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import Papa from 'papaparse';
-import { ClientOverallStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { format, parse } from 'date-fns';
+import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
-  const cookieStore = cookies();
-  const token = cookieStore.get('authToken')?.value;
-
-  const user = await getUserFromToken(token);
-
-  if (!user) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-
+// Função para converter string de data (dd/MM/yyyy) para objeto Date
+const parseDate = (dateString: string | undefined | null): Date | null => {
+  if (!dateString) return null;
   try {
+    return parse(dateString, 'dd/MM/yyyy', new Date());
+  } catch (e) {
+    return null;
+  }
+};
+
+export async function POST(request: NextRequest) {
+  try {
+    const currentUser = await getUserFromToken(request);
+    if (!currentUser) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    } 
+
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file') as File | null;
 
     if (!file) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
     }
 
-    console.log(`[BULK-IMPORT-SCAN] Arquivo recebido: ${file.name}, Tamanho: ${file.size} bytes, Tipo: ${file.type}`);
+    // Ler o arquivo Excel
+    const fileBuffer = await file.arrayBuffer();
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(fileBuffer);
 
-    const fileContent = await file.text();
-
-    if (!fileContent.trim()) {
-      console.log("[BULK-IMPORT-SCAN] Erro: O conteúdo do arquivo está vazio.");
-      return NextResponse.json({ error: 'O arquivo enviado está vazio.' }, { status: 400 });
+    // Processar apenas a primeira aba
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      return NextResponse.json({ error: 'A planilha está vazia ou corrompida.' }, { status: 400 });
     }
 
-    const parseResult = Papa.parse(fileContent, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: header => header.trim() // Garante que espaços em branco nos cabeçalhos sejam removidos
+    const rows: any[] = [];
+    const headerRow = worksheet.getRow(1).values as string[];
+    // Remove o primeiro elemento vazio que o ExcelJS pode adicionar
+    if (headerRow[0] === null || headerRow[0] === undefined) headerRow.shift(); 
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) { // Pula o cabeçalho
+        const rowData: { [key: string]: any } = {};
+        const rowValues = row.values as any[];
+        if (rowValues[0] === null || rowValues[0] === undefined) rowValues.shift();
+
+        headerRow.forEach((header, index) => {
+          // Trata células de data que o ExcelJS já converte para Date
+          if (rowValues[index] instanceof Date) {
+            rowData[header] = format(rowValues[index], 'dd/MM/yyyy');
+          } else {
+            rowData[header] = rowValues[index];
+          }
+        });
+        rows.push(rowData);
+      }
     });
 
-    // <<--- SCAN DOS DADOS PARSEADOS --- >>
-    console.log("[BULK-IMPORT-SCAN] Dados parseados do CSV:", JSON.stringify(parseResult.data, null, 2));
-    console.log("[BULK-IMPORT-SCAN] Erros do PapaParse:", JSON.stringify(parseResult.errors, null, 2));
+    let successCount = 0;
+    const errorDetails: string[] = [];
 
-    const clientsToCreate: any[] = [];
-    const errors: string[] = [];
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'O arquivo CSV está vazio ou mal formatado.' }, { status: 400 });
+    }
 
-    // Busca dados para validação em uma única consulta
-    const emailsFromCsv = parseResult.data.map((c: any) => c.email).filter(Boolean);
-    const corretorEmailsFromCsv = parseResult.data.map((c: any) => c.corretor_email).filter(Boolean);
+    // Buscar dados de validação em massa para otimizar
+    const emailsToFind = rows.map(row => row.proprietarioEmail).filter(Boolean);
+    const funnelsToFind = rows.map(row => row.funilNome).filter(Boolean);
+    const etapasToFind = rows.map(row => row.etapaNome).filter(Boolean);
 
-    const [existingEmails, funnelStages, corretores] = await Promise.all([
-      prisma.cliente.findMany({
-        where: { email: { in: emailsFromCsv } },
-        select: { email: true },
-      }),
-      prisma.funnelStage.findMany({ select: { name: true } }),
-      prisma.usuario.findMany({
-        where: { email: { in: corretorEmailsFromCsv } },
-        select: { id: true, email: true },
-      })
+    const [users, funnels, etapas] = await Promise.all([
+      prisma.usuario.findMany({ where: { email: { in: emailsToFind } }, select: { id: true, email: true } }),
+      prisma.funil.findMany({ where: { nome: { in: funnelsToFind } }, select: { id: true, nome: true } }),
+      prisma.etapaFunil.findMany({ where: { nome: { in: etapasToFind } }, select: { id: true, nome: true, funilId: true } })
     ]);
-    const emailSet = new Set(existingEmails.map(e => e.email));
-    const funnelStageSet = new Set(funnelStages.map(f => f.name));
-    const corretorEmailToIdMap = new Map(corretores.map(c => [c.email, c.id]));
 
-    for (let i = 0; i < parseResult.data.length; i++) {
-      const row: any = parseResult.data[i];
-      const lineNumber = i + 2; // +2 porque o header é a linha 1 e a contagem é base 0
+    // Mapear para busca rápida
+    const userMap = new Map(users.map(u => [u.email, u.id]));
+    const funnelMap = new Map(funnels.map(f => [f.nome, f.id]));
+    const etapaMap = new Map(etapas.map(e => [e.nome, { id: e.id, funilId: e.funilId }]));
 
-      // <<--- SCAN DE CADA LINHA --- >>
-      console.log(`[BULK-IMPORT-SCAN] Processando linha ${lineNumber}:`, JSON.stringify(row));
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const lineNumber = i + 2; // +1 para index e +1 para cabeçalho
 
-      // Validação de campos obrigatórios
       if (!row.nomeCompleto) {
-        errors.push(`Linha ${lineNumber}: A coluna 'nomeCompleto' é obrigatória.`);
+        errorDetails.push(`Linha ${lineNumber}: A coluna 'nomeCompleto' é obrigatória.`);
         continue;
       }
 
-      // Validação de e-mail (se existir)
-      if (row.email) {
-        if (emailSet.has(row.email)) {
-          errors.push(`Linha ${lineNumber}: O email '${row.email}' já existe.`);
-          continue;
+      try {
+        const clientData: Prisma.ClienteCreateInput = {
+          nomeCompleto: row.nomeCompleto,
+          email: row.email || null,
+          telefone: row.telefone ? String(row.telefone) : null,
+          criadoPor: { connect: { id: currentUser.id } },
+          // Adicione outros campos conforme o modelo
+          cpf: row.cpf || null,
+          cnpj: row.cnpj || null,
+          dataNascimento: parseDate(row.dataNascimento),
+          cidade: row.cidade || null,
+          estado: row.estado || null,
+          cep: row.cep || null,
+          origem: row.origem || null,
+        };
+
+        // Validações de funil e etapa (agora obrigatórias)
+        if (!row.funilNome || !row.etapaNome) {
+            throw new Error("As colunas 'funilNome' e 'etapaNome' são obrigatórias.");
         }
-        emailSet.add(row.email); // Adiciona ao set para checar duplicatas no próprio arquivo
-      }
+        const funnelId = funnelMap.get(row.funilNome);
+        const etapaInfo = etapaMap.get(row.etapaNome);
 
-      // Validação do overallStatus
-      const validOverallStatuses = Object.values(ClientOverallStatus);
-      if (row.overallStatus && !validOverallStatuses.includes(row.overallStatus as ClientOverallStatus)) {
-        errors.push(`Linha ${lineNumber}: O status '${row.overallStatus}' é inválido. Use um dos seguintes: ${validOverallStatuses.join(', ')}`);
-        continue;
-      }
-      
-      // Validação do currentFunnelStage
-      if (row.currentFunnelStage && !funnelStageSet.has(row.currentFunnelStage)) {
-          errors.push(`Linha ${lineNumber}: O estágio de funil '${row.currentFunnelStage}' é inválido.`);
-          continue;
-      }
+        if (!funnelId) { throw new Error(`Funil com nome '${row.funilNome}' não encontrado.`); }
+        if (!etapaInfo) { throw new Error(`Etapa com nome '${row.etapaNome}' não encontrada.`); }
+        if (etapaInfo.funilId !== funnelId) { throw new Error(`A etapa '${row.etapaNome}' não pertence ao funil '${row.funilNome}'.`); }
 
-      // Validação e atribuição do corretor
-      let corretorId = user.id; // Padrão: usuário logado
-      if (row.corretor_email) {
-        if (corretorEmailToIdMap.has(row.corretor_email)) {
-          corretorId = corretorEmailToIdMap.get(row.corretor_email)!;
-        } else {
-          errors.push(`Linha ${lineNumber}: O email do corretor '${row.corretor_email}' não foi encontrado no sistema.`);
-          continue;
+        // Proprietário é opcional
+        if (row.proprietarioEmail) {
+            const ownerId = userMap.get(row.proprietarioEmail);
+            if (!ownerId) { throw new Error(`Proprietário com email '${row.proprietarioEmail}' não encontrado.`); }
+            clientData.proprietario = { connect: { id: ownerId } };
         }
+
+        await prisma.cliente.create({ data: clientData });
+        successCount++;
+      } catch (error: any) {
+        errorDetails.push(`Linha ${lineNumber}: ${error.message}`);
       }
-
-      clientsToCreate.push({
-        nomeCompleto: row.nomeCompleto,
-        email: row.email || null,
-        telefone: row.telefone || null,
-        budget: row.budget ? parseFloat(row.budget) : null,
-        preferences: row.preferences || null,
-        currentFunnelStage: row.currentFunnelStage || 'Contato',
-        overallStatus: (row.overallStatus as ClientOverallStatus) || ClientOverallStatus.Ativo,
-        corretorId: corretorId,
-      });
-    }
-
-    if (errors.length > 0 && clientsToCreate.length === 0) {
-        // Se houver erros e nenhum cliente válido, retorna apenas os erros.
-        return NextResponse.json({
-            successCount: 0,
-            errorCount: errors.length,
-            errors: errors,
-        }, { status: 400 });
-    }
-
-    if (clientsToCreate.length > 0) {
-      await prisma.cliente.createMany({
-        data: clientsToCreate,
-        skipDuplicates: true, // Segurança extra para o caso de e-mails nulos
-      });
     }
 
     return NextResponse.json({
-      successCount: clientsToCreate.length,
-      errorCount: errors.length,
-      errors: errors,
+      successCount: successCount,
+      errorCount: errorDetails.length,
+      errors: errorDetails,
     });
 
   } catch (error: any) {
     console.error("Erro na importação em massa:", error);
-    return NextResponse.json({ error: 'Erro interno do servidor ao processar o arquivo.' }, { status: 500 });
+    return NextResponse.json({ error: 'Erro interno do servidor ao processar o arquivo.', details: error.message }, { status: 500 });
   }
 }

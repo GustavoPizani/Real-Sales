@@ -37,7 +37,7 @@ model Usuario {
   superiorId       String?
   superior         Usuario?         @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
   subordinados     Usuario[]        @relation("Hierarquia")
-  clientes         Cliente[]
+  clientes         Cliente[]        @relation("ProprietarioCliente")
   pushSubscription PushSubscription?
   tarefas          Tarefa[]
   roletas          RoletaCorretor[]
@@ -49,14 +49,15 @@ model Usuario {
 
   // ✅ --- RELAÇÃO DE ACESSO AO FUNIL ---
   funnelAccess UserFunnelAccess[]
-  
- // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO DE IMÓVEIS ---
+
+  // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO DE IMÓVEIS ---
   createdImoveis Imovel[] @relation("CreatedImoveis")
   updatedImoveis Imovel[] @relation("UpdatedImoveis")
 
   // ✅ --- RELAÇÕES DO BOLSÃO DE LEADS ---
-  leadsQualificadosParaMim Cliente[] @relation("QualificadoPara")
-  bolsoesPermitidos       BolsaoUsuario[]
+  leadsQualificadosParaMim Cliente[]       @relation("QualificadoPara")
+  bolsoesPermitidos        BolsaoUsuario[]
+  criadoPor                Cliente[]       @relation("CriadoPorCliente")
 }
 
 model Cliente {
@@ -64,30 +65,36 @@ model Cliente {
   nomeCompleto        String
   email               String?             @unique
   telefone            String?
+  cpf                 String?
+  cnpj                String?
+  dataNascimento      DateTime?
+  cidade              String?
+  estado              String?
+  cep                 String?
+  origem              String?
   facebook_lead_id    String?             @unique
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  corretorId          String
-  corretor            Usuario             @relation(fields: [corretorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  proprietarioId      String?
+  proprietario        Usuario?            @relation("ProprietarioCliente", fields: [proprietarioId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   imovelDeInteresseId String?
   imovelDeInteresse   Imovel?             @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
   overallStatus       ClientOverallStatus @default(Ativo)
+  criadoPorId         String
+  criadoPor           Usuario             @relation("CriadoPorCliente", fields: [criadoPorId], references: [id])
 
   // ✅ RELACIONAMENTO COM DOCUMENTOS ADICIONADO
-  documentos          DocumentoCliente[]
-  tags                Tag[]               @relation("ClienteTags")
-  tarefas             Tarefa[]
-  detalhesDeVenda     ClientWonDetails?
-  notas               Nota[]
-
-  // ✅ --- RELACIONAMENTO COM OFERTA ATIVA ---
-  activeOfferClients ActiveOfferClient[]
+  documentos    DocumentoCliente[]
+  tags            Tag[]              @relation("ClienteTags")
+  tarefas         Tarefa[]
+  detalhesDeVenda ClientWonDetails?
+  notas           Nota[]
 
   // ✅ --- CAMPOS DE FUNIL ATUALIZADOS ---
-  funnelId    String
-  funnel      Funnel      @relation(fields: [funnelId], references: [id])
+  funilId       String
+  funnel        Funnel      @relation(fields: [funnelId], references: [id])
   funnelStageId String
-  funnelStage FunnelStage @relation(fields: [funnelStageId], references: [id])
+  funnelStage   FunnelStage @relation(fields: [funnelStageId], references: [id])
 
   // ✅ --- CAMPOS PARA QUALIFICAÇÃO E BOLSÃO ---
   statusDeQualificacao StatusQualificacao @default(Aguardando)
@@ -104,7 +111,7 @@ model DocumentoCliente {
   createdAt DateTime @default(now())
 
   clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 }
 
 model Tag {
@@ -116,27 +123,27 @@ model Tag {
 }
 
 model Imovel {
-  id                   String       @id @default(uuid())
+  id                   String            @id @default(uuid())
   titulo               String
-  features             String[]     @default([])
+  features             String[]          @default([])
   endereco             String?
   preco                Float?
   tipo                 String?
-  status               StatusImovel @default(Disponivel)
+  status               StatusImovel      @default(Disponivel)
   quartos              Int?
   banheiros            Int?
   area                 Int?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
   clientesComInteresse Cliente[]
   tipologias           TipologiaImovel[]
   imagens              ImagemImovel[]
 
   // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO ---
-  creatorId            String?
-  creator              Usuario?          @relation("CreatedImoveis", fields: [creatorId], references: [id], onDelete: SetNull)
-  updaterId            String?
-  updater              Usuario?          @relation("UpdatedImoveis", fields: [updaterId], references: [id], onDelete: SetNull)
+  creatorId String?
+  creator   Usuario? @relation("CreatedImoveis", fields: [creatorId], references: [id], onDelete: SetNull)
+  updaterId String?
+  updater   Usuario? @relation("UpdatedImoveis", fields: [updaterId], references: [id], onDelete: SetNull)
 }
 
 model TipologiaImovel {
@@ -178,20 +185,20 @@ model Nota {
 }
 
 model Tarefa {
-  id          String   @id @default(uuid())
-  titulo      String
-  descricao   String?
-  status      String   @default("pendente")
-  dataHora    DateTime
-  concluida   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  clienteId   String
-  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  usuarioId   String
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  tipo        TaskType
-  prioridade  Priority
+  id         String   @id @default(uuid())
+  titulo     String
+  descricao  String?
+  status     String   @default("pendente")
+  dataHora   DateTime
+  concluida  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  clienteId  String
+  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo       TaskType
+  prioridade Priority
 }
 
 model PushSubscription {
@@ -218,9 +225,10 @@ model Roleta {
 
 model RoletaCorretor {
   roletaId   String
-  roleta     Roleta   @relation(fields: [roletaId], references: [id], onDelete: Cascade)
+  roleta     Roleta  @relation(fields: [roletaId], references: [id], onDelete: Cascade)
   corretorId String
-  corretor   Usuario  @relation(fields: [corretorId], references: [id], onDelete: Cascade)
+  corretor   Usuario @relation(fields: [corretorId], references: [id], onDelete: Cascade)
+
   @@id([roletaId, corretorId])
 }
 
@@ -248,27 +256,27 @@ model ClientWonDetails {
 // --- NOVOS MODELOS PARA OFERTA ATIVA ---
 
 model ActiveOffer {
-  id        String              @id @default(uuid())
-  name      String
-  status    ActiveOfferStatus   @default(Pendente)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  id          String              @id @default(cuid())
+  name        String
+  createdAt   DateTime            @default(now())
+  createdBy   Usuario             @relation("CreatedOffers", fields: [createdById], references: [id])
   createdById String
-  createdBy   Usuario           @relation("CreatedOffers", fields: [createdById], references: [id])
-  clients   ActiveOfferClient[]
+  clients     ActiveOfferClient[]
 }
 
 model ActiveOfferClient {
-  id            String                 @id @default(uuid())
-  status        ActiveOfferClientStatus @default(Pendente)
-  notes         String?
-  contactedAt   DateTime?
-  activeOfferId String
-  activeOffer   ActiveOffer            @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
-  clienteId     String
-  cliente       Cliente                @relation(fields: [clienteId], references: [id], onDelete:Cascade)
-  assignedToId  String
-  assignedTo    Usuario                @relation("AssignedCalls", fields: [assignedToId], references: [id])
+  id                String    @id @default(cuid())
+  offer             ActiveOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerId           String
+  assignedTo        Usuario   @relation("AssignedCalls", fields: [assignedToId], references: [id], onDelete: Cascade)
+  assignedToId      String
+  contactName       String
+  contactEmail      String?
+  contactPhone      String?
+  status            String    @default("Pendente") // Pendente, Contatado, Reaberto, Descartado
+  originalClienteId String? // Guarda o ID se o contato veio da base de clientes
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 // --- NOVOS MODELOS PARA MÚLTIPLOS FUNIS ---
@@ -283,18 +291,17 @@ model Funnel {
   stages         FunnelStage[]
   userAccess     UserFunnelAccess[]
   clients        Cliente[]
-  roletas        Roleta[]
 }
 
 model FunnelStage {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   order     Int
   color     String
   funnelId  String
-  funnel    Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  funnel    Funnel    @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   clients   Cliente[]
 
   @@unique([funnelId, name])
@@ -311,56 +318,56 @@ model UserFunnelAccess {
 }
 
 model FrequenciaConfig {
-  id        String   @id @default(cuid())
-  nome      String // Ex: "Stand de Vendas - Lançamento X"
-  latitude  Float
-  longitude Float
-  raio      Int // Raio em metros
-  horarios  Json // Ex: [{ inicio: "10:00", fim: "12:00" }, { inicio: "14:00", fim: "16:00" }]
-  diasDaSemana Int[]    @default([]) // ✅ Adicionado para salvar os dias da semana (0-6)
-  ativo     Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  registros FrequenciaRegistro[] // ✅ Adicionado para completar a relação
+  id           String               @id @default(cuid())
+  nome         String // Ex: "Stand de Vendas - Lançamento X"
+  latitude     Float
+  longitude    Float
+  raio         Int // Raio em metros
+  horarios     Json // Ex: [{ inicio: "10:00", fim: "12:00" }, { inicio: "14:00", fim: "16:00" }]
+  diasDaSemana Int[]                @default([]) // ✅ Adicionado para salvar os dias da semana (0-6)
+  ativo        Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  registros    FrequenciaRegistro[] // ✅ Adicionado para completar a relação
 }
-
 
 // --- NOVOS MODELOS PARA O BOLSÃO DE LEADS ---
 
 model ConfiguracaoBolsao {
-  id                            String   @id @default(cuid())
-  raioAtribuicaoMetros          Int      @default(5000)
+  id                               String   @id @default(cuid())
+  raioAtribuicaoMetros             Int      @default(5000)
   tempoAteBolsaoPrioritarioMinutos Int      @default(60)
-  tempoAteBolsaoGeralMinutos    Int      @default(120)
-  updatedAt                     DateTime @updatedAt
+  tempoAteBolsaoGeralMinutos       Int      @default(120)
+  updatedAt                        DateTime @updatedAt
 }
 
 model Bolsao {
-  id        String          @id @default(cuid())
-  nome      String          @unique // "Prioritário" ou "Geral"
-  ativo     Boolean         @default(true)
-  usuarios  BolsaoUsuario[]
+  id       String          @id @default(cuid())
+  nome     String          @unique // "Prioritário" ou "Geral"
+  ativo    Boolean         @default(true)
+  usuarios BolsaoUsuario[]
 }
 
 model BolsaoUsuario {
-  bolsaoId String
-  bolsao   Bolsao  @relation(fields: [bolsaoId], references: [id], onDelete: Cascade)
+  bolsaoId  String
+  bolsao    Bolsao  @relation(fields: [bolsaoId], references: [id], onDelete: Cascade)
   usuarioId String
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
   @@id([bolsaoId, usuarioId])
 }
 
 model FrequenciaRegistro {
-  id           String   @id @default(cuid())
+  id           String            @id @default(cuid())
   userId       String
-  usuario      Usuario  @relation(fields: [userId], references: [id])
+  usuario      Usuario           @relation(fields: [userId], references: [id])
   latitude     Float
   longitude    Float
   distancia    Int // Distância calculada do ponto central
   dentroDoRaio Boolean
   configId     String? // ✅ Adicionado para saber a qual config o registro pertence
   config       FrequenciaConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
+  createdAt    DateTime          @default(now())
 }
 
 // --- ENUMS ---

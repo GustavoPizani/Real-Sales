@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromToken, verifyPassword, hashPassword } from '@/lib/auth';
+import { getUserFromToken, verifyPassword, hashPassword, UserPayload } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) {
+    // Extrai o token do cookie httpOnly
+        const token = request.cookies.get('authToken')?.value;
+        const currentUser: UserPayload | null = await getUserFromToken(token);
+
+        if (!currentUser || !currentUser.id) {
+          
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
@@ -20,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userFromDb = await prisma.usuario.findUnique({
-      where: { id: user.id },
+      where: { id: currentUser.id },
     });
 
     if (!userFromDb || !userFromDb.passwordHash) {
@@ -36,7 +40,7 @@ export async function POST(request: NextRequest) {
     const newPasswordHash = await hashPassword(newPassword);
 
     await prisma.usuario.update({
-      where: { id: user.id },
+      where: { id: currentUser.id },
       data: { passwordHash: newPasswordHash },
     });
 

@@ -58,11 +58,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
         const dataToUpdate: Prisma.UsuarioUpdateInput = {};
 
-        if (name) dataToUpdate.nome = name;
-        if (email) dataToUpdate.email = email;
+        // Se o usuário está editando a si mesmo, ele só pode mudar o nome.
+        if (isEditingSelf) {
+            if (name) dataToUpdate.nome = name;
+            if (email && email !== currentUser.email) {
+                return NextResponse.json({ error: "Você não pode alterar seu próprio e-mail." }, { status: 403 });
+            }
+        }
 
-        // Apenas admins podem mudar o cargo e o superior
+        // Apenas admins podem mudar dados de outros usuários, cargo e superior.
         if (isAdmin) {
+            if (name) dataToUpdate.nome = name;
+            if (email) dataToUpdate.email = email;
             if (role) dataToUpdate.role = role;
             if (superiorId !== undefined) { // Permite definir superiorId como null
                 dataToUpdate.superiorId = superiorId;

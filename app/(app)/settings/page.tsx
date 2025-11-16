@@ -1,7 +1,7 @@
 // c:\Users\gusta\Real-sales\app\(app)\settings\page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback, ReactNode } from "react";
+import React, { useState, useEffect, useCallback, ReactNode, forwardRef } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,12 +36,10 @@ function RoleManagementCard({ settings, onUpdate }: { settings: RoleSetting[], o
 
     const handleToggleRole = async (roleName: Role, isActive: boolean) => {
         try {
-            const token = localStorage.getItem('authToken');
             const response = await fetch('/api/role-settings', {
                 method: 'POST',
                 headers: { 
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ roleName, isActive }),
             });
@@ -96,14 +94,12 @@ function ProfileTab() {
     e.preventDefault();
     if (!user) return;
     setIsLoading(true);
-    const token = localStorage.getItem('authToken');
 
     try {
       const response = await fetch(`/api/users/${user.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ name: formData.name, email: formData.email }),
       });
@@ -143,7 +139,7 @@ function ProfileTab() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} />
+            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} disabled title="O e-mail não pode ser alterado."/>
           </div>
           <Button type="submit" disabled={isLoading}>
             {isLoading ? 'Salvando...' : 'Salvar Alterações'}
@@ -172,11 +168,9 @@ function TeamManagementTab() {
     const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.corretor, superiorId: null });
 
     const fetchHierarchyData = useCallback(async () => {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
         try {
             const directorsRes = await fetch('/api/users/hierarchy?role=diretor', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Content-Type': 'application/json' }
             });
             if (directorsRes.ok) {
                 const directorsData = await directorsRes.json();
@@ -190,11 +184,9 @@ function TeamManagementTab() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('authToken');
-            if (!token) return;
-            const headers = { 'Authorization': `Bearer ${token}` };
+            const headers = { 'Content-Type': 'application/json' };
             const [usersRes, rolesRes] = await Promise.all([
-                fetch('/api/users', { headers }),
+                fetch('/api/users'),
                 fetch('/api/role-settings', { headers })
             ]);
 
@@ -221,9 +213,8 @@ function TeamManagementTab() {
     useEffect(() => {
         const fetchManagers = async () => {
             if (userForm.role === Role.corretor && selectedDirectorId) {
-                const token = localStorage.getItem('authToken');
                 const res = await fetch(`/api/users/hierarchy?role=gerente&superiorId=${selectedDirectorId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 if (res.ok) {
                     const managersData = await res.json();
@@ -261,9 +252,8 @@ function TeamManagementTab() {
 
     const handleDelete = async (userId: string) => {
         if (!window.confirm('Tem a certeza que deseja excluir este utilizador? Esta ação é irreversível.')) return;
-        const token = localStorage.getItem('authToken');
         try {
-            const response = await fetch(`/api/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Falha ao excluir utilizador.');
@@ -285,7 +275,6 @@ function TeamManagementTab() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const token = localStorage.getItem('authToken');
         const method = editingUser ? 'PATCH' : 'POST';
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
         
@@ -315,7 +304,7 @@ function TeamManagementTab() {
         try {
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
             if (!response.ok) {
@@ -515,6 +504,27 @@ function TeamManagementTab() {
     );
 }
 
+// Componente de Input de Senha com botão de visualização
+const PasswordInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const togglePasswordVisibility = () => setShowPassword(!showPassword);
+
+  return (
+    <div className="relative">
+      <Input
+        type={showPassword ? "text" : "password"}
+        {...props}
+        ref={ref}
+        className="pr-10"
+      />
+      <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-full px-3" onClick={togglePasswordVisibility}>
+        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </Button>
+    </div>
+  );
+});
+PasswordInput.displayName = 'PasswordInput';
+
 function SecurityTab() {
   const { toast } = useToast();
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -536,12 +546,11 @@ function SecurityTab() {
     }
 
     setIsLoading(true);
-    const token = localStorage.getItem('authToken');
 
     try {
       const response = await fetch('/api/users/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword }),
       });
 
@@ -569,15 +578,15 @@ function SecurityTab() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="currentPassword">Senha Atual</Label>
-            <Input id="currentPassword" name="currentPassword" type="password" value={passwords.currentPassword} onChange={handleChange} required/>
+            <PasswordInput id="currentPassword" name="currentPassword" value={passwords.currentPassword} onChange={handleChange} required/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="newPassword">Nova Senha</Label>
-            <Input id="newPassword" name="newPassword" type="password" value={passwords.newPassword} onChange={handleChange} required/>
+            <PasswordInput id="newPassword" name="newPassword" value={passwords.newPassword} onChange={handleChange} required/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
-            <Input id="confirmPassword" name="confirmPassword" type="password" value={passwords.confirmPassword} onChange={handleChange} required/>
+            <PasswordInput id="confirmPassword" name="confirmPassword" value={passwords.confirmPassword} onChange={handleChange} required/>
           </div>
           <Button type="submit" disabled={isLoading}>{isLoading ? 'Salvando...' : 'Alterar Senha'}</Button>
         </form>
@@ -649,7 +658,7 @@ function NotificationsTab() {
         await fetch('/api/notifications/subscribe', {
           method: 'POST',
           body: JSON.stringify(newSubscription),
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+          headers: { 'Content-Type': 'application/json' },
         });
 
         setSubscription(newSubscription);
@@ -664,7 +673,7 @@ function NotificationsTab() {
       // Lógica para CANCELAR INSCRIÇÃO
       try {
         await subscription.unsubscribe();
-        await fetch('/api/notifications/subscribe', { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
+        await fetch('/api/notifications/subscribe', { method: 'DELETE' });
         setSubscription(null);
         setIsSubscribed(false);
         toast({ title: 'Sucesso!', description: 'Inscrição para notificações removida.' });
@@ -733,7 +742,7 @@ function DataImportTab() {
     try {
       const response = await fetch('/api/clients/bulk-import', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+        // O token é enviado via cookie httpOnly, não precisa do header Authorization
         body: formData,
       });
 
@@ -770,10 +779,10 @@ function DataImportTab() {
           <p className="text-sm text-muted-foreground">
             Use este modelo para garantir que os dados estão no formato correto. A coluna 'nomeCompleto' é obrigatória.
           </p>
-          <a href="/api/clients/template" download="modelo_clientes.csv">
+          <a href="/api/clients/template" download="modelo_clientes.xlsx">
             <Button variant="outline">
               <Download className="mr-2 h-4 w-4" />
-              Gerar Planilha Modelo (.csv)
+              Gerar Planilha Modelo (.xlsx)
             </Button>
           </a>
         </div>
@@ -781,10 +790,10 @@ function DataImportTab() {
         <div className="p-4 border rounded-lg space-y-3">
           <h3 className="font-semibold">Passo 2: Faça o upload da sua planilha</h3>
           <p className="text-sm text-muted-foreground">
-            Selecione o arquivo .csv preenchido para iniciar a importação.
+            Selecione o arquivo .xlsx preenchido para iniciar a importação.
           </p>
           <div className="flex items-center gap-2">
-            <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
+            <Input id="csv-upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={handleFileChange} className="hidden" />
             <Label
               htmlFor="csv-upload"
               className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 cursor-pointer"
@@ -793,7 +802,7 @@ function DataImportTab() {
               {file ? (
                 <span className="truncate max-w-[200px]">{file.name}</span>
               ) : (
-                "Escolher Planilha (.csv)"
+                "Escolher Planilha (.xlsx)"
               )}
             </Label>
             
@@ -857,10 +866,7 @@ function LostReasonsTab() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/lost-reasons', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const response = await fetch('/api/lost-reasons');
       if (!response.ok) throw new Error('Falha ao buscar motivos.');
       const data = await response.json();
       setReasons(data.reasons || []);
@@ -888,14 +894,13 @@ function LostReasonsTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('authToken');
     const method = editingReason ? 'PUT' : 'POST';
     const url = editingReason ? `/api/lost-reasons/${editingReason.id}` : '/api/lost-reasons';
 
     try {
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: reasonForm.reason }),
       });
       if (!response.ok) {
@@ -912,12 +917,8 @@ function LostReasonsTab() {
 
   const handleDelete = async (reasonId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este motivo?')) return;
-    const token = localStorage.getItem('authToken');
     try {
-      const response = await fetch(`/api/lost-reasons/${reasonId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const response = await fetch(`/api/lost-reasons/${reasonId}`, { method: 'DELETE' });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Falha ao excluir motivo.');
