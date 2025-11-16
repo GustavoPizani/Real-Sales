@@ -92,7 +92,7 @@ model Cliente {
 
   // ✅ --- CAMPOS DE FUNIL ATUALIZADOS ---
   funilId       String
-  funnel        Funnel      @relation(fields: [funnelId], references: [id])
+  funnel        Funnel      @relation(fields: [funilId], references: [id])
   funnelStageId String
   funnelStage   FunnelStage @relation(fields: [funnelStageId], references: [id])
 
@@ -291,6 +291,7 @@ model Funnel {
   stages         FunnelStage[]
   userAccess     UserFunnelAccess[]
   clients        Cliente[]
+  roletas        Roleta[]
 }
 
 model FunnelStage {
