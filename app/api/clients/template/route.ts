@@ -2,17 +2,25 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import ExcelJS from 'exceljs';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
     try {
         // 1. Buscar dados do banco
         const [users, funnels] = await Promise.all([
+            // Usuario mantido (está em PT no schema)
             prisma.usuario.findMany({
                 select: { nome: true, email: true, role: true },
                 orderBy: { nome: 'asc' }
             }),
-            prisma.funil.findMany({
-                include: { etapas: { orderBy: { ordem: 'asc' } } },
-                orderBy: { nome: 'asc' }
+            // Funnel ajustado para EN (está em EN no schema)
+            prisma.funnel.findMany({
+                include: { 
+                    stages: { // Era 'etapas', schema é 'stages'
+                        orderBy: { order: 'asc' } 
+                    } 
+                },
+                orderBy: { name: 'asc' } // Era 'nome', schema é 'name'
             })
         ]);
 
@@ -54,7 +62,7 @@ export async function GET(request: NextRequest) {
             ref: 'E1',
             headerRow: true,
             columns: [{ name: 'Nome do Funil (para preencher em funilNome)' }, { name: 'Nome da Etapa (para preencher em etapaNome)' }],
-            rows: funnels.flatMap(f => f.etapas.map(e => [f.nome, e.nome])),
+            rows: funnels.flatMap(f => f.stages.map((e: any) => [f.name, e.name])),
         });
         dataSheet.columns.forEach(column => { column.width = 40; });
 

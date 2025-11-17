@@ -13,7 +13,7 @@ async function getClientWithDetails(id: string) {
   return await prisma.cliente.findUnique({
     where: { id },
     include: {
-      corretor: {
+      proprietario: {
         select: {
           id: true,
           nome: true,
@@ -97,7 +97,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Busca o cliente atual para obter o corretor antigo antes da atualização
     const currentClient = await prisma.cliente.findUnique({
       where: { id },
-      include: { corretor: { select: { nome: true } } },
+      include: { proprietario: { select: { nome: true } } },
     });
     if (!currentClient) return NextResponse.json({ error: 'Cliente não encontrado para transferência' }, { status: 404 });
 
@@ -143,7 +143,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         await prisma.nota.create({
           data: {
             clienteId: id,
-            content: `Lead transferido de ${currentClient.corretor.nome} para ${newCorretor.nome}.`,
+            content: `Lead transferido de ${currentClient.proprietario?.nome || 'desconhecido'} para ${newCorretor.nome}.`,
             createdBy: user.name, // Nome do usuário que realizou a ação
           },
         });
