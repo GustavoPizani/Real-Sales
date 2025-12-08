@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    let whereClause: any = {};
+    let whereClause: Prisma.ActiveOfferWhereInput = {
+      account: { id: user.isSuperAdmin ? undefined : user.accountId }
+    };
 
     if (user.role === Role.corretor) {
       // Corretores veem apenas as campanhas atribuídas a eles
@@ -115,6 +117,7 @@ export async function POST(request: NextRequest) {
             data: {
                 name,
                 createdById: user.id,
+                accountId: user.accountId,
                 clients: { createMany: { data: contacts } },
             },
         });
@@ -128,7 +131,8 @@ export async function POST(request: NextRequest) {
         }
 
         let clientWhereClause: Prisma.ClienteWhereInput = {
-            overallStatus: ClientOverallStatus.Perdido
+            overallStatus: ClientOverallStatus.Perdido,
+            accountId: user.isSuperAdmin ? undefined : user.accountId
         };
 
         if (source === 'meus_clientes') {
@@ -165,6 +169,7 @@ export async function POST(request: NextRequest) {
             data: {
                 name,
                 createdById: user.id,
+                accountId: user.accountId,
                 clients: { createMany: { data: contactsToCreate } },
             },
         });

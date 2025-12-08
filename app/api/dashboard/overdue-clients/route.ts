@@ -27,7 +27,7 @@ export async function GET() {
     // cuja última atualização foi há mais de 7 dias.
     const overdueClients = await prisma.cliente.findMany({
       where: {
-        corretorId: user.id, // Filtra pelo usuário logado
+        proprietarioId: user.id, // Filtra pelo usuário logado
         updatedAt: {
           lt: sevenDaysAgo, // 'lt' significa "menor que" (less than)
         },

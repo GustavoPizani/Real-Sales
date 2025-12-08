@@ -16,7 +16,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const where: Prisma.ClienteWhereInput = {};
+    const where: Prisma.ClienteWhereInput = {
+      // Filtro de Tenant: Garante que a query só retorne dados da conta do usuário
+      accountId: user.isSuperAdmin ? undefined : user.accountId,
+    };
+
+    // Lógica de permissão por cargo (mantida)
     if (user.role === Role.gerente) {
       const subordinateIds = (await prisma.usuario.findMany({ 
         where: { superiorId: user.id },
@@ -35,12 +40,12 @@ export async function GET(request: NextRequest) {
             where.id = '-1'; // Condição impossível
         }
     }
-    // Admins e Diretores não têm 'where' clause, então veem todos os clientes, incluindo os sem proprietário.
+    // Super Admins e outros cargos sem filtro específico veem todos os clientes DENTRO DO SEU TENANT.
 
     const clients = await prisma.cliente.findMany({
       where,
       include: { 
-        corretor: { select: { nome: true, id: true } },
+        proprietario: { select: { nome: true, id: true } },
         // ✅ Adicionado para incluir as tags na listagem de clientes
         tags: {
           select: { id: true, name: true, color: true },
@@ -59,7 +64,7 @@ export async function GET(request: NextRequest) {
 // Schema de validação para a criação de um novo cliente
 const createClientSchema = z.object({
     nomeCompleto: z.string().min(1, { message: "Nome completo é obrigatório." }),
-    corretorId: z.string().uuid({ message: "ID do corretor inválido." }),
+    proprietarioId: z.string().uuid({ message: "ID do proprietário inválido." }),
     funnelId: z.string().uuid({ message: "ID do funil é obrigatório." }),
     funnelStageId: z.string().uuid({ message: "ID da etapa do funil é obrigatório." }),
     email: z.string().email({ message: "Email inválido." }).optional().or(z.literal('')),
@@ -84,7 +89,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, { status: 400 });
         }
         
-        const { nomeCompleto, email, telefone, corretorId, funnelId, funnelStageId } = validation.data;
+        const { nomeCompleto, email, telefone, proprietarioId, funnelId, funnelStageId } = validation.data;
 
         const newClient = await prisma.cliente.create({
             data: {
@@ -93,7 +98,9 @@ export async function POST(request: NextRequest) {
                 telefone,
                 funnelId,
                 funnelStageId,
-                corretorId, // Usa o corretorId validado do corpo da requisição
+                proprietarioId,
+                criadoPorId: user.id,
+                accountId: user.accountId,
             }
         });
 

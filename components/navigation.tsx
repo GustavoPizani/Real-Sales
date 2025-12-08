@@ -11,15 +11,15 @@ import { useState } from 'react';
 import { Role } from '@prisma/client';
 
 const navigationLinks = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Imóveis', href: '/properties', icon: Building, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Imóveis', href: '/properties', icon: Building, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
   //{ name: "Integrações", href: "/integrations", icon: Megaphone, roles: ['marketing_adm'] },
-  { name: 'Configurações', href: '/settings', icon: Settings, roles: ['marketing_adm', 'diretor', 'gerente', 'corretor'] },
+  { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente'] },
 ];
 
 interface NavigationProps {
@@ -35,9 +35,14 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
 
   const isExpanded = isDesktopExpanded || isMobileOpen;
 
-  const filteredNavigation = navigationLinks.filter(item => 
-    user?.role && item.roles.includes(user.role)
-  );
+  const filteredNavigation = navigationLinks.filter((link) => {
+    // 1. Se for Super Admin, vê tudo irrestritamente
+    if (user?.isSuperAdmin) return true;
+  
+    // 2. Lógica padrão para outros usuários
+    if (!user?.role || !link.roles) return false;
+    return link.roles.includes(user.role);
+  });
 
   const getRoleLabel = (role: Role | string) => {
     const labels: Record<Role | string, string> = {
@@ -45,6 +50,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
       [Role.diretor]: 'Diretor',
       [Role.gerente]: 'Gerente',
       [Role.corretor]: 'Corretor',
+      [Role.ADMIN]: 'Super Admin',
     };
     return labels[role] || role;
   };

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,14 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2 } from "lucide-react";
+import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2, Layout } from "lucide-react";
 import { type Imovel, StatusImovel, type TipologiaImovel } from "@/lib/types"; // CORREÇÃO: Importado StatusImovel
 import { useToast } from "@/components/ui/use-toast";
+import PropertiesEmptyState from './empty-state'; // Importação estática
 
-const PropertiesEmptyState = dynamic(() =>
-  import('./empty-state'),
-  { loading: () => <Loader2 className="h-8 w-8 mx-auto my-12 animate-spin text-gray-300" /> }
-);
 
 export default function PropertiesPage() {
   const router = useRouter();
@@ -99,10 +96,20 @@ export default function PropertiesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
           <p className="text-gray-600">Gerencie todos os empreendimentos e propriedades</p>
         </div>
-        <Button onClick={() => router.push('/properties/new')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Imóvel
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* BOTÃO NOVO */}
+          <Link href="/site-builder">
+            <Button variant="outline" className="flex items-center gap-2 border-gray-300 hover:bg-gray-50">
+              <Layout className="h-4 w-4" />
+              Editor de Site
+            </Button>
+          </Link>
+          
+          {/* Botão Existente */}
+          <Link href="/properties/new">
+            <Button><Plus className="h-4 w-4 mr-2" />Novo Imóvel</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>

@@ -9,11 +9,15 @@ export interface UserPayload {
   name: string;
   email: string;
   role: string;
+  accountId: string;
+  isSuperAdmin: boolean;
 }
 
 // Interface para o payload decodificado do JWT
 interface JwtPayload {
   userId: string;
+  accountId: string;
+  isSuperAdmin: boolean;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -33,6 +37,8 @@ export function generateToken(user: UserPayload): string {
       userId: user.id,
       email: user.email,
       role: user.role,
+      accountId: user.accountId,
+      isSuperAdmin: user.isSuperAdmin,
     },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
@@ -52,8 +58,8 @@ export async function verifyToken(token: string | undefined): Promise<UserPayloa
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload;
     
     const userFromDb = await prisma.usuario.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, nome: true, email: true, role: true },
+      where: { id: decoded.userId, accountId: decoded.accountId },
+      select: { id: true, nome: true, email: true, role: true, accountId: true, isSuperAdmin: true },
     });
 
     if (!userFromDb) {
@@ -66,7 +72,9 @@ export async function verifyToken(token: string | undefined): Promise<UserPayloa
         id: userFromDb.id,
         name: userFromDb.nome,
         email: userFromDb.email,
-        role: userFromDb.role
+        role: userFromDb.role,
+        accountId: userFromDb.accountId,
+        isSuperAdmin: userFromDb.isSuperAdmin,
     };
 
     return user;
@@ -99,6 +107,8 @@ export async function authenticateUser(email: string, password: string): Promise
       name: userFromDb.nome,
       email: userFromDb.email,
       role: userFromDb.role,
+      accountId: userFromDb.accountId,
+      isSuperAdmin: userFromDb.isSuperAdmin,
     };
   } catch (error) {
     console.error('Authentication error:', error);
@@ -106,9 +116,7 @@ export async function authenticateUser(email: string, password: string): Promise
   }
 }
 
-export async function getUserFromToken(token: string | undefined): Promise<UserPayload | null> {
-  // Esta função agora recebe o token diretamente.
-  // A lógica de extrair o token do cabeçalho ou cookie foi movida
-  // para as rotas da API, que é o local correto.
+export async function getUserFromToken(token: string | undefined): Promise<(UserPayload & { accountId: string }) | null> {
+  // A lógica de extrair o token foi movida para as rotas da API.
   return verifyToken(token);
 }

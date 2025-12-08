@@ -16,6 +16,7 @@ enum Role {
   diretor
   gerente
   corretor
+  ADMIN
   pre_vendas // Novo perfil
 }
 
@@ -58,6 +59,15 @@ model Usuario {
   leadsQualificadosParaMim Cliente[]       @relation("QualificadoPara")
   bolsoesPermitidos        BolsaoUsuario[]
   criadoPor                Cliente[]       @relation("CriadoPorCliente")
+
+  // Relação com os sites que o usuário possui
+  sites Site[]
+
+  // NOVOS CAMPOS PARA MULTI-TENANT
+  isSuperAdmin Boolean @default(false) // Se true, ignora filtros de tenant
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model Cliente {
@@ -81,7 +91,7 @@ model Cliente {
   imovelDeInteresse   Imovel?             @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
   overallStatus       ClientOverallStatus @default(Ativo)
   criadoPorId         String
-  criadoPor           Usuario             @relation("CriadoPorCliente", fields: [criadoPorId], references: [id])
+  criadoPor           Usuario             @relation("CriadoPorCliente", fields: [criadoPorId], references: [id], onDelete: Cascade)
 
   // ✅ RELACIONAMENTO COM DOCUMENTOS ADICIONADO
   documentos    DocumentoCliente[]
@@ -92,7 +102,7 @@ model Cliente {
 
   // ✅ --- CAMPOS DE FUNIL ATUALIZADOS ---
   funilId       String
-  funnel        Funnel      @relation(fields: [funilId], references: [id])
+  funnel        Funnel      @relation(fields: [funilId], references: [id], onDelete: Cascade)
   funnelStageId String
   funnelStage   FunnelStage @relation(fields: [funnelStageId], references: [id])
 
@@ -101,6 +111,13 @@ model Cliente {
   qualificadoParaId    String?
   qualificadoPara      Usuario?           @relation("QualificadoPara", fields: [qualificadoParaId], references: [id], onDelete: SetNull)
   entrouNoBolsaoEm     DateTime?
+  
+  siteOriginId String?
+  siteOrigin   Site?    @relation("SiteOrigin", fields: [siteOriginId], references: [id])
+  originUrl    String? // Para saber qual página converteu o lead
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 // ✅ NOVO MODELO PARA DOCUMENTOS
@@ -120,6 +137,9 @@ model Tag {
   color     String
   createdAt DateTime  @default(now())
   clientes  Cliente[] @relation("ClienteTags")
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model Imovel {
@@ -144,6 +164,9 @@ model Imovel {
   creator   Usuario? @relation("CreatedImoveis", fields: [creatorId], references: [id], onDelete: SetNull)
   updaterId String?
   updater   Usuario? @relation("UpdatedImoveis", fields: [updaterId], references: [id], onDelete: SetNull)
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model TipologiaImovel {
@@ -292,6 +315,9 @@ model Funnel {
   userAccess     UserFunnelAccess[]
   clients        Cliente[]
   roletas        Roleta[]
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model FunnelStage {
@@ -418,3 +444,85 @@ enum StatusQualificacao {
   NoBolsaoGeral
   Atribuido
 }
+
+// --- MODELOS PARA O SITE BUILDER (MULTI-TENANT) ---
+
+// Configurações do Site do Corretor/Imobiliária
+model Site {
+  id           String  @id @default(uuid())
+  name         String // Nome interno
+  description  String?
+  subdomain    String? @unique // ex: "imobiliaria-top" (acessa via imobiliaria-top.crm.com)
+  customDomain String? @unique // ex: "www.minhaimobiliaria.com.br"
+
+  // Aparência Global
+  primaryColor String  @default("#000000")
+  fontFamily   String  @default("Inter")
+  logoUrl      String?
+  faviconUrl   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String // Dono do site
+  user   Usuario @relation(fields: [userId], references: [id])
+
+  pages Page[]
+  leads Cliente[] @relation("SiteOrigin") // Leads capturados neste site
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
+
+// Domínios Personalizados (Para gestão na Vercel API)
+model Domain {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  siteId    String?
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Páginas do Site (Home, Contato, Quem Somos)
+model Page {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String // ex: "home", "contato"
+  isPublished Boolean   @default(false)
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sections    Section[]
+
+  @@unique([siteId, slug]) // Slug único por site
+}
+
+// Seções/Blocos da Página (Hero, Imóveis, Texto)
+model Section {
+  id      String @id @default(uuid())
+  type    String // ex: "HERO_SEARCH", "FEATURED_LIST", "RICH_TEXT", "CONTACT_FORM"
+  order   Int // Ordem na página
+  content Json // Dados flexíveis: { title: "...", bgImage: "...", showPrice: true }
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+}
+
+// --- MODELO PARA MULTI-TENANT ---
+
+model Account {
+  id        String   @id @default(uuid())
+  name      String // Ex: "Imobiliária Silva", "Real Sales HQ"
+  document  String? // CNPJ/CPF
+  isActive  Boolean  @default(true) // Para bloquear caloteiros
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  users    Usuario[]
+  clients  Cliente[]
+  funnels  Funnel[]
+  properties Imovel[]
+  sites    Site[]
+  tags     Tag[]
+}
+

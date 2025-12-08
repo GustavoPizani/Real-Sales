@@ -9,9 +9,12 @@ import { Prisma, Role } from '@prisma/client';
 export const dynamic = 'force-dynamic';
 
 // Função auxiliar para buscar cliente com detalhes
-async function getClientWithDetails(id: string) {
+async function getClientWithDetails(id: string, user: { accountId: string, isSuperAdmin: boolean }) {
   return await prisma.cliente.findUnique({
-    where: { id },
+    where: { 
+      id,
+      accountId: user.isSuperAdmin ? undefined : user.accountId,
+    },
     include: {
       proprietario: {
         select: {
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const { id } = params;
-    const client = await getClientWithDetails(id);
+    const client = await getClientWithDetails(id, user);
 
     if (!client) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
@@ -96,7 +99,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     // Busca o cliente atual para obter o corretor antigo antes da atualização
     const currentClient = await prisma.cliente.findUnique({
-      where: { id },
+      where: { 
+        id,
+        accountId: user.isSuperAdmin ? undefined : user.accountId,
+      },
       include: { proprietario: { select: { nome: true } } },
     });
     if (!currentClient) return NextResponse.json({ error: 'Cliente não encontrado para transferência' }, { status: 404 });
@@ -162,7 +168,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const updatedClient = await prisma.cliente.update({
-      where: { id },
+      where: { 
+        id,
+        accountId: user.isSuperAdmin ? undefined : user.accountId,
+      },
       data: dataToUpdate,
     });
 

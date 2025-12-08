@@ -52,19 +52,27 @@ export async function GET() {
       userIdsForFilter = [user.id];
     }
 
+    // Define o filtro base para o tenant
+    const tenantWhere: Prisma.ClienteWhereInput = {
+      accountId: user.isSuperAdmin ? undefined : user.accountId,
+    };
+
     // Agrupa as consultas para melhor performance
     const [hierarchicalTotalClients, hierarchicalActiveClients, totalProperties] = await prisma.$transaction([
       prisma.cliente.count({
-        where: { 
-          ...(userIdsForFilter.length > 0 && { corretorId: { in: userIdsForFilter } })
+        where: {
+          ...tenantWhere,
+          ...(userIdsForFilter.length > 0 && { proprietarioId: { in: userIdsForFilter } })
         },
       }),
       prisma.cliente.count({
-        where: { 
-          ...(userIdsForFilter.length > 0 && { corretorId: { in: userIdsForFilter } }),
+        where: {
+          ...tenantWhere,
+          ...(userIdsForFilter.length > 0 && { proprietarioId: { in: userIdsForFilter } }),
           overallStatus: 'Ativo' },
       }),
-      prisma.imovel.count()
+      // A contagem de imóveis também deve respeitar o tenant
+      prisma.imovel.count({ where: { accountId: user.isSuperAdmin ? undefined : user.accountId } })
     ]);
 
     const conversionRate =

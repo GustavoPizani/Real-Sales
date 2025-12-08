@@ -1,5 +1,6 @@
 // c:\Users\gusta\Real-sales\app\api\clients\bulk-import\route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
@@ -20,7 +21,8 @@ const parseDate = (dateString: string | undefined | null): Date | null => {
 
 export async function POST(request: NextRequest) {
   try {
-    const currentUser = await getUserFromToken(request);
+    const token = cookies().get('authToken')?.value;
+    const currentUser = await getUserFromToken(token);
     if (!currentUser) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     } 
@@ -78,10 +80,22 @@ export async function POST(request: NextRequest) {
     const funnelsToFind = rows.map(row => row.funilNome).filter(Boolean);
     const etapasToFind = rows.map(row => row.etapaNome).filter(Boolean);
 
+    // Filtro de Tenant para validação
+    const tenantWhere = {
+      accountId: currentUser.isSuperAdmin ? undefined : currentUser.accountId,
+    };
+
     const [users, funnels, etapas] = await Promise.all([
-      prisma.usuario.findMany({ where: { email: { in: emailsToFind } }, select: { id: true, email: true } }),
-      prisma.funil.findMany({ where: { nome: { in: funnelsToFind } }, select: { id: true, nome: true } }),
-      prisma.etapaFunil.findMany({ where: { nome: { in: etapasToFind } }, select: { id: true, nome: true, funilId: true } })
+      prisma.usuario.findMany({ 
+        where: { email: { in: emailsToFind }, ...tenantWhere }, 
+        select: { id: true, email: true } 
+      }),
+      prisma.funil.findMany({ 
+        where: { name: { in: funnelsToFind }, ...tenantWhere }, 
+        select: { id: true, name: true } }),
+      prisma.funnelStage.findMany({ 
+        where: { name: { in: etapasToFind }, funnel: tenantWhere }, 
+        select: { id: true, name: true, funnelId: true } })
     ]);
 
     // Mapear para busca rápida
@@ -104,6 +118,7 @@ export async function POST(request: NextRequest) {
           email: row.email || null,
           telefone: row.telefone ? String(row.telefone) : null,
           criadoPor: { connect: { id: currentUser.id } },
+          account: { connect: { id: currentUser.accountId } }, // Garante que o cliente pertence ao tenant correto
           // Adicione outros campos conforme o modelo
           cpf: row.cpf || null,
           cnpj: row.cnpj || null,

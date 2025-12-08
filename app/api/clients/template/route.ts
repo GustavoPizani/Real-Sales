@@ -1,20 +1,32 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from "@/lib/prisma";
+import { getUserFromToken } from '@/lib/auth';
 import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
     try {
+        const token = cookies().get('authToken')?.value;
+        const user = await getUserFromToken(token);
+        if (!user) {
+            return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+        }
+
+        const tenantWhere = { accountId: user.isSuperAdmin ? undefined : user.accountId };
+
         // 1. Buscar dados do banco
         const [users, funnels] = await Promise.all([
             // Usuario mantido (está em PT no schema)
             prisma.usuario.findMany({
+                where: tenantWhere,
                 select: { nome: true, email: true, role: true },
                 orderBy: { nome: 'asc' }
             }),
             // Funnel ajustado para EN (está em EN no schema)
             prisma.funnel.findMany({
+                where: tenantWhere,
                 include: { 
                     stages: { // Era 'etapas', schema é 'stages'
                         orderBy: { order: 'asc' } 
