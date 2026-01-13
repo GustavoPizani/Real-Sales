@@ -17,11 +17,11 @@ export async function GET(
       const token = authHeader?.split(' ')[1];
       const user = await getUserFromToken(token);
   
-      if (!user || user.role !== Role.marketing_adm) {
+      if (!user || user.role !== Role.MARKETING_ADMIN) {
         return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
       }
   
-      const roleta = await prisma.roleta.findUnique({
+      const roleta = await prisma.leadRoulette.findUnique({
         where: { id: params.id },
         include: {
           corretores: { include: { corretor: true } },
@@ -48,17 +48,17 @@ export async function PUT(
     const token = authHeader?.split(' ')[1];
     const user = await getUserFromToken(token);
 
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { nome, usuarios, ativa, validFrom, validUntil, funnelId } = await request.json(); // --- MODIFICADO ---
+    const { name, usuarios, ativa, validFrom, validUntil, funnelId } = await request.json(); // --- MODIFICADO ---
 
     const updatedRoleta = await prisma.$transaction(async (tx) => {
       const roleta = await tx.roleta.update({
         where: { id: params.id },
         data: {
-          nome,
+          name,
           ativa,
           validFrom: validFrom ? new Date(validFrom) : null,
           validUntil: validUntil ? new Date(validUntil) : null,
@@ -72,7 +72,7 @@ export async function PUT(
           await tx.roletaCorretor.createMany({
             data: usuarios.map((userId: string) => ({
               roletaId: params.id,
-              corretorId: userId,
+              brokerId: userId,
             })),
           });
         }
@@ -97,11 +97,11 @@ export async function DELETE(
       const token = authHeader?.split(' ')[1];
       const user = await getUserFromToken(token);
   
-      if (!user || user.role !== Role.marketing_adm) {
+      if (!user || user.role !== Role.MARKETING_ADMIN) {
         return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
       }
   
-      await prisma.roleta.delete({ where: { id: params.id } });
+      await prisma.leadRoulette.delete({ where: { id: params.id } });
   
       return NextResponse.json({ message: 'Roleta excluída com sucesso' });
     } catch (error) {

@@ -41,20 +41,20 @@ interface Funnel {
 
 interface Roleta {
     id: string
-    nome: string
+    name: string
     ativa: boolean
     last_assigned_index: number
     validFrom?: string | null;
     validUntil?: string | null;
     usuarios: User[]
-    created_at: string;
+    createdAt: string;
     funnel?: Funnel;
     funnelId?: string | null;
 }
 
 interface FrequenciaConfig {
     id: string;
-    nome: string;
+    name: string;
     latitude: number;
     longitude: number;
     raio: number;
@@ -70,7 +70,7 @@ interface FrequenciaRegistro {
     userId: string;
     usuario: {
         id: string;
-        nome: string;
+        name: string;
         email: string;
         role: string;
     };
@@ -78,8 +78,8 @@ interface FrequenciaRegistro {
     longitude: number;
     distancia: number;
     dentroDoRaio: boolean;
-    config?: { // ✅ Adicionado para receber o nome do local
-        nome: string;
+    config?: { // ✅ Adicionado para receber o name do local
+        name: string;
     } | null;
     createdAt: string;
 }
@@ -200,7 +200,7 @@ function FrequenciaAdminView({ configs, loading, onEdit, onDelete }) {
                         <TableBody>
                             {configs.map(config => (
                                 <TableRow key={config.id}>
-                                    <TableCell className="font-medium">{config.nome}</TableCell>
+                                    <TableCell className="font-medium">{config.name}</TableCell>
                                     <TableCell>{config.raio}</TableCell>
                                     <TableCell>{config.horarios.map((h, i) => <Badge key={i} variant="secondary" className="mr-1 mb-1">{h.inicio}-{h.fim}</Badge>)}</TableCell>
                                     <TableCell><Badge variant={config.ativo ? 'default' : 'destructive'}>{config.ativo ? 'Sim' : 'Não'}</Badge></TableCell>
@@ -236,7 +236,7 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
                                 <SelectItem value="all">Todos os Usuários</SelectItem>
                                 {reportUsers
                                     .filter(u => u.role === 'corretor' || u.role === 'gerente')
-                                    .map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
+                                    .map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
                         <Popover>
@@ -272,10 +272,10 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
                                     <TableBody>
                                         {weekRegistros.map(registro => (
                                             <TableRow key={registro.id}>
-                                                {(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableCell>{registro.usuario.nome}</TableCell>}
+                                                {(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableCell>{registro.usuario.name}</TableCell>}
                                                 <TableCell>{format(parseISO(registro.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                                                 <TableCell>{registro.distancia}m</TableCell>
-                                                <TableCell>{registro.config?.nome || 'N/A'}</TableCell>
+                                                <TableCell>{registro.config?.name || 'N/A'}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -375,7 +375,7 @@ function FrequenciaUserView({ configs, registros, loading, onRegister, isRegiste
                         <TableBody>
                             {registros.map((registro) => (
                                 <TableRow key={registro.id} onClick={() => handleRowClick(registro)} className="cursor-pointer">
-                                    <TableCell className="font-medium">{registro.config?.nome || 'N/A'}</TableCell>
+                                    <TableCell className="font-medium">{registro.config?.name || 'N/A'}</TableCell>
                                     <TableCell>{format(parseISO(registro.createdAt), 'HH:mm')}</TableCell>
                                     <TableCell>{format(parseISO(registro.createdAt), 'dd/MM/yy')}</TableCell>
                                     <TableCell><Badge variant={registro.dentroDoRaio ? 'default' : 'destructive'}>{registro.dentroDoRaio ? 'Dentro do Raio' : 'Fora do Raio'}</Badge></TableCell>
@@ -406,7 +406,7 @@ function FrequenciaUserView({ configs, registros, loading, onRegister, isRegiste
                                 />
                             </div>
                             <div className="space-y-2">
-                                <p><strong className="font-semibold">Local:</strong> {selectedRegistro.config?.nome || 'Não especificado'}</p>
+                                <p><strong className="font-semibold">Local:</strong> {selectedRegistro.config?.name || 'Não especificado'}</p>
                                 <p><strong className="font-semibold">Horário:</strong> {safeFormatDateTime(selectedRegistro.createdAt)}</p>
                                 <p><strong className="font-semibold">Endereço Aproximado:</strong> {loadingAddress ? <Loader2 className="inline-block h-4 w-4 animate-spin" /> : selectedRegistro.address}</p>
                                 <p><strong className="font-semibold">Dispositivo:</strong> <span className="text-xs text-muted-foreground">{navigator.userAgent}</span></p>
@@ -428,7 +428,7 @@ function FrequenciaTabContent() {
     const { toast } = useToast();
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [editingConfig, setEditingConfig] = useState<FrequenciaConfig | null>(null);
-    const [configForm, setConfigForm] = useState({ nome: '', latitude: '', longitude: '', raio: '', horarios: [{ inicio: '', fim: '' }], ativo: true });
+    const [configForm, setConfigForm] = useState({ name: '', latitude: '', longitude: '', raio: '', horarios: [{ inicio: '', fim: '' }], ativo: true });
     const [diasDaSemana, setDiasDaSemana] = useState<number[]>([]);
     const [isConfigDeleteDialogOpen, setIsConfigDeleteDialogOpen] = useState(false);
     const [configToDelete, setConfigToDelete] = useState<string | null>(null);
@@ -462,13 +462,13 @@ function FrequenciaTabContent() {
         if (config) {
             setEditingConfig(config);
             setConfigForm({
-                nome: config.nome, latitude: String(config.latitude), longitude: String(config.longitude),
+                name: config.name, latitude: String(config.latitude), longitude: String(config.longitude),
                 raio: String(config.raio), horarios: config.horarios || [{ inicio: '', fim: '' }], ativo: config.ativo,
             });
             setDiasDaSemana(config.diasDaSemana || []);
         } else {
             setEditingConfig(null);
-            setConfigForm({ nome: '', latitude: '', longitude: '', raio: '', horarios: [{ inicio: '', fim: '' }], ativo: true });
+            setConfigForm({ name: '', latitude: '', longitude: '', raio: '', horarios: [{ inicio: '', fim: '' }], ativo: true });
             setDiasDaSemana([]);
         }
         setIsConfigModalOpen(true);
@@ -647,7 +647,7 @@ function FrequenciaTabContent() {
                     <DialogHeader><DialogTitle>{editingConfig ? 'Editar' : 'Nova'} Configuração</DialogTitle></DialogHeader>
                     <div className="pt-4">
                         <form onSubmit={handleConfigSubmit} className="space-y-4">
-                        <div><Label htmlFor="nome">Nome do Local</Label><Input id="nome" name="nome" value={configForm.nome} onChange={(e) => setConfigForm(prev => ({ ...prev, nome: e.target.value }))} required /></div>
+                        <div><Label htmlFor="name">Nome do Local</Label><Input id="name" name="name" value={configForm.name} onChange={(e) => setConfigForm(prev => ({ ...prev, name: e.target.value }))} required /></div>
                         <div>
                             <Label>Localização</Label>
                             <div className="flex items-center gap-2 mt-1">
@@ -732,7 +732,7 @@ function FrequenciaTabContent() {
                             <Select name="userId" required><SelectTrigger><SelectValue placeholder="Selecione um usuário" /></SelectTrigger>
                                 <SelectContent>{reportUsers
                                     .filter(u => u.role === 'corretor' || u.role === 'gerente')
-                                    .map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
+                                    .map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
                         <div>
@@ -741,7 +741,7 @@ function FrequenciaTabContent() {
                                 const selected = configs.find(c => c.id === value);
                                 setConfigForm(prev => ({ ...prev, horarios: selected?.horarios || [] }));
                             }}><SelectTrigger><SelectValue placeholder="Selecione um local" /></SelectTrigger>
-                                <SelectContent>{configs.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
+                                <SelectContent>{configs.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
                         {configForm.horarios.length > 1 && (
@@ -784,7 +784,7 @@ export default function RoletaPage() {
     const [editingRoleta, setEditingRoleta] = useState<Roleta | null>(null)
     const [roletaToDelete, setRoletaToDelete] = useState<string | null>(null)
     const [formData, setFormData] = useState({
-        nome: "",
+        name: "",
         usuarios: [] as string[],
         validFrom: '',
         validUntil: '',
@@ -869,7 +869,7 @@ export default function RoletaPage() {
             if (response.ok) {
                 setMessage("Roleta criada com sucesso!")
                 setShowCreateModal(false)
-                setFormData({ nome: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' })
+                setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' })
                 setParticipantOrder([]);
                 loadRoletas()
             } else {
@@ -900,7 +900,7 @@ export default function RoletaPage() {
             if (response.ok) {
                 setMessage("Roleta atualizada com sucesso!")
                 setEditingRoleta(null)
-                setFormData({ nome: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' })
+                setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' })
                 setParticipantOrder([]);
                 loadRoletas()
             } else {
@@ -945,7 +945,7 @@ export default function RoletaPage() {
                 method: "PUT",
                 headers: { 'Authorization': `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    nome: roleta.nome,
+                    name: roleta.name,
                     usuarios: roleta.usuarios.map((u) => u.id),
                     ativa: !roleta.ativa,
                     funnelId: roleta.funnelId
@@ -966,7 +966,7 @@ export default function RoletaPage() {
     const openEditModal = (roleta: Roleta) => {
         setEditingRoleta(roleta)
         setFormData({
-            nome: roleta.nome,
+            name: roleta.name,
             usuarios: roleta.usuarios.map((u) => u.id),
             validFrom: roleta.validFrom ? new Date(roleta.validFrom).toISOString().slice(0, 16) : '',
             validUntil: roleta.validUntil ? new Date(roleta.validUntil).toISOString().slice(0, 16) : '',
@@ -1043,7 +1043,7 @@ export default function RoletaPage() {
                             const nextCorretorIndex = roleta.usuarios.length > 0 ? (roleta.last_assigned_index + 1) % roleta.usuarios.length : 0;
                             return (
                                 <Card key={roleta.id} className="w-full max-w-2xl">
-                                    <CardHeader><CardTitle className="text-xl">{roleta.nome}</CardTitle><CardDescription>{roleta.funnel?.name || 'Sem funil associado'}</CardDescription></CardHeader>
+                                    <CardHeader><CardTitle className="text-xl">{roleta.name}</CardTitle><CardDescription>{roleta.funnel?.name || 'Sem funil associado'}</CardDescription></CardHeader>
                                     <CardContent>
                                         <div className="space-y-1">
                                             {roleta.usuarios.map((corretor, index) => {
@@ -1052,7 +1052,7 @@ export default function RoletaPage() {
                                                 return (
                                                     <div key={corretor.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50">
                                                         <div>
-                                                            <p className="font-medium text-gray-900">{corretor.nome || corretor.email}</p>
+                                                            <p className="font-medium text-gray-900">{corretor.name || corretor.email}</p>
                                                             <p className={`text-sm font-semibold ${isNext ? 'text-green-600' : 'text-gray-500'}`}>{isNext ? 'NA VEZ - ' : ''}{leadCount} QUALIFICADO(S)</p>
                                                         </div>
                                                         <span className="text-lg font-medium text-gray-400">{index + 1}</span>
@@ -1075,7 +1075,7 @@ export default function RoletaPage() {
                                 <CardDescription>Gerencie as roletas de distribuição de leads</CardDescription>
                             </div>
                         {user?.role === 'marketing_adm' && (
-                            <Button onClick={() => { setShowCreateModal(true); setParticipantOrder([]); setFormData({ nome: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' }) }} className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
+                            <Button onClick={() => { setShowCreateModal(true); setParticipantOrder([]); setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' }) }} className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                                 <Plus className="h-4 w-4 mr-2" />Nova Roleta
                             </Button>
                         )}
@@ -1103,7 +1103,7 @@ export default function RoletaPage() {
                                         <TableBody>
                                             {roletas.map((roleta) => (
                                                 <TableRow key={roleta.id}>
-                                                    <TableCell className="font-medium">{roleta.nome}</TableCell>
+                                                    <TableCell className="font-medium">{roleta.name}</TableCell>
                                                     <TableCell>{roleta.funnel?.name || 'N/A'}</TableCell>
                                                     <TableCell>
                                                         <div className="flex items-center gap-2">
@@ -1116,7 +1116,7 @@ export default function RoletaPage() {
                                                             <Users className="h-4 w-4 text-gray-500" />
                                                             <span>{roleta.usuarios.length}</span>
                                                             <div className="ml-2">
-                                                                {roleta.usuarios.slice(0, 3).map((usuario) => (<Badge key={usuario.id} variant="outline" className="mr-1 text-xs">{(usuario.nome || 'N/A').split(" ")[0]}</Badge>))}
+                                                                {roleta.usuarios.slice(0, 3).map((usuario) => (<Badge key={usuario.id} variant="outline" className="mr-1 text-xs">{(usuario.name || 'N/A').split(" ")[0]}</Badge>))}
                                                                 {roleta.usuarios.length > 3 && (<Badge variant="outline" className="text-xs">+{roleta.usuarios.length - 3}</Badge>)}
                                                             </div>
                                                         </div>
@@ -1125,8 +1125,8 @@ export default function RoletaPage() {
                                                         {roleta.validFrom ? `De: ${safeFormatDateTime(roleta.validFrom)}` : 'Desde sempre'}<br />
                                                         {roleta.validUntil ? `Até: ${safeFormatDateTime(roleta.validUntil)}` : 'Para sempre'}
                                                     </TableCell>
-                                                    <TableCell>{roleta.usuarios.length > 0 && roleta.last_assigned_index < roleta.usuarios.length ? roleta.usuarios[roleta.last_assigned_index]?.nome || "N/A" : "Nenhum"}</TableCell>
-                                                    <TableCell>{safeFormatDate(roleta.created_at, "dd/MM/yyyy")}</TableCell>
+                                                    <TableCell>{roleta.usuarios.length > 0 && roleta.last_assigned_index < roleta.usuarios.length ? roleta.usuarios[roleta.last_assigned_index]?.name || "N/A" : "Nenhum"}</TableCell>
+                                                    <TableCell>{safeFormatDate(roleta.createdAt, "dd/MM/yyyy")}</TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
                                                         {user?.role === 'marketing_adm' && (
@@ -1158,8 +1158,8 @@ export default function RoletaPage() {
                     <DialogHeader><DialogTitle>Criar Nova Roleta</DialogTitle></DialogHeader>
                     <form onSubmit={handleCreateRoleta} className="space-y-4 pt-4">
                         <div>
-                            <Label htmlFor="nome">Nome da Roleta</Label>
-                            <Input id="nome" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} placeholder="Ex: Roleta Principal" required />
+                            <Label htmlFor="name">Nome da Roleta</Label>
+                            <Input id="name" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))} placeholder="Ex: Roleta Principal" required />
                         </div>
                         <div>
                             <Label htmlFor="funnelId">Funil de Vendas</Label>
@@ -1184,7 +1184,7 @@ export default function RoletaPage() {
                                 {usersForRoleta.map((participant) => (
                                     <div key={participant.id} className="flex items-center space-x-2">
                                         <input type="checkbox" id={`participant_${participant.id}`} checked={participantOrder.some(p => p.id === participant.id)} onChange={() => handleUsuarioToggle(participant)} />
-                                        <label htmlFor={`participant_${participant.id}`} className="text-sm">{participant.nome} ({participant.role})</label>
+                                        <label htmlFor={`participant_${participant.id}`} className="text-sm">{participant.name} ({participant.role})</label>
                                     </div>
                                 ))}
                             </div>
@@ -1203,8 +1203,8 @@ export default function RoletaPage() {
                     <DialogHeader><DialogTitle>Editar Roleta</DialogTitle></DialogHeader>
                     <form onSubmit={handleEditRoleta} className="space-y-4 pt-4">
                         <div>
-                            <Label htmlFor="edit_nome">Nome da Roleta</Label>
-                            <Input id="edit_nome" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} required />
+                            <Label htmlFor="edit_name">Nome da Roleta</Label>
+                            <Input id="edit_name" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))} required />
                         </div>
                         <div>
                             <Label htmlFor="edit_funnelId">Funil de Vendas</Label>
@@ -1229,7 +1229,7 @@ export default function RoletaPage() {
                                 {participantOrder.map((participant) => (
                                     <div key={participant.id} className="flex items-center space-x-2">
                                         <input type="checkbox" id={`edit_participant_${participant.id}`} checked={true} onChange={() => handleUsuarioToggle(participant)} />
-                                        <label htmlFor={`edit_participant_${participant.id}`} className="text-sm">{participant.nome} ({participant.role})</label>
+                                        <label htmlFor={`edit_participant_${participant.id}`} className="text-sm">{participant.name} ({participant.role})</label>
                                     </div>
                                 ))}
                             </div>

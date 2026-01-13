@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       success: true,
       user: {
         id: user.id,
-        name: user.name, // Supondo que o nome do usuário seja 'name'
+        name: user.name, // Supondo que o name do usuário seja 'name'
         email: user.email,
         role: user.role,
       },

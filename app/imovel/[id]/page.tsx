@@ -117,12 +117,12 @@ export default function PublicPropertyViewPage() {
     <div className="bg-white min-h-screen">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">{property.titulo}</h1>
+          <h1 className="text-4xl font-bold text-gray-900">{property.title}</h1>
           <div className="flex items-center gap-4 mt-2">
             <Badge className={getStatusColor(property.status)}>{property.status}</Badge>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <MapPin className="h-4 w-4" />
-              <span>{property.endereco}</span>
+              <span>{property.address}</span>
             </div>
           </div>
         </header>
@@ -131,13 +131,13 @@ export default function PublicPropertyViewPage() {
           <main className="lg:col-span-2 space-y-8">
             <Card>
               <CardContent className="p-0">
-                <img src={property.imagens?.[selectedImage]?.url || "/placeholder.jpg"} alt={property.titulo} className="w-full h-[500px] object-cover rounded-t-lg" />
-                {property.imagens && property.imagens.length > 1 && (
+                <img src={property.images?.[selectedImage]?.url || "/placeholder.jpg"} alt={property.title} className="w-full h-[500px] object-cover rounded-t-lg" />
+                {property.images && property.images.length > 1 && (
                   <div className="p-4 bg-gray-50 rounded-b-lg">
                     <div className="flex gap-2 overflow-x-auto">
-                      {property.imagens.map((image, index) => (
+                      {property.images.map((image, index) => (
                         <button key={image.id} onClick={() => setSelectedImage(index)} className={`flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 transition-all duration-200 ${selectedImage === index ? "border-primary-custom scale-105" : "border-gray-300 hover:border-primary-custom"}`}>
-                          <img src={image.url} alt={`${property.titulo} ${index + 1}`} className="w-full h-full object-cover" />
+                          <img src={image.url} alt={`${property.title} ${index + 1}`} className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
@@ -177,9 +177,9 @@ export default function PublicPropertyViewPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {property.tipologias?.map((typology) => (
+                    {property.typelogias?.map((typology) => (
                       <TableRow key={typology.id}>
-                        <TableCell className="font-medium">{typology.nome}</TableCell>
+                        <TableCell className="font-medium">{typology.name}</TableCell>
                         <TableCell>{typology.area}m²</TableCell>
                         <TableCell>{typology.dormitorios}</TableCell>
                         <TableCell>{typology.suites}</TableCell>
@@ -197,7 +197,7 @@ export default function PublicPropertyViewPage() {
               <CardHeader className="text-center"><CardTitle>Fale com um especialista</CardTitle><p className="text-sm text-muted-foreground pt-1">Preencha o formulário e receba um contacto.</p></CardHeader>
               <CardContent className="pt-2">
                 <form onSubmit={handleLeadSubmit} className="space-y-4">
-                  <div><Label htmlFor="name">Nome completo</Label><Input id="name" placeholder="Seu nome" required value={leadName} onChange={(e) => setLeadName(e.target.value)} /></div>
+                  <div><Label htmlFor="name">Nome completo</Label><Input id="name" placeholder="Seu name" required value={leadName} onChange={(e) => setLeadName(e.target.value)} /></div>
                   <div><Label htmlFor="email">E-mail</Label><Input id="email" type="email" placeholder="seu@email.com" required value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} /></div>
                   <div><Label htmlFor="phone">Telefone / WhatsApp</Label><Input id="phone" placeholder="(XX) XXXXX-XXXX" required value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} /></div>
                   <div><Label htmlFor="message">Mensagem <span className="text-xs text-muted-foreground">(Opcional)</span></Label><Textarea id="message" placeholder="Olá, tenho interesse neste imóvel e gostaria de mais informações." value={leadMessage} onChange={(e) => setLeadMessage(e.target.value)} /></div>

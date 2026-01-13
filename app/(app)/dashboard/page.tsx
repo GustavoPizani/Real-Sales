@@ -28,31 +28,31 @@ interface DashboardStats {
 
 interface Client {
   id: string
-  nomeCompleto: string
+  fullName: string
   email?: string | null
   updatedAt: string
 }
 
 interface Property {
   id: string;
-  titulo: string;
+  title: string;
   endereco: string | null;
 }
 
 interface Task {
   id: string;
-  titulo: string;
-  dataHora: string;
+  title: string;
+  dateTime: string;
   concluida: boolean;
   cliente: {
     id: string;
-    nomeCompleto: string;
+    fullName: string;
   }
 }
 
 interface Broker {
   id: string;
-  nome: string;
+  name: string;
   role: string;
 }
 
@@ -79,8 +79,8 @@ export default function DashboardPage() {
   const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
 
-  const [clientForm, setClientForm] = useState({ nomeCompleto: "", email: "", telefone: "", selectedCorretorId: "" })
-  const [propertyForm, setPropertyForm] = useState({ titulo: "", endereco: "", preco: "" })
+  const [clientForm, setClientForm] = useState({ fullName: "", email: "", phone: "", selectedbrokerId: "" })
+  const [propertyForm, setPropertyForm] = useState({ title: "", endereco: "", price: "" })
   const [taskForm, setTaskForm] = useState({
     title: "",
     description: "",
@@ -115,8 +115,8 @@ export default function DashboardPage() {
       if (tasksRes.ok) {
         const allTasks = await tasksRes.json();
         const now = new Date();
-        setPendingTasks(allTasks.filter((task: Task) => !task.concluida && new Date(task.dataHora) >= now));
-        setOverdueTasks(allTasks.filter((task: Task) => !task.concluida && new Date(task.dataHora) < now));
+        setPendingTasks(allTasks.filter((task: Task) => !task.concluida && new Date(task.dateTime) >= now));
+        setOverdueTasks(allTasks.filter((task: Task) => !task.concluida && new Date(task.dateTime) < now));
       }
 
     } catch (error) {
@@ -138,7 +138,7 @@ export default function DashboardPage() {
 
     const isManager = user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role);
 
-    if (isManager && !clientForm.selectedCorretorId) {
+    if (isManager && !clientForm.selectedbrokerId) {
       toast({
         variant: "destructive",
         title: "Campo obrigatório",
@@ -147,7 +147,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const corretorId = isManager ? clientForm.selectedCorretorId : user?.id;
+    const brokerId = isManager ? clientForm.selectedbrokerId : user?.id;
 
     try {
       const token = localStorage.getItem('authToken');
@@ -155,10 +155,10 @@ export default function DashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ 
-          nomeCompleto: clientForm.nomeCompleto,
+          fullName: clientForm.fullName,
           email: clientForm.email,
-          telefone: clientForm.telefone,
-          corretorId: corretorId,
+          phone: clientForm.phone,
+          brokerId: brokerId,
           currentFunnelStage: 'Contato'
         }),
       });
@@ -168,7 +168,7 @@ export default function DashboardPage() {
       }
       toast({ title: "Sucesso!", description: "Cliente criado com sucesso." });
       setIsClientModalOpen(false);
-      setClientForm({ nomeCompleto: "", email: "", telefone: "", selectedCorretorId: "" });
+      setClientForm({ fullName: "", email: "", phone: "", selectedbrokerId: "" });
       fetchDashboardData(); // Re-fetch data
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -182,12 +182,12 @@ export default function DashboardPage() {
       const response = await fetch("/api/properties", {
         method: "POST",
         headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ...propertyForm, preco: parseFloat(propertyForm.preco) }),
+        body: JSON.stringify({ ...propertyForm, price: parseFloat(propertyForm.price) }),
       });
       if (!response.ok) throw new Error("Falha ao criar imóvel.");
       toast({ title: "Sucesso!", description: "Imóvel criado com sucesso." });
       setIsPropertyModalOpen(false);
-      setPropertyForm({ titulo: "", endereco: "", preco: "" });
+      setPropertyForm({ title: "", endereco: "", price: "" });
       fetchDashboardData(); // Re-fetch data
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -311,21 +311,21 @@ export default function DashboardPage() {
             <DialogContent>
               <DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader>
               <form onSubmit={handleClientSubmit} className="space-y-4">
-                <div className="space-y-2"><Label htmlFor="nomeCompleto">Nome Completo</Label><Input id="nomeCompleto" value={clientForm.nomeCompleto} onChange={(e) => setClientForm({ ...clientForm, nomeCompleto: e.target.value })} required /></div>
+                <div className="space-y-2"><Label htmlFor="fullName">Nome Completo</Label><Input id="fullName" value={clientForm.fullName} onChange={(e) => setClientForm({ ...clientForm, fullName: e.target.value })} required /></div>
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} /></div>
-                <div className="space-y-2"><Label htmlFor="telefone">Telefone</Label><Input id="telefone" value={clientForm.telefone} onChange={(e) => setClientForm({ ...clientForm, telefone: e.target.value })} /></div>
+                <div className="space-y-2"><Label htmlFor="phone">Telefone</Label><Input id="phone" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} /></div>
                 {user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role) && (
                   <div className="space-y-2">
                     <Label htmlFor="corretor">Corretor Responsável</Label>
                     <Select
-                      value={clientForm.selectedCorretorId}
-                      onValueChange={(value) => setClientForm(p => ({ ...p, selectedCorretorId: value }))}
+                      value={clientForm.selectedbrokerId}
+                      onValueChange={(value) => setClientForm(p => ({ ...p, selectedbrokerId: value }))}
                     >
                       <SelectTrigger id="corretor" className="w-full">
                         <SelectValue placeholder="Selecione um corretor" />
                       </SelectTrigger>
                       <SelectContent>
-                        {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.nome}</SelectItem>)}
+                        {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -347,9 +347,9 @@ export default function DashboardPage() {
             <DialogContent>
               <DialogHeader><DialogTitle>Novo Imóvel</DialogTitle></DialogHeader>
               <form onSubmit={handlePropertySubmit} className="space-y-4">
-                <div className="space-y-2"><Label htmlFor="titulo">Título</Label><Input id="titulo" value={propertyForm.titulo} onChange={(e) => setPropertyForm({ ...propertyForm, titulo: e.target.value })} required /></div>
+                <div className="space-y-2"><Label htmlFor="title">Título</Label><Input id="title" value={propertyForm.title} onChange={(e) => setPropertyForm({ ...propertyForm, title: e.target.value })} required /></div>
                 <div className="space-y-2"><Label htmlFor="endereco">Endereço</Label><Input id="endereco" value={propertyForm.endereco} onChange={(e) => setPropertyForm({ ...propertyForm, endereco: e.target.value })} /></div>
-                <div className="space-y-2"><Label htmlFor="preco">Preço</Label><Input id="preco" type="number" value={propertyForm.preco} onChange={(e) => setPropertyForm({ ...propertyForm, preco: e.target.value })} /></div>
+                <div className="space-y-2"><Label htmlFor="price">Preço</Label><Input id="price" type="number" value={propertyForm.price} onChange={(e) => setPropertyForm({ ...propertyForm, price: e.target.value })} /></div>
                 <DialogFooter><Button type="button" variant="outline" onClick={() => setIsPropertyModalOpen(false)}>Cancelar</Button><Button type="submit">Salvar</Button></DialogFooter>
               </form>
             </DialogContent>
@@ -370,7 +370,7 @@ export default function DashboardPage() {
               </DialogHeader>
               <form onSubmit={handleTaskSubmit} className="space-y-4">
                 <div className="space-y-2"><Label htmlFor="title">Título *</Label><Input id="title" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} required /></div>
-                <div className="space-y-2"><Label htmlFor="clientId">Cliente *</Label><Select value={taskForm.clientId} onValueChange={(value) => setTaskForm({ ...taskForm, clientId: value })}><SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger><SelectContent>{clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.nomeCompleto}</SelectItem>))}</SelectContent></Select></div>
+                <div className="space-y-2"><Label htmlFor="clientId">Cliente *</Label><Select value={taskForm.clientId} onValueChange={(value) => setTaskForm({ ...taskForm, clientId: value })}><SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger><SelectContent>{clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.fullName}</SelectItem>))}</SelectContent></Select></div>
                 <div className="space-y-2"><Label htmlFor="dueDate">Data de Vencimento *</Label><Input id="dueDate" type="datetime-local" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required /></div>
                 <div className="space-y-2"><Label htmlFor="description">Descrição</Label><Textarea id="description" value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} /></div>
                 <DialogFooter><Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Cancelar</Button><Button type="submit">Criar Tarefa</Button></DialogFooter>
@@ -400,7 +400,7 @@ export default function DashboardPage() {
               overdueClients.map(client => (
                 <Link href={`/client/${client.id}`} key={client.id} className="block p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-800 dark:text-gray-200">{client.nomeCompleto}</p>
+                    <p className="font-medium text-gray-800 dark:text-gray-200">{client.fullName}</p>
                     <span className="text-xs text-red-500 flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
                       {formatDistanceToNow(new Date(client.updatedAt), { addSuffix: true, locale: ptBR })}
@@ -426,10 +426,10 @@ export default function DashboardPage() {
                   pendingTasks.map(task => (
                     <Link href={task.cliente ? `/client/${task.cliente.id}` : '#'} key={task.id} className="block p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
                       <div className="flex justify-between items-start">
-                        <p className="font-medium">{task.titulo}</p>
-                        {task.cliente && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.cliente.nomeCompleto}</span>}
+                        <p className="font-medium">{task.title}</p>
+                        {task.cliente && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.cliente.fullName}</span>}
                       </div>
-                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><Clock className="h-3 w-3" /> {format(new Date(task.dataHora), "dd/MM 'às' HH:mm")}</p>
+                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><Clock className="h-3 w-3" /> {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}</p>
                     </Link>
                   ))
                 ) : <p className="text-center text-gray-500 py-8">Nenhuma tarefa pendente.</p>}
@@ -439,10 +439,10 @@ export default function DashboardPage() {
                   overdueTasks.map(task => (
                     <Link href={task.cliente ? `/client/${task.cliente.id}` : '#'} key={task.id} className="block p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
                       <div className="flex justify-between items-start">
-                        <p className="font-medium text-red-500">{task.titulo}</p>
-                        {task.cliente && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.cliente.nomeCompleto}</span>}
+                        <p className="font-medium text-red-500">{task.title}</p>
+                        {task.cliente && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.cliente.fullName}</span>}
                       </div>
-                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><AlertCircle className="h-3 w-3 text-red-500" /> {format(new Date(task.dataHora), "dd/MM 'às' HH:mm")}</p>
+                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><AlertCircle className="h-3 w-3 text-red-500" /> {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}</p>
                     </Link>
                   ))
                 ) : <p className="text-center text-gray-500 py-8">Nenhuma tarefa atrasada.</p>}

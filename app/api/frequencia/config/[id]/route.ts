@@ -11,7 +11,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
@@ -19,7 +19,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const body = await request.json();
 
     const updateSchema = z.object({
-      nome: z.string().min(1, "O nome é obrigatório."),
+      name: z.string().min(1, "O name é obrigatório."),
       latitude: z.number(),
       longitude: z.number(),
       raio: z.number().int().positive("O raio deve ser um número positivo."),
@@ -29,12 +29,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       })).min(1, "Pelo menos um horário é necessário."),
       ativo: z.boolean(),
     });
-    const { nome, latitude, longitude, raio, horarios, ativo } = updateSchema.parse(body);
+    const { name, latitude, longitude, raio, horarios, ativo } = updateSchema.parse(body);
 
-    const updatedConfig = await prisma.frequenciaConfig.update({
+    const updatedConfig = await prisma.attendanceConfig.update({
       where: { id },
       data: {
-        nome,
+        name,
         latitude,
         longitude,
         raio,
@@ -58,13 +58,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     const { id } = params;
 
-    await prisma.frequenciaConfig.delete({
+    await prisma.attendanceConfig.delete({
       where: { id },
     });
 

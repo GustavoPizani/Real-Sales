@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import { StatusImovel } from '@prisma/client';
+import { PropertyStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +17,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const properties = await prisma.imovel.findMany({
+    const properties = await prisma.property.findMany({
       include: {
-        imagens: {
+        images: {
           take: 1, // Pega apenas a primeira imagem
           orderBy: {
             createdAt: 'asc',
           },
         },
-        tipologias: true,
+        propertyTypes: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Cria uma nova propriedade, as suas tipologias e associa as imagens
+// POST: Cria uma nova propriedade, as suas propertyTypes e associa as images
 export async function POST(request: NextRequest) {
   try {
     const token = cookies().get('authToken')?.value;
@@ -66,12 +66,12 @@ export async function POST(request: NextRequest) {
     const newProperty = await prisma.$transaction(async (tx) => {
       const imovel = await tx.imovel.create({
         data: {
-          titulo: title,
+          title: title,
           // descricao: description, // ❌ Removido
           features: features || [], // ✅ Adicionado
           tipo: type,
           endereco: address,
-          status: status || StatusImovel.Disponivel,
+          status: status || PropertyStatus.AVAILABLE,
           creatorId: user.id, // ✅ Salva quem criou
           updaterId: user.id, // ✅ Salva quem atualizou pela primeira vez
         },
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       if (typologies && typologies.length > 0) {
         await tx.tipologiaImovel.createMany({
           data: typologies.map((t: any) => ({
-            nome: t.nome, // Corrigido de t.name para t.nome
+            name: t.name, // Corrigido de t.name para t.name
             valor: parseFloat(t.valor) || 0,
             area: parseFloat(t.area) || null,
             dormitorios: parseInt(t.dormitorios) || null,

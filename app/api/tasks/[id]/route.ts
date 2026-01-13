@@ -12,11 +12,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const task = await prisma.tarefa.findUnique({
+    const task = await prisma.task.findUnique({
       where: { id: params.id },
       include: {
-        cliente: { select: { id: true, nomeCompleto: true } },
-        usuario: { select: { nome: true } },
+        cliente: { select: { id: true, fullName: true } },
+        usuario: { select: { name: true } },
       },
     });
 
@@ -43,7 +43,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Verifica se a tarefa existe antes de tentar atualizar
-    const existingTask = await prisma.tarefa.findUnique({ where: { id: params.id } });
+    const existingTask = await prisma.task.findUnique({ where: { id: params.id } });
     if (!existingTask) {
       return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 });
     }
@@ -55,12 +55,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: 'Título é obrigatório' }, { status: 400 });
     }
 
-    const updatedTask = await prisma.tarefa.update({
+    const updatedTask = await prisma.task.update({
       where: { id: params.id },
       data: {
-        titulo: title,
+        title: title,
         descricao: description,
-        dataHora: due_date ? new Date(due_date) : undefined,
+        dateTime: due_date ? new Date(due_date) : undefined,
         clienteId: client_id,
         concluida: concluida,
       },
@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     // Verifica se a tarefa existe e se o usuário tem permissão
-    const task = await prisma.tarefa.findUnique({ where: { id: params.id } });
+    const task = await prisma.task.findUnique({ where: { id: params.id } });
     if (!task) {
       return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 });
     }
@@ -92,9 +92,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const dataToUpdate: any = {};
 
     // Constrói o objeto de dados apenas com os campos fornecidos
-    if (body.title !== undefined) dataToUpdate.titulo = body.title;
+    if (body.title !== undefined) dataToUpdate.title = body.title;
     if (body.description !== undefined) dataToUpdate.descricao = body.description;
-    if (body.due_date !== undefined) dataToUpdate.dataHora = new Date(body.due_date);
+    if (body.due_date !== undefined) dataToUpdate.dateTime = new Date(body.due_date);
     if (body.client_id !== undefined) dataToUpdate.clienteId = body.client_id;
     if (body.concluida !== undefined) dataToUpdate.concluida = body.concluida;
 
@@ -102,7 +102,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: 'Nenhum dado para atualizar fornecido.' }, { status: 400 });
     }
 
-    const updatedTask = await prisma.tarefa.update({
+    const updatedTask = await prisma.task.update({
       where: { id: params.id },
       data: dataToUpdate,
     });
@@ -123,13 +123,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     // Verifica se a tarefa existe antes de tentar excluir
-    const existingTask = await prisma.tarefa.findUnique({ where: { id: params.id } });
+    const existingTask = await prisma.task.findUnique({ where: { id: params.id } });
     if (!existingTask) {
       return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 });
     }
     // Adicionar verificação de permissão aqui (ex: if (existingTask.usuarioId !== user.id) ...)
 
-    await prisma.tarefa.delete({
+    await prisma.task.delete({
       where: { id: params.id },
     });
 

@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest, { params }: { params: { noteId: 
       return NextResponse.json({ error: 'O conteúdo da anotação é obrigatório.' }, { status: 400 });
     }
 
-    const updatedNote = await prisma.nota.update({
+    const updatedNote = await prisma.note.update({
       where: { id: noteId },
       data: {
         content,
@@ -56,7 +56,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { noteI
     // Opcional: Verificar se o usuário tem permissão para excluir a nota
     // (ex: só o criador ou um admin pode excluir)
 
-    await prisma.nota.delete({
+    await prisma.note.delete({
       where: { id: noteId },
     });
 

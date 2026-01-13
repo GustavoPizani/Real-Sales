@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const roletas = await prisma.roleta.findMany({
+    const roletas = await prisma.leadRoulette.findMany({
       include: {
         funnel: true, // --- NOVO --- Inclui o funil associado
         corretores: {
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
             corretor: {
               select: {
                 id: true,
-                nome: true,
+                name: true,
                 email: true,
               },
             },
@@ -33,20 +33,20 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        nome: 'asc',
+        name: 'asc',
       },
     });
 
     const formattedRoletas = await Promise.all(roletas.map(async roleta => {
       const usuariosComContagem = await Promise.all(roleta.corretores.map(async rc => {
-        const leadCount = await prisma.cliente.count({
+        const leadCount = await prisma.client.count({
           where: {
-            corretorId: rc.corretor.id,
+            brokerId: rc.corretor.id,
           },
         });
         return {
           id: rc.corretor.id,
-          name: rc.corretor.nome,
+          name: rc.corretor.name,
           email: rc.corretor.email,
           leadCount: leadCount,
         };
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
       return {
         ...roleta,
-        created_at: roleta.createdAt, // --- CORRIGIDO --- Garante que a data de criação é enviada
+        createdAt: roleta.createdAt, // --- CORRIGIDO --- Garante que a data de criação é enviada
         usuarios: usuariosComContagem,
       };
     }));
@@ -78,17 +78,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { nome, usuarios, validFrom, validUntil, funnelId } = await request.json(); // --- MODIFICADO ---
-    if (!nome || !usuarios || !Array.isArray(usuarios)) {
+    const { name, usuarios, validFrom, validUntil, funnelId } = await request.json(); // --- MODIFICADO ---
+    if (!name || !usuarios || !Array.isArray(usuarios)) {
       return NextResponse.json(
         { error: 'Nome e pelo menos um usuário são obrigatórios.' },
         { status: 400 }
       );
     }
 
-    const newRoleta = await prisma.roleta.create({
+    const newRoleta = await prisma.leadRoulette.create({
       data: {
-        nome,
+        name,
         validFrom: validFrom ? new Date(validFrom) : null,
         validUntil: validUntil ? new Date(validUntil) : null,
         funnelId: funnelId || null, // --- NOVO ---

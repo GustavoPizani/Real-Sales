@@ -21,16 +21,16 @@ export async function GET(request: NextRequest) {
       account: { id: user.isSuperAdmin ? undefined : user.accountId }
     };
 
-    if (user.role === Role.corretor) {
+    if (user.role === Role.BROKER) {
       // Corretores veem apenas as campanhas atribuídas a eles
       whereClause = {
         clients: {
           some: { assignedToId: user.id },
         },
       };
-    } else if (user.role === Role.gerente) {
+    } else if (user.role === Role.MANAGER) {
       // Gerentes veem campanhas que eles criaram ou que foram atribuídas à sua equipe
-      const subordinateIds = (await prisma.usuario.findMany({
+      const subordinateIds = (await prisma.user.findMany({
         where: { superiorId: user.id },
         select: { id: true },
       })).map(u => u.id);
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const activeOffers = await prisma.activeOffer.findMany({
       where: whereClause,
       include: {
-        createdBy: { select: { nome: true } },
+        createdBy: { select: { name: true } },
         _count: {
           select: { clients: true },
         },
@@ -130,25 +130,25 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Nome, fonte e corretores atribuídos são obrigatórios.' }, { status: 400 });
         }
 
-        let clientWhereClause: Prisma.ClienteWhereInput = {
+        let clientWhereClause: prisma.clientWhereInput = {
             overallStatus: ClientOverallStatus.Perdido,
             accountId: user.isSuperAdmin ? undefined : user.accountId
         };
 
         if (source === 'meus_clientes') {
             clientWhereClause.proprietarioId = user.id;
-        } else if (source === 'equipe' && [Role.gerente, Role.diretor, Role.marketing_adm].includes(user.role)) {
-            const subordinateIds = (await prisma.usuario.findMany({ where: { superiorId: user.id }, select: { id: true } })).map(u => u.id);
+        } else if (source === 'equipe' && [Role.MANAGER, Role.DIRECTOR, Role.MARKETING_ADMIN].includes(user.role)) {
+            const subordinateIds = (await prisma.user.findMany({ where: { superiorId: user.id }, select: { id: true } })).map(u => u.id);
             clientWhereClause.proprietarioId = { in: [user.id, ...subordinateIds] };
-        } else if (source === 'sem_proprietario' && [Role.diretor, Role.marketing_adm].includes(user.role)) {
+        } else if (source === 'sem_proprietario' && [Role.DIRECTOR, Role.MARKETING_ADMIN].includes(user.role)) {
             clientWhereClause.proprietarioId = null;
         } else {
             return NextResponse.json({ error: 'Permissão negada para esta fonte de clientes.' }, { status: 403 });
         }
 
-        const clientsToMove = await prisma.cliente.findMany({
+        const clientsToMove = await prisma.client.findMany({
             where: clientWhereClause,
-            select: { id: true, nomeCompleto: true, email: true, telefone: true },
+            select: { id: true, fullName: true, email: true, phone: true },
         });
 
         if (clientsToMove.length === 0) {
@@ -158,9 +158,9 @@ export async function POST(request: NextRequest) {
         const contactsToCreate: Prisma.ActiveOfferClientCreateManyOfferInput[] = clientsToMove.flatMap(client =>
             assignedToIds.map((brokerId: string) => ({
                 assignedToId: brokerId,
-                contactName: client.nomeCompleto,
+                contactName: client.fullName,
                 contactEmail: client.email,
-                contactPhone: client.telefone,
+                contactPhone: client.phone,
                 originalClienteId: client.id, // Rastreia a origem
             }))
         );

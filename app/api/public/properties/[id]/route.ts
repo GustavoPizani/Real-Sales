@@ -12,11 +12,11 @@ export async function GET(
       return NextResponse.json({ error: 'ID do imóvel não fornecido' }, { status: 400 });
     }
 
-    const property = await prisma.imovel.findUnique({
+    const property = await prisma.property.findUnique({
       where: { id: propertyId },
       include: {
-        tipologias: true,
-        imagens: {
+        propertyTypes: true,
+        images: {
           select: { id: true, url: true } 
         },
       },
@@ -29,13 +29,13 @@ export async function GET(
     // ✅ CORREÇÃO: Trocamos 'descricao' por 'features' para alinhar com o novo modelo.
     const publicPropertyData = {
       id: property.id,
-      titulo: property.titulo,
+      title: property.title,
       features: property.features, // ✅ Enviando 'features'
-      endereco: property.endereco,
-      tipo: property.tipo,
+      endereco: property.address,
+      tipo: property.type,
       status: property.status,
-      imagens: property.imagens,
-      tipologias: property.tipologias,
+      images: property.images,
+      propertyTypes: property.typelogias,
       createdAt: property.createdAt.toISOString(),
     };
 

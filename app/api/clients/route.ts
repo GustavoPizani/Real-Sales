@@ -16,20 +16,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const where: Prisma.ClienteWhereInput = {
+    const where: prisma.clientWhereInput = {
       // Filtro de Tenant: Garante que a query só retorne dados da conta do usuário
       accountId: user.isSuperAdmin ? undefined : user.accountId,
     };
 
     // Lógica de permissão por cargo (mantida)
-    if (user.role === Role.gerente) {
-      const subordinateIds = (await prisma.usuario.findMany({ 
+    if (user.role === Role.MANAGER) {
+      const subordinateIds = (await prisma.user.findMany({ 
         where: { superiorId: user.id },
         select: { id: true }
       })).map(u => u.id);
-      where.proprietarioId = { in: [user.id, ...subordinateIds] };
-    } else if (user.role === Role.corretor) {
-      where.proprietarioId = user.id;
+      where.brokerId = { in: [user.id, ...subordinateIds] };
+    } else if (user.role === Role.BROKER) {
+      where.brokerId = user.id;
     } else if (user.role === Role.pre_vendas) {
         // Pré-vendas só vê clientes no funil de pré-vendas
         const preSalesFunnel = await prisma.funil.findFirst({ where: { isPreSales: true }});
@@ -42,10 +42,10 @@ export async function GET(request: NextRequest) {
     }
     // Super Admins e outros cargos sem filtro específico veem todos os clientes DENTRO DO SEU TENANT.
 
-    const clients = await prisma.cliente.findMany({
+    const clients = await prisma.client.findMany({
       where,
       include: { 
-        proprietario: { select: { nome: true, id: true } },
+        corretor: { select: { name: true, id: true } },
         // ✅ Adicionado para incluir as tags na listagem de clientes
         tags: {
           select: { id: true, name: true, color: true },
@@ -63,12 +63,12 @@ export async function GET(request: NextRequest) {
 
 // Schema de validação para a criação de um novo cliente
 const createClientSchema = z.object({
-    nomeCompleto: z.string().min(1, { message: "Nome completo é obrigatório." }),
-    proprietarioId: z.string().uuid({ message: "ID do proprietário inválido." }),
+    fullName: z.string().min(1, { message: "Nome completo é obrigatório." }),
+    brokerId: z.string().uuid({ message: "ID do corretor inválido." }),
     funnelId: z.string().uuid({ message: "ID do funil é obrigatório." }),
     funnelStageId: z.string().uuid({ message: "ID da etapa do funil é obrigatório." }),
     email: z.string().email({ message: "Email inválido." }).optional().or(z.literal('')),
-    telefone: z.string().optional(),
+    phone: z.string().optional(),
 });
 
 
@@ -89,17 +89,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, { status: 400 });
         }
         
-        const { nomeCompleto, email, telefone, proprietarioId, funnelId, funnelStageId } = validation.data;
+        const { fullName, email, phone, brokerId, funnelId, funnelStageId } = validation.data;
 
-        const newClient = await prisma.cliente.create({
+        const newClient = await prisma.client.create({
             data: {
-                nomeCompleto,
+                fullName,
                 email: email || null, // Garante que o email seja null se for uma string vazia
-                telefone,
+                phone,
                 funnelId,
                 funnelStageId,
-                proprietarioId,
-                criadoPorId: user.id,
+                brokerId,
+                createdById: user.id,
                 accountId: user.accountId,
             }
         });
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(newClient, { status: 201 });
     } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            // Erro de violação de chave estrangeira (ex: corretorId não existe)
+            // Erro de violação de chave estrangeira (ex: brokerId não existe)
             if (error.code === 'P2003') {
                 return NextResponse.json({ error: `Falha de referência: O campo '${error.meta?.field_name}' não é válido.` }, { status: 400 });
             }

@@ -17,18 +17,18 @@ import { useToast } from "@/components/ui/use-toast";
 
 interface Task {
   id: string;
-  titulo: string;
+  title: string;
   descricao: string;
   concluida: boolean;
-  dataHora: string;
+  dateTime: string;
   clienteId: string;
-  cliente?: { nomeCompleto: string };
+  cliente?: { fullName: string };
   createdAt: string;
 }
 
 interface Client {
   id: string;
-  nomeCompleto: string;
+  fullName: string;
 }
 
 export default function TasksPage() {
@@ -121,9 +121,9 @@ export default function TasksPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          title: editingTask.titulo,
+          title: editingTask.title,
           description: editingTask.descricao,
-          due_date: editingTask.dataHora,
+          due_date: editingTask.dateTime,
           client_id: editingTask.clienteId,
         }),
       });
@@ -177,7 +177,7 @@ export default function TasksPage() {
 
         if (!taskUpdateResponse.ok) throw new Error('Falha ao marcar a tarefa como concluída.');
 
-        const noteContent = `Tarefa Concluída: "${task.titulo}".\n\nComentário: ${comment || 'Nenhum comentário adicionado.'}`;
+        const noteContent = `Tarefa Concluída: "${task.title}".\n\nComentário: ${comment || 'Nenhum comentário adicionado.'}`;
         const noteResponse = await fetch(`/api/clients/${task.clienteId}/notes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -221,7 +221,7 @@ export default function TasksPage() {
             <form onSubmit={handleCreateSubmit} className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><Label htmlFor="title">Título *</Label><Input id="title" value={createForm.title} onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })} required /></div>
-                    <div><Label htmlFor="clientId">Cliente *</Label><Select value={createForm.clientId} onValueChange={(value) => setCreateForm({ ...createForm, clientId: value })}><SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger><SelectContent>{clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.nomeCompleto}</SelectItem>))}</SelectContent></Select></div>
+                    <div><Label htmlFor="clientId">Cliente *</Label><Select value={createForm.clientId} onValueChange={(value) => setCreateForm({ ...createForm, clientId: value })}><SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger><SelectContent>{clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.fullName}</SelectItem>))}</SelectContent></Select></div>
                 </div>
                 <div><Label htmlFor="dueDate">Data de Vencimento *</Label><Input id="dueDate" type="datetime-local" value={createForm.dueDate} onChange={(e) => setCreateForm({ ...createForm, dueDate: e.target.value })} required /></div>
                 <div><Label htmlFor="description">Descrição *</Label><Textarea id="description" value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} required /></div>
@@ -239,7 +239,7 @@ export default function TasksPage() {
             <Card key={task.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold line-clamp-2">{task.titulo}</CardTitle>
+                  <CardTitle className="text-lg font-semibold line-clamp-2">{task.title}</CardTitle>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
@@ -262,12 +262,12 @@ export default function TasksPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground text-sm line-clamp-3">{task.descricao}</p>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><User className="h-4 w-4" /><span>{task.cliente?.nomeCompleto || "Cliente não encontrado"}</span></div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Clock className="h-4 w-4" /><span>{new Date(task.dataHora).toLocaleString("pt-BR")}</span></div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><User className="h-4 w-4" /><span>{task.cliente?.fullName || "Cliente não encontrado"}</span></div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Clock className="h-4 w-4" /><span>{new Date(task.dateTime).toLocaleString("pt-BR")}</span></div>
               </CardContent>
               <CardFooter className="flex items-center justify-between">
                   <Badge variant={task.concluida ? "default" : "secondary"}>{task.concluida ? "Concluída" : "Pendente"}</Badge>
-                  {new Date(task.dataHora) < new Date() && !task.concluida && (<div className="flex items-center gap-1 text-red-500 text-xs"><AlertCircle className="h-3 w-3" /><span>Atrasada</span></div>)}
+                  {new Date(task.dateTime) < new Date() && !task.concluida && (<div className="flex items-center gap-1 text-red-500 text-xs"><AlertCircle className="h-3 w-3" /><span>Atrasada</span></div>)}
               </CardFooter>
             </Card>
           ))
@@ -281,10 +281,10 @@ export default function TasksPage() {
           {editingTask && (
             <form onSubmit={handleUpdateSubmit} className="space-y-4 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><Label htmlFor="edit-title">Título *</Label><Input id="edit-title" value={editingTask.titulo} onChange={(e) => setEditingTask({ ...editingTask, titulo: e.target.value })} required /></div>
-                <div><Label htmlFor="edit-clientId">Cliente *</Label><Select value={editingTask.clienteId} onValueChange={(value) => setEditingTask({ ...editingTask, clienteId: value })}><SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger><SelectContent>{clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.nomeCompleto}</SelectItem>))}</SelectContent></Select></div>
+                <div><Label htmlFor="edit-title">Título *</Label><Input id="edit-title" value={editingTask.title} onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })} required /></div>
+                <div><Label htmlFor="edit-clientId">Cliente *</Label><Select value={editingTask.clienteId} onValueChange={(value) => setEditingTask({ ...editingTask, clienteId: value })}><SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger><SelectContent>{clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.fullName}</SelectItem>))}</SelectContent></Select></div>
               </div>
-              <div><Label htmlFor="edit-dueDate">Data de Vencimento *</Label><Input id="edit-dueDate" type="datetime-local" value={editingTask.dataHora.substring(0, 16)} onChange={(e) => setEditingTask({ ...editingTask, dataHora: e.target.value })} required /></div>
+              <div><Label htmlFor="edit-dueDate">Data de Vencimento *</Label><Input id="edit-dueDate" type="datetime-local" value={editingTask.dateTime.substring(0, 16)} onChange={(e) => setEditingTask({ ...editingTask, dateTime: e.target.value })} required /></div>
               <div><Label htmlFor="edit-description">Descrição *</Label><Textarea id="edit-description" value={editingTask.descricao} onChange={(e) => setEditingTask({ ...editingTask, descricao: e.target.value })} required /></div>
               <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button><Button type="submit">Salvar Alterações</Button></DialogFooter>
             </form>
@@ -309,7 +309,7 @@ export default function TasksPage() {
           }
       }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Concluir Tarefa: {taskToComplete?.titulo}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Concluir Tarefa: {taskToComplete?.title}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <Label htmlFor="completion-comment">Adicionar comentário de conclusão</Label>
             <Textarea id="completion-comment" placeholder="Descreva o resultado ou adicione informações relevantes..." value={completionComment} onChange={(e) => setCompletionComment(e.target.value)} />

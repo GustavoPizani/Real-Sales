@@ -1,97 +1,81 @@
 // contexts/auth-context.tsx
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, Dispatch, SetStateAction } from "react";
-import { useRouter } from "next/navigation";
-import { type UserPayload } from "@/lib/auth";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client'; // Cliente que criamos antes
+import { UserPayload } from '@/lib/auth';
 
 interface AuthContextType {
   user: UserPayload | null;
-  setUser: Dispatch<SetStateAction<UserPayload | null>>;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
   isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
+  const supabase = createClient();
 
-  const verifyUser = useCallback(async () => {
-    const token = localStorage.getItem("authToken");
-    if (token) {
-      try {
-        const response = await fetch('/api/auth/me', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
+  // 1. Verificar sessão ativa ao carregar o app
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user: sbUser } } = await supabase.auth.getUser();
+      
+      if (sbUser) {
+        // Buscar dados extras do Prisma (como a Role) via uma API simples de "me"
+        const response = await fetch('/api/auth/me');
         if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.user) {
-            setUser(data.user);
-          }
-        } else {
-          localStorage.removeItem("authToken");
-          setUser(null);
+          const userData = await response.json();
+          setUser(userData);
         }
-      } catch (error) {
-        console.error("Falha ao verificar o token:", error);
-        setUser(null);
       }
+      setIsLoading(false);
     }
-    setIsLoading(false);
+    loadUser();
   }, []);
 
-  useEffect(() => {
-    verifyUser();
-  }, [verifyUser]);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
+  // 2. Função de Login atualizada para Supabase
+  const login = async (email: string, password: string) => {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      if (!response.ok) return false;
+      if (error) throw error;
 
-      const data = await response.json();
-
-      if (data.success && data.user && data.token) {
-        setUser(data.user);
-        localStorage.setItem("authToken", data.token);
+      // Após logar no Supabase, buscamos os dados do perfil no nosso DB
+      const response = await fetch('/api/auth/me');
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
         return true;
       }
       return false;
     } catch (error) {
-      console.error("Erro na função de login:", error);
+      console.error('Erro no login:', error);
       return false;
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem("authToken");
-    router.push('/login');
+    window.location.href = '/login';
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!context) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   return context;
-}
+};

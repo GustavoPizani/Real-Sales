@@ -29,8 +29,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           include: {
             cliente: {
               select: {
-                nomeCompleto: true,
-                telefone: true,
+                fullName: true,
+                phone: true,
                 email: true,
                 notas: { orderBy: { createdAt: 'desc' }, take: 3 },
               },

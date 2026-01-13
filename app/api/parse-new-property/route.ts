@@ -11,10 +11,10 @@ function buildParsePrompt(textContent: string): string {
       Você é um assistente especialista em extrair dados de blocos de texto sobre imóveis. Sua tarefa é analisar o texto abaixo e convertê-lo em um objeto JSON estruturado.
 
       **Regras de Extração:**
-      1.  **title**: A primeira linha do texto, contendo o nome do empreendimento.
+      1.  **title**: A primeira linha do texto, contendo o name do empreendimento.
       2.  **address**: A segunda linha do texto, contendo o endereço.
       3.  **features**: Encontre a lista de itens sob o título "Características condominiais". Extraia cada item e retorne como um array de strings. Se a seção não existir, retorne um array vazio [].
-      4.  **typologies**: Encontre a seção "Tipologias disponíveis". Para cada tipologia (ex: "Garden", "Apartamento"), extraia seu nome e os dados da tabela: valor (apenas números), área (m²), dormitórios, suítes e vagas.
+      4.  **typologies**: Encontre a seção "Tipologias disponíveis". Para cada tipologia (ex: "Garden", "Apartamento"), extraia seu name e os dados da tabela: valor (apenas números), área (m²), dormitórios, suítes e vagas.
 
       **Estrutura do JSON de Saída (Obrigatório):**
       Retorne APENAS o objeto JSON, sem nenhum texto ou formatação adicional. O campo "description" NÃO deve ser incluído.
@@ -24,7 +24,7 @@ function buildParsePrompt(textContent: string): string {
         "features": ["item1", "item2", ...],
         "typologies": [
           {
-            "nome": "string",
+            "name": "string",
             "valor": "number | null",
             "area": "number | null",
             "dormitorios": "number | null",

@@ -56,7 +56,7 @@ a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
 
 #### 3.4 Configurar a Planilha
 1. Crie uma nova planilha no Google Sheets
-2. Renomeie a primeira aba para "Leads"
+2. Renameie a primeira aba para "Leads"
 3. Na linha 1, coloque os cabeçalhos:
    \`\`\`
    A1: Nome

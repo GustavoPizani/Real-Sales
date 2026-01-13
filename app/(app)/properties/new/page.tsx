@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Save, Plus, Trash2, Upload, X, Loader2, ClipboardPaste } from "lucide-react";
-import { type TipologiaImovel, StatusImovel, type ImagemPlanta } from "@prisma/client";
+import { type TipologiaImovel, PropertyStatus, type ImagemPlanta } from "@prisma/client";
 
 type TypologyWithFiles = Partial<TipologiaImovel> & {
   plantaFile?: File;
@@ -36,7 +36,7 @@ function NewPropertyForm() {
     const [title, setTitle] = useState("");
     const [type, setType] = useState("Apartamento");
     const [address, setAddress] = useState("");
-    const [status, setStatus] = useState<StatusImovel>("LANCAMENTO");
+    const [status, setStatus] = useState<PropertyStatus>("LANCAMENTO");
     const [typologies, setTypologies] = useState<TypologyWithFiles[]>([]);
     const [features, setFeatures] = useState<string[]>([]);
     const [images, setImages] = useState<File[]>([]);
@@ -101,7 +101,7 @@ function NewPropertyForm() {
         
         if (parsedData.typologies && Array.isArray(parsedData.typologies)) {
             const newTypologies = parsedData.typologies.map((t: any) => ({
-                nome: t.nome || '',
+                name: t.name || '',
                 valor: parseFloat(t.valor) || 0,
                 area: parseFloat(t.area) || 0,
                 dormitorios: parseInt(t.dormitorios, 10) || 0,
@@ -235,10 +235,10 @@ function NewPropertyForm() {
 
                             <div>
                                 <Label htmlFor="status">Status</Label>
-                                <Select onValueChange={(value: StatusImovel) => setStatus(value)} defaultValue={status}>
+                                <Select onValueChange={(value: PropertyStatus) => setStatus(value)} defaultValue={status}>
                                     <SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger>
                                     <SelectContent>
-                                        {Object.values(StatusImovel).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                        {Object.values(PropertyStatus).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -255,7 +255,7 @@ function NewPropertyForm() {
                                 <div key={index} className="p-4 border rounded-md space-y-4 relative">
                                     <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => removeTypology(index)}><Trash2 className="h-4 w-4" /></Button>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div><Label>Nome</Label><Input value={typology.nome || ''} onChange={(e) => handleTypologyChange(index, 'nome', e.target.value)} /></div>
+                                        <div><Label>Nome</Label><Input value={typology.name || ''} onChange={(e) => handleTypologyChange(index, 'name', e.target.value)} /></div>
                                         <div><Label>Valor</Label><Input type="number" value={typology.valor || ''} onChange={(e) => handleTypologyChange(index, 'valor', parseFloat(e.target.value))} /></div>
                                         <div><Label>Área (m²)</Label><Input type="number" value={typology.area || ''} onChange={(e) => handleTypologyChange(index, 'area', parseFloat(e.target.value))} /></div>
                                     </div>
@@ -268,7 +268,7 @@ function NewPropertyForm() {
                                         <Label htmlFor={`planta-${index}`}>Planta da Tipologia (Opcional)</Label>
                                         <Input id={`planta-${index}`} type="file" accept="image/*" onChange={(e) => handlePlantaImageChange(index, e)} className="mt-1" />
                                         {typology.plantaPreview && (
-                                            <div className="mt-2"><img src={typology.plantaPreview} alt={`Planta para ${typology.nome}`} className="h-24 w-auto rounded-md border" /></div>
+                                            <div className="mt-2"><img src={typology.plantaPreview} alt={`Planta para ${typology.name}`} className="h-24 w-auto rounded-md border" /></div>
                                         )}
                                     </div>
                                 </div>
@@ -334,7 +334,7 @@ function NewPropertyForm() {
                                 <div className="space-y-2">
                                     {parsedData.typologies?.map((t: any, index: number) => (
                                         <div key={index} className="text-xs text-muted-foreground p-2 border rounded-md">
-                                            <p className="font-bold text-foreground">{t.nome}</p>
+                                            <p className="font-bold text-foreground">{t.name}</p>
                                             <p>Área: {t.area || 'N/A'} m² | Dorms: {t.dormitorios || 'N/A'} | Suítes: {t.suites || 'N/A'} | Vagas: {t.vagas || 'N/A'}</p>
                                             <p>Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor || 0)}</p>
                                         </div>

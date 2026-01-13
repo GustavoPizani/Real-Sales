@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     const where: any = {};
 
-    if (user.role === Role.corretor || user.role === Role.gerente) {
+    if (user.role === Role.BROKER || user.role === Role.MANAGER) {
       where.userId = user.id;
     } else if (userIdFilter) {
       where.userId = userIdFilter;
@@ -37,19 +37,19 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const registros = await prisma.frequenciaRegistro.findMany({
+    const registros = await prisma.attendanceRecord.findMany({
       where,
       include: {
         usuario: {
           select: {
             id: true,
-            nome: true,
+            name: true,
             email: true,
             role: true,
           },
         },
         config: { // ✅ Inclui os dados da configuração associada
-          select: { nome: true }
+          select: { name: true }
         }
       },
       orderBy: { createdAt: 'desc' },
@@ -82,21 +82,21 @@ export async function POST(request: NextRequest) {
 
     let targetUserId = user.id;
     // Se um userId for fornecido e o usuário for admin, use esse ID.
-    if (body.userId && user.role === Role.marketing_adm) {
+    if (body.userId && user.role === Role.MARKETING_ADMIN) {
       targetUserId = body.userId;
-    } else if (![Role.corretor, Role.gerente, Role.marketing_adm].includes(user.role)) {
+    } else if (![Role.BROKER, Role.MANAGER, Role.MARKETING_ADMIN].includes(user.role)) {
       return NextResponse.json({ error: 'Não autorizado para registar frequência' }, { status: 403 });
     }
 
     // ✅ Se for um registro manual com horário, usa a data atual com a hora fornecida
     let registrationTime = new Date();
-    if (body.horarioManual && user.role === Role.marketing_adm) {
+    if (body.horarioManual && user.role === Role.MARKETING_ADMIN) {
         const [hours, minutes] = body.horarioManual.split(':').map(Number);
         registrationTime.setHours(hours, minutes, 0, 0);
     }
 
     // 1. Encontrar configurações de frequência ativas
-    const activeConfigs = await prisma.frequenciaConfig.findMany({
+    const activeConfigs = await prisma.attendanceConfig.findMany({
       where: { ativo: true },
     });
 
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Nenhuma configuração de frequência ativa encontrada para o horário atual.' }, { status: 400 });
     }
 
-    const newRegistro = await prisma.frequenciaRegistro.create({
+    const newRegistro = await prisma.attendanceRecord.create({
       data: {
         userId: targetUserId,
         latitude,

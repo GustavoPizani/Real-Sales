@@ -1,100 +1,98 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromToken, hashPassword } from "@/lib/auth";
+// TODO: Replace getUserFromToken with Supabase auth helpers
+import { getUserFromToken } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
 
-// GET: Busca um utilizador específico
+// GET: Fetches a specific user
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // TODO: Replace with Supabase session logic
     const loggedInUser = await getUserFromToken(request);
     if (!loggedInUser) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const userToFind = await prisma.usuario.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: params.id },
       select: {
         id: true,
-        nome: true,
+        name: true,
         email: true,
         role: true,
-        superiorId: true,
+        supervisorId: true,
       },
     });
 
-    if (!userToFind) {
+    if (!user) {
       return NextResponse.json({ error: "Utilizador não encontrado" }, { status: 404 });
     }
-    
-    // Mapeia para o formato esperado pelo frontend (name)
-    const { nome, ...rest } = userToFind;
-    const userForFrontend = { ...rest, name: nome };
 
-    return NextResponse.json(userForFrontend);
+    return NextResponse.json(user);
   } catch (error) {
     console.error("Erro ao buscar utilizador:", error);
     return NextResponse.json({ error: "Erro interno ao buscar utilizador" }, { status: 500 });
   }
 }
 
-// PATCH: Atualiza um utilizador
+// PATCH: Updates a user
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
     try {
+        // TODO: Replace with Supabase session logic
         const currentUser = await getUserFromToken(request);
         if (!currentUser) {
             return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
         }
 
         const body = await request.json();
-        const { name, email, role, superiorId, password } = body;
+        // Note: `password` update logic is removed as it will be handled by Supabase Auth.
+        const { name, email, role, supervisorId } = body;
 
-        const isAdmin = currentUser.role === Role.marketing_adm;
+        const isAdmin = currentUser.role === Role.MARKETING_ADMIN;
         const isEditingSelf = currentUser.id === params.id;
 
-        // Apenas um admin pode editar outros utilizadores. Utilizadores normais só se podem editar a si mesmos.
         if (!isAdmin && !isEditingSelf) {
              return NextResponse.json({ error: "Sem permissão para editar este utilizador." }, { status: 403 });
         }
 
-        const dataToUpdate: Prisma.UsuarioUpdateInput = {};
+        const dataToUpdate: Prisma.UserUpdateInput = {};
 
-        // Se o usuário está editando a si mesmo, ele só pode mudar o nome.
+        // A user can edit their own name and email
         if (isEditingSelf) {
-            if (name) dataToUpdate.nome = name;
-            if (email && email !== currentUser.email) {
-                return NextResponse.json({ error: "Você não pode alterar seu próprio e-mail." }, { status: 403 });
-            }
+            if (name) dataToUpdate.name = name;
+            if (email) dataToUpdate.email = email; // Allowing self-email update
         }
 
-        // Apenas admins podem mudar dados de outros usuários, cargo e superior.
+        // Admins can update other users' data, role, and supervisor.
         if (isAdmin) {
-            if (name) dataToUpdate.nome = name;
+            if (name) dataToUpdate.name = name;
             if (email) dataToUpdate.email = email;
             if (role) dataToUpdate.role = role;
-            if (superiorId !== undefined) { // Permite definir superiorId como null
-                dataToUpdate.superiorId = superiorId;
+            if (supervisorId !== undefined) { // Allows setting supervisorId to null
+                dataToUpdate.supervisor = supervisorId ? { connect: { id: supervisorId } } : { disconnect: true };
             }
-        } else if (role || superiorId !== undefined) {
-            // Utilizadores não-admin não podem alterar o seu próprio cargo ou superior
+        } else if (role || supervisorId !== undefined) {
+            // Non-admin users cannot change their own role or supervisor
             return NextResponse.json({ error: "Sem permissão para alterar cargo ou superior." }, { status: 403 });
         }
 
-        // Apenas admins podem redefinir a senha de outros utilizadores sem a senha antiga
-        if (password && isAdmin && !isEditingSelf) {
-            dataToUpdate.passwordHash = await hashPassword(password);
-        } else if (password) {
-            // A alteração de senha do próprio utilizador deve ser feita pelo endpoint /api/users/change-password
-            return NextResponse.json({ error: "Para alterar a sua senha, use a aba de Segurança." }, { status: 400 });
-        }
+        // Password management is now handled by Supabase Auth.
+        // Admin password resets should use the Supabase Admin API.
+        // User password changes should use the Supabase client API on a dedicated page/component.
 
-        const updatedUser = await prisma.usuario.update({
+        const updatedUser = await prisma.user.update({
             where: { id: params.id },
             data: dataToUpdate,
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                supervisorId: true,
+            }
         });
-        
-        const { passwordHash, nome, ...userWithoutSensitiveData } = updatedUser;
 
-        return NextResponse.json({ user: { ...userWithoutSensitiveData, name: nome } });
+        return NextResponse.json({ user: updatedUser });
 
     } catch (error: any) {
         console.error("Erro ao atualizar utilizador:", error);
@@ -105,11 +103,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 }
 
-// DELETE: Remove um utilizador
+// DELETE: Removes a user
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
     try {
+        // TODO: Replace with Supabase session logic
         const currentUser = await getUserFromToken(request);
-        if (!currentUser || currentUser.role !== Role.marketing_adm) {
+        if (!currentUser || currentUser.role !== Role.MARKETING_ADMIN) {
             return NextResponse.json({ error: "Sem permissão para remover utilizadores." }, { status: 403 });
         }
         
@@ -117,7 +116,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
             return NextResponse.json({ error: "Não pode excluir a sua própria conta." }, { status: 400 });
         }
 
-        await prisma.usuario.delete({
+        await prisma.user.delete({
             where: { id: params.id },
         });
 

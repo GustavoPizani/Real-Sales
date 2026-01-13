@@ -19,8 +19,8 @@ interface ActiveOfferClient {
   id: string;
   status: string;
   cliente: {
-    nomeCompleto: string;
-    telefone: string | null;
+    fullName: string;
+    phone: string | null;
     email: string | null;
     notas: ClientNote[];
   };
@@ -126,19 +126,19 @@ export default function ActiveOfferCallPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-1">
         <Card>
             <CardHeader>
-                <CardTitle className="text-3xl">{currentClient.cliente.nomeCompleto}</CardTitle>
+                <CardTitle className="text-3xl">{currentClient.cliente.fullName}</CardTitle>
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground pt-2">
-                    <span>Telefone: {currentClient.cliente.telefone || 'N/A'}</span>
+                    <span>Telefone: {currentClient.cliente.phone || 'N/A'}</span>
                     <span>Email: {currentClient.cliente.email || 'N/A'}</span>
                 </div>
             </CardHeader>
             <CardContent>
                 <div className="flex items-center gap-2 mb-6">
-                    <Button asChild variant="outline" className="flex-1" disabled={!currentClient.cliente.telefone}>
-                        <a href={`tel:${currentClient.cliente.telefone}`}><Phone className="mr-2 h-4 w-4" /> Ligar</a>
+                    <Button asChild variant="outline" className="flex-1" disabled={!currentClient.cliente.phone}>
+                        <a href={`tel:${currentClient.cliente.phone}`}><Phone className="mr-2 h-4 w-4" /> Ligar</a>
                     </Button>
-                    <Button asChild variant="outline" className="flex-1" disabled={!currentClient.cliente.telefone}>
-                        <a href={`https://wa.me/55${currentClient.cliente.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageSquare className="mr-2 h-4 w-4" /> WhatsApp</a>
+                    <Button asChild variant="outline" className="flex-1" disabled={!currentClient.cliente.phone}>
+                        <a href={`https://wa.me/55${currentClient.cliente.phone?.replace(/\D/g, '')}`} target="_blank"><MessageSquare className="mr-2 h-4 w-4" /> WhatsApp</a>
                     </Button>
                     <Button asChild variant="outline" className="flex-1" disabled={!currentClient.cliente.email}>
                         <a href={`mailto:${currentClient.cliente.email}`}><Mail className="mr-2 h-4 w-4" /> E-mail</a>

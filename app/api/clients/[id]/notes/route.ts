@@ -24,7 +24,7 @@ export async function GET(
       return NextResponse.json({ error: 'ID do cliente é obrigatório.' }, { status: 400 });
     }
 
-    const client = await prisma.cliente.findUnique({
+    const client = await prisma.client.findUnique({
       where: { id: clientId },
       include: {
         corretor: true,
@@ -71,7 +71,7 @@ export async function PUT(
         const { id: clientId } = params;
         const body = await request.json();
 
-        const updatedClient = await prisma.cliente.update({
+        const updatedClient = await prisma.client.update({
             where: { id: clientId },
             data: {
                 ...body,
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const user = await getUserFromToken(token);
 
     if (!user || !user.name) { // Adicionada verificação para user.name
-      return NextResponse.json({ error: 'Não autorizado ou nome do usuário ausente' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado ou name do usuário ausente' }, { status: 401 });
     }
 
     const { id: clientId } = params;
@@ -112,14 +112,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const [newNote] = await prisma.$transaction([
-      prisma.nota.create({
+      prisma.note.create({
         data: {
           content,
           createdBy: user.name,
           clienteId: clientId,
         },
       }),
-      prisma.cliente.update({
+      prisma.client.update({
         where: { id: clientId },
         data: { updatedAt: new Date() },
       }),

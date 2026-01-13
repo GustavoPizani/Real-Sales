@@ -11,7 +11,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const token = authHeader?.split(' ')[1];
         const user = await getUserFromToken(token);
 
-        if (!user || ![Role.marketing_adm, Role.diretor].includes(user.role)) {
+        if (!user || ![Role.MARKETING_ADMIN, Role.DIRECTOR].includes(user.role)) {
             return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
@@ -102,7 +102,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
         const token = authHeader?.split(' ')[1];
         const user = await getUserFromToken(token);
 
-        if (!user || ![Role.marketing_adm, Role.diretor].includes(user.role)) {
+        if (!user || ![Role.MARKETING_ADMIN, Role.DIRECTOR].includes(user.role)) {
             return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 

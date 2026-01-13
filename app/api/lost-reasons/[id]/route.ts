@@ -7,7 +7,7 @@ import { Role } from '@prisma/client';
 
 async function checkAdmin(request: NextRequest) {
   const user = await getUserFromToken(request);
-  if (!user || user.role !== Role.marketing_adm) {
+  if (!user || user.role !== Role.MARKETING_ADMIN) {
     return null;
   }
   return user;

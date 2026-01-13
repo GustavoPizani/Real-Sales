@@ -1,122 +1,60 @@
 // lib/auth.ts
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { NextRequest } from 'next/server';
+import { Role } from '@prisma/client';
 
 // Interface para o objeto de usuário usado no frontend e no token
 export interface UserPayload {
   id: string;
   name: string;
   email: string;
-  role: string;
-  accountId: string;
+  role: Role;
+  accountId: string | null;
   isSuperAdmin: boolean;
 }
 
-// Interface para o payload decodificado do JWT
-interface JwtPayload {
-  userId: string;
-  accountId: string;
-  isSuperAdmin: boolean;
-}
-
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
-}
-
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword);
-}
-
-export function generateToken(user: UserPayload): string {
-  if (!process.env.JWT_SECRET) {
-    throw new Error('A variável de ambiente JWT_SECRET não está definida.');
-  }
-  return jwt.sign(
-    {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      accountId: user.accountId,
-      isSuperAdmin: user.isSuperAdmin,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-}
-
-export async function verifyToken(token: string | undefined): Promise<UserPayload | null> {
-  if (!token) {
-    console.log('[AUTH] Tentativa de verificação sem token.');
-    return null;
-  }
-  if (!process.env.JWT_SECRET) {
-    console.error('[AUTH] ERRO: A variável de ambiente JWT_SECRET não está definida no backend.');
-    return null;
-  }
+/**
+ * Recupera os dados do usuário com base na sessão atual do Supabase.
+ * Recomendado para API Routes e Server Components.
+ */
+export async function getUserFromToken(request?: NextRequest): Promise<UserPayload | null> {
+  // 1. Criar o cliente Supabase (Note o await aqui!)
+  const supabase = await createClient();
+  
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload;
-    
-    const userFromDb = await prisma.usuario.findUnique({
-      where: { id: decoded.userId, accountId: decoded.accountId },
-      select: { id: true, nome: true, email: true, role: true, accountId: true, isSuperAdmin: true },
+    // 2. Recuperar o usuário da sessão (getUser é mais seguro que getSession no servidor)
+    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !supabaseUser) {
+      if (authError) console.error('[AUTH] Supabase error:', authError.message);
+      return null;
+    }
+
+    // 3. Buscar o perfil complementar no banco via Prisma (Schema em Inglês)
+    const userProfile = await prisma.user.findUnique({
+      where: { id: supabaseUser.id },
+      select: { 
+        id: true, 
+        name: true, 
+        email: true, 
+        role: true, 
+        accountId: true 
+      },
     });
 
-    if (!userFromDb) {
-      console.log(`[AUTH] Token válido para userId ${decoded.userId}, mas usuário não foi encontrado.`);
+    if (!userProfile) {
+      console.warn(`[AUTH] Supabase user ${supabaseUser.id} exists, but no profile found in public.users.`);
       return null;
     }
 
-    // Mapeia do schema (nome) para o payload do frontend (name)
-    const user: UserPayload = {
-        id: userFromDb.id,
-        name: userFromDb.nome,
-        email: userFromDb.email,
-        role: userFromDb.role,
-        accountId: userFromDb.accountId,
-        isSuperAdmin: userFromDb.isSuperAdmin,
-    };
-
-    return user;
-
-  } catch (error: any) {
-    console.error(`[AUTH] ERRO ao verificar o token JWT: ${error.name} - ${error.message}`);
-    return null;
-  }
-}
-
-export async function authenticateUser(email: string, password: string): Promise<UserPayload | null> {
-  try {
-    const userFromDb = await prisma.usuario.findUnique({
-      where: { email },
-    });
-
-    if (!userFromDb || !userFromDb.passwordHash) {
-      return null;
-    }
-
-    const isValidPassword = await verifyPassword(password, userFromDb.passwordHash);
-
-    if (!isValidPassword) {
-      return null;
-    }
-
-    // Mapeia do schema (nome) para o payload do frontend (name)
+    // 4. Retornar o Payload consolidado
     return {
-      id: userFromDb.id,
-      name: userFromDb.nome,
-      email: userFromDb.email,
-      role: userFromDb.role,
-      accountId: userFromDb.accountId,
-      isSuperAdmin: userFromDb.isSuperAdmin,
+      ...userProfile,
+      isSuperAdmin: userProfile.role === Role.MARKETING_ADMIN || userProfile.role === Role.DIRECTOR,
     };
-  } catch (error) {
-    console.error('Authentication error:', error);
+  } catch (error: any) {
+    console.error(`[AUTH] Unexpected error: ${error.message}`);
     return null;
   }
-}
-
-export async function getUserFromToken(token: string | undefined): Promise<(UserPayload & { accountId: string }) | null> {
-  // A lógica de extrair o token foi movida para as rotas da API.
-  return verifyToken(token);
 }

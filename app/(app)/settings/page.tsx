@@ -1,7 +1,7 @@
 // c:\Users\gusta\Real-sales\app\(app)\settings\page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback, ReactNode, forwardRef } from "react";
+import React, { useState, useEffect, useCallback, ReactNode } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,7 +27,7 @@ interface RoleSetting {
 
 interface HierarchyUser {
   id: string;
-  nome: string;
+  name: string;
 }
 
 // --- Sub-componente: Gestão de Cargos ---
@@ -36,10 +36,12 @@ function RoleManagementCard({ settings, onUpdate }: { settings: RoleSetting[], o
 
     const handleToggleRole = async (roleName: Role, isActive: boolean) => {
         try {
+            const token = localStorage.getItem('authToken');
             const response = await fetch('/api/role-settings', {
                 method: 'POST',
                 headers: { 
                   'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ roleName, isActive }),
             });
@@ -94,12 +96,14 @@ function ProfileTab() {
     e.preventDefault();
     if (!user) return;
     setIsLoading(true);
+    const token = localStorage.getItem('authToken');
 
     try {
       const response = await fetch(`/api/users/${user.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ name: formData.name, email: formData.email }),
       });
@@ -139,7 +143,7 @@ function ProfileTab() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} disabled title="O e-mail não pode ser alterado."/>
+            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} />
           </div>
           <Button type="submit" disabled={isLoading}>
             {isLoading ? 'Salvando...' : 'Salvar Alterações'}
@@ -164,13 +168,15 @@ function TeamManagementTab() {
     const [managers, setManagers] = useState<HierarchyUser[]>([]);
     const [selectedDirectorId, setSelectedDirectorId] = useState<string>('');
     
-    interface UserFormData { name: string; email: string; password?: string; role: Role; superiorId?: string | null; }
-    const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.corretor, superiorId: null });
+    interface UserFormData { name: string; email: string; password?: string; role: Role; supervisorId?: string | null; }
+    const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.BROKER, supervisorId: null });
 
     const fetchHierarchyData = useCallback(async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
         try {
             const directorsRes = await fetch('/api/users/hierarchy?role=diretor', {
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (directorsRes.ok) {
                 const directorsData = await directorsRes.json();
@@ -184,9 +190,11 @@ function TeamManagementTab() {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const headers = { 'Content-Type': 'application/json' };
+            const token = localStorage.getItem('authToken');
+            if (!token) return;
+            const headers = { 'Authorization': `Bearer ${token}` };
             const [usersRes, rolesRes] = await Promise.all([
-                fetch('/api/users'),
+                fetch('/api/users', { headers }),
                 fetch('/api/role-settings', { headers })
             ]);
 
@@ -212,9 +220,10 @@ function TeamManagementTab() {
     // Effect for cascading managers
     useEffect(() => {
         const fetchManagers = async () => {
-            if (userForm.role === Role.corretor && selectedDirectorId) {
-                const res = await fetch(`/api/users/hierarchy?role=gerente&superiorId=${selectedDirectorId}`, {
-                    headers: { 'Content-Type': 'application/json' }
+            if (userForm.role === Role.BROKER && selectedDirectorId) {
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`/api/users/hierarchy?role=MANAGER&superiorId=${selectedDirectorId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
                     const managersData = await res.json();
@@ -238,22 +247,23 @@ function TeamManagementTab() {
                 email: user.email,
                 password: '',
                 role: user.role,
-                superiorId: user.superiorId || ''
+                supervisorId: user.supervisorId || ''
             });
         } else {
             // Reset for new user
             setEditingUser(null);
             setSelectedDirectorId('');
             setManagers([]);
-            setUserForm({ name: '', email: '', password: '', role: Role.corretor, superiorId: null });
+            setUserForm({ name: '', email: '', password: '', role: Role.BROKER, supervisorId: null });
         }
         setIsDialogOpen(true);
     };
 
     const handleDelete = async (userId: string) => {
         if (!window.confirm('Tem a certeza que deseja excluir este utilizador? Esta ação é irreversível.')) return;
+        const token = localStorage.getItem('authToken');
         try {
-            const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+            const response = await fetch(`/api/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Falha ao excluir utilizador.');
@@ -266,7 +276,7 @@ function TeamManagementTab() {
     };
 
     const resetForm = () => {
-        setUserForm({ name: '', email: '', password: '', role: Role.corretor, superiorId: null });
+        setUserForm({ name: '', email: '', password: '', role: Role.BROKER, supervisorId: null });
         setSelectedDirectorId('');
         setManagers([]);
         setEditingUser(null);
@@ -275,13 +285,14 @@ function TeamManagementTab() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const token = localStorage.getItem('authToken');
         const method = editingUser ? 'PATCH' : 'POST';
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
         
         let finalSuperiorId = null;
-        if (userForm.role === Role.corretor) {
-            finalSuperiorId = userForm.superiorId; // This will be the manager's ID
-        } else if (userForm.role === Role.gerente) {
+        if (userForm.role === Role.BROKER) {
+            finalSuperiorId = userForm.supervisorId; // This will be the manager's ID
+        } else if (userForm.role === Role.MANAGER) {
             finalSuperiorId = selectedDirectorId;
         }
 
@@ -290,7 +301,7 @@ function TeamManagementTab() {
             email: userForm.email,
             password: userForm.password,
             role: userForm.role,
-            superiorId: finalSuperiorId
+            supervisorId: finalSuperiorId
         };
 
         if (!editingUser && !body.password) {
@@ -304,7 +315,7 @@ function TeamManagementTab() {
         try {
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(body),
             });
             if (!response.ok) {
@@ -321,11 +332,11 @@ function TeamManagementTab() {
 
     const getRoleIcon = (role: Role) => {
         const icons: Record<Role, React.ReactNode> = {
-            [Role.marketing_adm]: <Shield className="h-4 w-4 text-red-600" />,
-            [Role.diretor]: <Crown className="h-4 w-4 text-purple-600" />,
-            [Role.gerente]: <Star className="h-4 w-4 text-blue-600" />,
-            [Role.corretor]: <UserIcon className="h-4 w-4 text-green-600" />,
-            [Role.pre_vendas]: <Users className="h-4 w-4 text-orange-600" />,
+            [Role.MARKETING_ADMIN]: <Shield className="h-4 w-4 text-red-600" />,
+            [Role.DIRECTOR]: <Crown className="h-4 w-4 text-purple-600" />,
+            [Role.MANAGER]: <Star className="h-4 w-4 text-blue-600" />,
+            [Role.BROKER]: <UserIcon className="h-4 w-4 text-green-600" />,
+            [Role.PRE_SALES]: <Users className="h-4 w-4 text-orange-600" />,
         };
         return icons[role] || null;
     };
@@ -352,21 +363,21 @@ function TeamManagementTab() {
                         <CardTitle className="text-sm font-medium">Administradores</CardTitle>
                         <Shield className="h-4 w-4 text-red-500" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats.marketing_adm || 0}</div></CardContent>
+                    <CardContent><div className="text-2xl font-bold">{stats[Role.MARKETING_ADMIN] || 0}</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Gerentes</CardTitle>
                         <Star className="h-4 w-4 text-blue-500" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats.gerente || 0}</div></CardContent>
+                    <CardContent><div className="text-2xl font-bold">{stats[Role.MANAGER] || 0}</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Corretores</CardTitle>
                         <UserIcon className="h-4 w-4 text-green-500" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats.corretor || 0}</div></CardContent>
+                    <CardContent><div className="text-2xl font-bold">{stats[Role.BROKER] || 0}</div></CardContent>
                 </Card>
             </div>
 
@@ -408,7 +419,7 @@ function TeamManagementTab() {
                                         {USER_ROLE_LABELS[user.role]}
                                     </Badge>
                                 </TableCell>
-                                <TableCell>{user.superior?.nome || '-'}</TableCell>
+                                <TableCell>{user.supervisor?.name || 'N/A'}</TableCell>
                                 <TableCell>{user.createdAt ? format(new Date(user.createdAt), 'dd/MM/yyyy') : '-'}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={() => openDialog(user)}><Edit className="h-4 w-4" /></Button>
@@ -426,6 +437,9 @@ function TeamManagementTab() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>{editingUser ? 'Editar Utilizador' : 'Adicionar Novo Utilizador'}</DialogTitle>
+                        <DialogDescription className="sr-only">
+                            Formulário para adicionar ou editar usuários.
+                        </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
                         <div className="space-y-2">
@@ -443,7 +457,7 @@ function TeamManagementTab() {
                         <div className="space-y-2">
                             <Label htmlFor="role">Cargo</Label>
                             <Select value={userForm.role} onValueChange={(value: Role) => {
-                                setUserForm(p => ({...p, role: value, superiorId: null}));
+                                setUserForm(p => ({...p, role: value, supervisorId: null}));
                                 setSelectedDirectorId('');
                                 setManagers([]);
                             }}>
@@ -458,35 +472,35 @@ function TeamManagementTab() {
                             </Select>
                         </div>
                         
-                        {(userForm.role === Role.gerente || userForm.role === Role.corretor) && (
+                        {(userForm.role === Role.MANAGER || userForm.role === Role.BROKER) && (
                             <div className="space-y-2">
                                 <Label htmlFor="directorId">Diretor Responsável</Label>
                                 <Select value={selectedDirectorId} onValueChange={(value) => {
                                     setSelectedDirectorId(value);
-                                    setUserForm(p => ({...p, superiorId: null})); // Reset manager selection
+                                    setUserForm(p => ({...p, supervisorId: null})); // Reset manager selection
                                 }}>
                                     <SelectTrigger><SelectValue placeholder="Selecione um diretor" /></SelectTrigger>
                                     <SelectContent>
                                         {directors.map(dir => (
-                                            <SelectItem key={dir.id} value={dir.id}>{dir.nome}</SelectItem>
+                                            <SelectItem key={dir.id} value={dir.id}>{dir.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                         )}
 
-                        {userForm.role === Role.corretor && (
+                        {userForm.role === Role.BROKER && (
                              <div className="space-y-2">
-                                <Label htmlFor="superiorId">Gerente Responsável</Label>
+                                <Label htmlFor="supervisorId">Gerente Responsável</Label>
                                 <Select 
-                                    value={userForm.superiorId || ''} 
-                                    onValueChange={(value) => setUserForm(p => ({...p, superiorId: value}))}
+                                    value={userForm.supervisorId || ''} 
+                                    onValueChange={(value) => setUserForm(p => ({...p, supervisorId: value}))}
                                     disabled={!selectedDirectorId || managers.length === 0}
                                 >
                                     <SelectTrigger><SelectValue placeholder={!selectedDirectorId ? "Selecione um diretor primeiro" : "Selecione um gerente"} /></SelectTrigger>
                                     <SelectContent>
                                         {managers.map(manager => (
-                                            <SelectItem key={manager.id} value={manager.id}>{manager.nome}</SelectItem>
+                                            <SelectItem key={manager.id} value={manager.id}>{manager.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -504,30 +518,9 @@ function TeamManagementTab() {
     );
 }
 
-// Componente de Input de Senha com botão de visualização
-const PasswordInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => {
-  const [showPassword, setShowPassword] = useState(false);
-  const togglePasswordVisibility = () => setShowPassword(!showPassword);
-
-  return (
-    <div className="relative">
-      <Input
-        type={showPassword ? "text" : "password"}
-        {...props}
-        ref={ref}
-        className="pr-10"
-      />
-      <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-full px-3" onClick={togglePasswordVisibility}>
-        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </Button>
-    </div>
-  );
-});
-PasswordInput.displayName = 'PasswordInput';
-
 function SecurityTab() {
   const { toast } = useToast();
-  const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwords, setPasswords] = useState({ newPassword: '', confirmPassword: '' });
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -551,7 +544,7 @@ function SecurityTab() {
       const response = await fetch('/api/users/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword }),
+        body: JSON.stringify({ newPassword: passwords.newPassword }),
       });
 
       if (!response.ok) {
@@ -560,7 +553,9 @@ function SecurityTab() {
       }
 
       toast({ title: 'Sucesso!', description: 'Senha alterada com sucesso.' });
-      setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswords({ newPassword: '', confirmPassword: '' });
+      // TODO: Idealmente, o useAuth() deveria ser atualizado para deslogar o usuário aqui,
+      // ou a página deveria ser recarregada para que o middleware de autenticação redirecione para o login.
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Erro', description: error.message });
     } finally {
@@ -577,16 +572,12 @@ function SecurityTab() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="currentPassword">Senha Atual</Label>
-            <PasswordInput id="currentPassword" name="currentPassword" value={passwords.currentPassword} onChange={handleChange} required/>
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="newPassword">Nova Senha</Label>
-            <PasswordInput id="newPassword" name="newPassword" value={passwords.newPassword} onChange={handleChange} required/>
+            <Input id="newPassword" name="newPassword" type="password" value={passwords.newPassword} onChange={handleChange} required/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
-            <PasswordInput id="confirmPassword" name="confirmPassword" value={passwords.confirmPassword} onChange={handleChange} required/>
+            <Input id="confirmPassword" name="confirmPassword" type="password" value={passwords.confirmPassword} onChange={handleChange} required/>
           </div>
           <Button type="submit" disabled={isLoading}>{isLoading ? 'Salvando...' : 'Alterar Senha'}</Button>
         </form>
@@ -658,7 +649,7 @@ function NotificationsTab() {
         await fetch('/api/notifications/subscribe', {
           method: 'POST',
           body: JSON.stringify(newSubscription),
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
         });
 
         setSubscription(newSubscription);
@@ -673,7 +664,7 @@ function NotificationsTab() {
       // Lógica para CANCELAR INSCRIÇÃO
       try {
         await subscription.unsubscribe();
-        await fetch('/api/notifications/subscribe', { method: 'DELETE' });
+        await fetch('/api/notifications/subscribe', { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
         setSubscription(null);
         setIsSubscribed(false);
         toast({ title: 'Sucesso!', description: 'Inscrição para notificações removida.' });
@@ -742,7 +733,7 @@ function DataImportTab() {
     try {
       const response = await fetch('/api/clients/bulk-import', {
         method: 'POST',
-        // O token é enviado via cookie httpOnly, não precisa do header Authorization
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
         body: formData,
       });
 
@@ -777,12 +768,12 @@ function DataImportTab() {
         <div className="p-4 border rounded-lg space-y-3">
           <h3 className="font-semibold">Passo 1: Baixe a planilha modelo</h3>
           <p className="text-sm text-muted-foreground">
-            Use este modelo para garantir que os dados estão no formato correto. A coluna 'nomeCompleto' é obrigatória.
+            Use este modelo para garantir que os dados estão no formato correto. A coluna 'fullName' é obrigatória.
           </p>
-          <a href="/api/clients/template" download="modelo_clientes.xlsx">
+          <a href="/api/clients/template" download="modelo_clientes.csv">
             <Button variant="outline">
               <Download className="mr-2 h-4 w-4" />
-              Gerar Planilha Modelo (.xlsx)
+              Gerar Planilha Modelo (.csv)
             </Button>
           </a>
         </div>
@@ -790,10 +781,10 @@ function DataImportTab() {
         <div className="p-4 border rounded-lg space-y-3">
           <h3 className="font-semibold">Passo 2: Faça o upload da sua planilha</h3>
           <p className="text-sm text-muted-foreground">
-            Selecione o arquivo .xlsx preenchido para iniciar a importação.
+            Selecione o arquivo .csv preenchido para iniciar a importação.
           </p>
           <div className="flex items-center gap-2">
-            <Input id="csv-upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={handleFileChange} className="hidden" />
+            <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
             <Label
               htmlFor="csv-upload"
               className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 cursor-pointer"
@@ -802,7 +793,7 @@ function DataImportTab() {
               {file ? (
                 <span className="truncate max-w-[200px]">{file.name}</span>
               ) : (
-                "Escolher Planilha (.xlsx)"
+                "Escolher Planilha (.csv)"
               )}
             </Label>
             
@@ -827,6 +818,9 @@ function DataImportTab() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Resultado da Importação</DialogTitle>
+                <DialogDescription className="sr-only">
+                    Detalhes do resultado da importação de clientes.
+                </DialogDescription>
                 <DialogDescription>
                   <div className="flex items-center gap-4 mt-2">
                     <span className="flex items-center text-green-600"><CheckCircle className="mr-2 h-5 w-5" /> {importResult.successCount} Sucessos</span>
@@ -866,7 +860,10 @@ function LostReasonsTab() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/lost-reasons');
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/lost-reasons', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (!response.ok) throw new Error('Falha ao buscar motivos.');
       const data = await response.json();
       setReasons(data.reasons || []);
@@ -894,13 +891,14 @@ function LostReasonsTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const token = localStorage.getItem('authToken');
     const method = editingReason ? 'PUT' : 'POST';
     const url = editingReason ? `/api/lost-reasons/${editingReason.id}` : '/api/lost-reasons';
 
     try {
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ reason: reasonForm.reason }),
       });
       if (!response.ok) {
@@ -917,8 +915,12 @@ function LostReasonsTab() {
 
   const handleDelete = async (reasonId: string) => {
     if (!window.confirm('Tem certeza que deseja excluir este motivo?')) return;
+    const token = localStorage.getItem('authToken');
     try {
-      const response = await fetch(`/api/lost-reasons/${reasonId}`, { method: 'DELETE' });
+      const response = await fetch(`/api/lost-reasons/${reasonId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Falha ao excluir motivo.');
@@ -959,7 +961,10 @@ function LostReasonsTab() {
       </CardContent>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingReason ? 'Editar Motivo' : 'Novo Motivo de Perda'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editingReason ? 'Editar Motivo' : 'Novo Motivo de Perda'}</DialogTitle>
+            <DialogDescription className="sr-only">Formulário para adicionar ou editar motivos de perda de cliente.</DialogDescription>
+          </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="reason">Descrição do Motivo</Label>

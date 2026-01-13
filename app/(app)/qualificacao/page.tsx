@@ -19,7 +19,7 @@ function LeadCard({ lead, onAssign, isAssignable }) {
     setIsAssigning(true);
     try {
       await onAssign(lead.id);
-      toast({ title: "Sucesso!", description: `Lead "${lead.nomeCompleto}" atribuído a você.` });
+      toast({ title: "Sucesso!", description: `Lead "${lead.fullName}" atribuído a você.` });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro na Atribuição", description: error.message });
     } finally {
@@ -30,7 +30,7 @@ function LeadCard({ lead, onAssign, isAssignable }) {
   return (
     <div className="p-4 border rounded-lg flex justify-between items-center">
       <div>
-        <p className="font-semibold">{lead.nomeCompleto}</p>
+        <p className="font-semibold">{lead.fullName}</p>
         <p className="text-sm text-muted-foreground">Origem: {lead.funnel?.name || 'N/A'}</p>
       </div>
       <Button onClick={handleAssign} disabled={!isAssignable || isAssigning}>
@@ -111,7 +111,7 @@ function AtribuicaoTab() {
 function ConfiguracaoTab() {
   const { toast } = useToast();
   const [config, setConfig] = useState({ raioAtribuicaoMetros: 0, tempoAteBolsaoPrioritarioMinutos: 0, tempoAteBolsaoGeralMinutos: 0 });
-  const [users, setUsers] = useState<{id: string, nome: string}[]>([]);
+  const [users, setUsers] = useState<{id: string, name: string}[]>([]);
   const [permissions, setPermissions] = useState<{prioritario: string[], geral: string[]}>({ prioritario: [], geral: [] });
   const [loading, setLoading] = useState(true);
 
@@ -172,7 +172,7 @@ function ConfiguracaoTab() {
                 {users.map(user => (
                   <div key={user.id} className="flex items-center space-x-2">
                     <Checkbox id={`prioritario-${user.id}`} checked={permissions.prioritario.includes(user.id)} onCheckedChange={(checked) => handlePermissionChange('prioritario', user.id, !!checked)} />
-                    <label htmlFor={`prioritario-${user.id}`} className="text-sm font-medium leading-none">{user.nome}</label>
+                    <label htmlFor={`prioritario-${user.id}`} className="text-sm font-medium leading-none">{user.name}</label>
                   </div>
                 ))}
               </div>
@@ -183,7 +183,7 @@ function ConfiguracaoTab() {
                 {users.map(user => (
                   <div key={user.id} className="flex items-center space-x-2">
                     <Checkbox id={`geral-${user.id}`} checked={permissions.geral.includes(user.id)} onCheckedChange={(checked) => handlePermissionChange('geral', user.id, !!checked)} />
-                    <label htmlFor={`geral-${user.id}`} className="text-sm font-medium leading-none">{user.nome}</label>
+                    <label htmlFor={`geral-${user.id}`} className="text-sm font-medium leading-none">{user.name}</label>
                   </div>
                 ))}
               </div>

@@ -113,7 +113,7 @@ Após o deploy, execute os scripts na seguinte ordem:
 
 2. **Teste de Funcionalidades:**
    - Criar novo imóvel
-   - Upload de imagens
+   - Upload de images
    - Auto-save
    - Sistema de aprovações
 

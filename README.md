@@ -118,7 +118,7 @@ Acesse: http://localhost:3000
 ### Propriedades
 - Catálogo completo de imóveis
 - Filtros avançados
-- Upload de imagens
+- Upload de images
 - Status de disponibilidade
 
 ### Pipeline de Vendas

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     // --- UPLOAD REAL PARA O VERCEL BLOB ---
     const blob = await put(file.name, file, {
       access: 'public', // Torna o arquivo publicamente acessível através do URL
-      addRandomSuffix: true, // Adiciona um sufixo aleatório para evitar sobreposições de nome
+      addRandomSuffix: true, // Adiciona um sufixo aleatório para evitar sobreposições de name
     });
 
     // A função 'put' retorna um objeto com várias informações, incluindo o URL público do arquivo.

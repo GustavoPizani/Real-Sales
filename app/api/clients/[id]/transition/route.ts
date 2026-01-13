@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
         }
 
         // Lógica de permissão: Apenas usuários de pré-vendas ou admins podem mover
-        if (![Role.pre_vendas, Role.marketing_adm, Role.diretor].includes(user.role)) {
+        if (![Role.pre_vendas, Role.MARKETING_ADMIN, Role.DIRECTOR].includes(user.role)) {
             return NextResponse.json({ error: "Acesso negado para realizar esta transição." }, { status: 403 });
         }
 
@@ -34,9 +34,9 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
         }
 
         // --- Lógica da Roleta ---
-        const roleta = await prisma.roleta.findUnique({
+        const roleta = await prisma.leadRoulette.findUnique({
             where: { id: roletaId },
-            include: { corretores: { include: { corretor: true }, orderBy: { corretor: { nome: 'asc' } } } }
+            include: { corretores: { include: { corretor: true }, orderBy: { corretor: { name: 'asc' } } } }
         });
 
         if (!roleta || !roleta.ativa || roleta.corretores.length === 0) {
@@ -61,26 +61,26 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
 
         // Transação para garantir atomicidade
         const [updatedClient] = await prisma.$transaction([
-            prisma.cliente.update({
+            prisma.client.update({
                 where: { id: clientId },
                 data: {
                     funnelId: targetFunnel.id,
                     funnelStageId: firstStageOfTargetFunnel.id,
-                    corretorId: nextCorretor.id,
+                    brokerId: nextCorretor.id,
                 }
             }),
-            prisma.roleta.update({
+            prisma.leadRoulette.update({
                 where: { id: roletaId },
                 data: { lastAssignedIndex: nextIndex }
             })
         ]);
 
         // 3. (Opcional, mas recomendado) Criar uma nota de histórico
-        await prisma.nota.create({
+        await prisma.note.create({
             data: {
                 clienteId: clientId,
-                content: `Lead movido do funil anterior para "${targetFunnel.name}" por ${user.nome}.`,
-                createdBy: user.nome,
+                content: `Lead movido do funil anterior para "${targetFunnel.name}" por ${user.name}.`,
+                createdBy: user.name,
             }
         });
 

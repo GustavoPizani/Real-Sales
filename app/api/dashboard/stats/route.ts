@@ -1,10 +1,10 @@
 // app/api/dashboard/stats/route.ts
 
 import { NextResponse, NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
+// TODO: Replace getUserFromToken with Supabase auth helpers
 import { getUserFromToken } from '@/lib/auth'
-import { Role } from '@prisma/client'
+import { Role, ClientOverallStatus, Prisma } from '@prisma/client'
 
 // Força a rota a ser sempre dinâmica, resolvendo o erro de build da Vercel.
 export const dynamic = 'force-dynamic';
@@ -14,8 +14,9 @@ async function getSubordinateIds(userId: string): Promise<string[]> {
   const allSubordinateIds = new Set<string>();
 
   while (idsToProcess.length > 0) {
-    const currentLevelIds = await prisma.usuario.findMany({
-      where: { superiorId: { in: idsToProcess } },
+    const currentLevelIds = await prisma.user.findMany({
+      // Corrected field name from 'superiorId' to 'supervisorId'
+      where: { supervisorId: { in: idsToProcess } },
       select: { id: true },
     });
 
@@ -31,48 +32,51 @@ async function getSubordinateIds(userId: string): Promise<string[]> {
   return Array.from(allSubordinateIds);
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Utiliza a função centralizada para obter o usuário, que é mais segura e limpa.
-    const token = cookies().get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    // TODO: Replace with Supabase session logic
+    const user = await getUserFromToken(request);
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     let userIdsForFilter: string[] = [];
 
-    if (user.role === Role.marketing_adm) {
-      // Admin vê todos. Deixar o filtro `in` vazio busca de todos os usuários.
-      // Se corretorId for opcional, precisamos de uma lógica diferente.
-      // Assumindo que queremos todos os clientes com um corretor atribuído.
-    } else if (user.role === Role.diretor || user.role === Role.gerente) {
+    if (user.role === Role.MARKETING_ADMIN) {
+      // Admin sees all. An empty userIdsForFilter array means no filter by brokerId will be applied.
+    } else if (user.role === Role.DIRECTOR || user.role === Role.MANAGER) {
       userIdsForFilter = [user.id, ...(await getSubordinateIds(user.id))];
-    } else { // Para corretor, pre_vendas, etc.
+    } else { // For BROKER, PRE_SALES, etc.
       userIdsForFilter = [user.id];
     }
 
-    // Define o filtro base para o tenant
-    const tenantWhere: Prisma.ClienteWhereInput = {
-      accountId: user.isSuperAdmin ? undefined : user.accountId,
+    // Base filter for the tenant. The 'accountId' is on the User model.
+    // We filter clients based on the brokers who belong to the account.
+    const tenantWhere: Prisma.ClientWhereInput = {
+      broker: {
+        accountId: user.accountId,
+      },
     };
 
     // Agrupa as consultas para melhor performance
     const [hierarchicalTotalClients, hierarchicalActiveClients, totalProperties] = await prisma.$transaction([
-      prisma.cliente.count({
+      prisma.client.count({
         where: {
           ...tenantWhere,
-          ...(userIdsForFilter.length > 0 && { proprietarioId: { in: userIdsForFilter } })
+          ...(userIdsForFilter.length > 0 && { brokerId: { in: userIdsForFilter } }),
         },
       }),
-      prisma.cliente.count({
+      prisma.client.count({
         where: {
           ...tenantWhere,
-          ...(userIdsForFilter.length > 0 && { proprietarioId: { in: userIdsForFilter } }),
-          overallStatus: 'Ativo' },
+          ...(userIdsForFilter.length > 0 && { brokerId: { in: userIdsForFilter } }),
+          overallStatus: ClientOverallStatus.ACTIVE,
+        },
       }),
-      // A contagem de imóveis também deve respeitar o tenant
-      prisma.imovel.count({ where: { accountId: user.isSuperAdmin ? undefined : user.accountId } })
+      // The Property model does not have an accountId.
+      // This count will be for all properties in the database.
+      // To filter by tenant, the Property model would need an accountId or a relation to a user.
+      prisma.property.count(),
     ]);
 
     const conversionRate =

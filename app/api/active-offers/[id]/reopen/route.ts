@@ -36,16 +36,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         if (!firstStage) throw new Error("Nenhuma etapa encontrada para o funil principal.");
 
         // Cria um novo cliente no pipeline principal
-        const newClient = await prisma.cliente.create({
+        const newClient = await prisma.client.create({
             data: {
-                nomeCompleto: offerClient.contactName,
+                fullName: offerClient.contactName,
                 email: offerClient.contactEmail,
-                telefone: offerClient.contactPhone,
+                phone: offerClient.contactPhone,
                 proprietario: { connect: { id: user.id } }, // O proprietário é quem reabriu
                 criadoPor: { connect: { id: user.id } },
                 funil: { connect: { id: mainFunnel.id } },
                 etapa: { connect: { id: firstStage.id } },
-                overallStatus: ClientOverallStatus.Ativo,
+                overallStatus: ClientOverallStatus.ACTIVE,
                 origem: `Oferta Ativa: ${offerClient.offerId}`,
             },
         });

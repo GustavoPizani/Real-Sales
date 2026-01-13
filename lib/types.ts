@@ -1,111 +1,155 @@
 // lib/types.ts
-import { Role, StatusImovel, ClientOverallStatus, TaskType, Priority } from '@prisma/client';
+import { Role, PropertyStatus, ClientOverallStatus, TaskType, Priority } from '@prisma/client';
 
-// --- INTERFACES DE DADOS (ALINHADAS COM O SCHEMA) ---
+// --- DATA INTERFACES (Updated and aligned with the new schema) ---
+
 export interface User {
   id: string;
-  nome: string;
+  name: string;
   email: string;
   role: Role;
-  superiorId?: string | null;
-  superior?: User | null;
+  supervisorId?: string | null;
+  supervisor?: User | null;
   createdAt: string;
 }
 
-export interface Cliente {
-  id: string;
-  nomeCompleto: string;
-  telefone?: string | null;
-  email?: string | null;
-  currentFunnelStage: string;
-  overallStatus: ClientOverallStatus;
-  notas?: Nota[];
-  createdAt: string;
-  updatedAt: string;
-  corretorId: string;
-  imovelDeInteresseId?: string | null;
-  imovelDeInteresse?: Imovel | null;
-  corretor?: User | null;
-  detalhesDeVenda?: ClientWonDetails;
+export interface Tag {
+    id: string;
+    name: string;
+    color: string;
 }
 
-export interface ClientWonDetails {
-  id: string;
-  clienteId: string;
-  sale_value: number;
-  sale_date: string;
-  createdAt: string;
+export interface ClientDocument {
+    id: string;
+    url: string;
+    name: string;
+    type?: string | null;
+    createdAt: string;
 }
 
-export interface Nota {
+export interface Note {
   id: string;
-  clienteId: string;
-  createdBy: string;
+  clientId: string;
+  authorId: string;
   content: string;
   createdAt: string;
 }
 
-export interface TipologiaImovel {
+export interface ClientWonDetails {
   id: string;
-  nome: string;
-  valor: number;
-  area?: number | null;
-  dormitorios?: number | null;
-  suites?: number | null;
-  vagas?: number | null;
+  clientId: string;
+  saleValue: number;
+  saleDate: string;
+  createdAt: string;
 }
 
-export interface ImagemImovel {
+export interface PropertyType {
+  id: string;
+  name: string;
+  value: number;
+  areaSqMeters?: number | null;
+  bedrooms?: number | null;
+  suites?: number | null;
+  parkingSpaces?: number | null;
+}
+
+export interface PropertyImage {
     id: string;
     url: string;
 }
 
-export interface Imovel {
+export interface Property {
   id: string;
-  titulo: string;
-  // descricao?: string | null; // ❌ Removido
-  features?: string[];           // ✅ Adicionado
-  endereco?: string | null;
-  tipo?: string | null;
-  status: StatusImovel;
-  quartos?: number | null;
-  banheiros?: number | null;
-  preco?: number | null;
-  area?: number | null;
-  imagens?: ImagemImovel[];
-  tipologias?: TipologiaImovel[];
+  title: string;
+  features?: string[];
+  address?: string | null;
+  type?: string | null;
+  status: PropertyStatus;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  price?: number | null;
+  areaSqMeters?: number | null;
+  images?: PropertyImage[];
+  propertyTypes?: PropertyType[];
   createdAt: string;
 }
 
-export interface Tarefa {
+export interface Task {
   id: string;
-  titulo: string;
-  descricao?: string | null;
-  dataHora: string;
-  concluida: boolean;
+  title: string;
+  description?: string | null;
+  dateTime: string;
+  isCompleted: boolean;
   tipo: TaskType;
-  prioridade: Priority;
-  clienteId: string;
-  cliente?: Cliente;
-  usuarioId: string;
-  usuario?: User;
+  priority: Priority;
+  clientId: string;
+  client?: Client;
+  userId: string;
+  user?: User;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Client {
+  id: string;
+  fullName: string;
+  phone?: string | null;
+  email?: string | null;
+  createdAt: string;
+  updatedAt: string;
+
+  // --- Schema scalar fields ---
+  accountId: string;
+  createdById: string;
+  brokerId: string;
+  propertyOfInterestId?: string | null;
+  funnelId: string;
+  funnelStageId: string;
+  overallStatus: ClientOverallStatus;
+
+  // --- Relations included from API ---
+  broker?: {
+    id: string;
+    name: string;
+    email: string;
+    role: Role; supervisor?: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
+
+  propertyOfInterest?: (Property & { propertyTypes?: PropertyType[] }) | null;
+
+  funnel: {
+    name: string;
+  };
+
+  funnelStage: {
+    name: string;
+  };
+
+  notes?: Note[];
+  tasks?: Task[];
+  tags?: Tag[];
+  documents?: ClientDocument[];
+  saleDetails?: ClientWonDetails | null;
 }
 
 export interface LostReason {
   id: string;
   reason: string;
   active: boolean;
-  created_at: string;
+  createdAt: string;
 }
 
 // --- CONSTANTES E ENUMS ---
-export { Role, StatusImovel, ClientOverallStatus, TaskType, Priority };
+export { Role, PropertyStatus, ClientOverallStatus, TaskType, Priority };
 
+// Corrigindo o mapeamento de labels para os novos Enums
 export const USER_ROLE_LABELS: Record<Role, string> = {
-  [Role.marketing_adm]: "Admin Marketing",
-  [Role.diretor]: "Diretor",
-  [Role.gerente]: "Gerente",
-  [Role.corretor]: "Corretor",
+  [Role.MARKETING_ADMIN]: "Marketing / Admin",
+  [Role.DIRECTOR]: "Diretor",
+  [Role.MANAGER]: "Gerente",
+  [Role.BROKER]: "Corretor",
+  [Role.PRE_SALES]: "Pré-vendas",
 };

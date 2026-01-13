@@ -10,29 +10,29 @@ export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
     }
 
     // Garante que a configuração e os bolsões existam
     const config = await prisma.configuracaoBolsao.findFirst() ?? await prisma.configuracaoBolsao.create({ data: {} });
-    await prisma.bolsao.upsert({ where: { nome: 'Prioritário' }, update: {}, create: { nome: 'Prioritário' } });
-    await prisma.bolsao.upsert({ where: { nome: 'Geral' }, update: {}, create: { nome: 'Geral' } });
+    await prisma.leadPool.upsert({ where: { name: 'Prioritário' }, update: {}, create: { name: 'Prioritário' } });
+    await prisma.leadPool.upsert({ where: { name: 'Geral' }, update: {}, create: { name: 'Geral' } });
 
     // Busca todos os usuários que podem participar
-    const users = await prisma.usuario.findMany({
-      where: { role: { in: [Role.corretor, Role.gerente] } },
-      select: { id: true, nome: true },
+    const users = await prisma.user.findMany({
+      where: { role: { in: [Role.BROKER, Role.MANAGER] } },
+      select: { id: true, name: true },
     });
 
     // Busca as permissões atuais
-    const permissions = await prisma.bolsaoUsuario.findMany({
+    const permissions = await prisma.leadPoolUsuario.findMany({
       include: { bolsao: true },
     });
 
     const permissionsByPool = {
-      prioritario: permissions.filter(p => p.bolsao.nome === 'Prioritário').map(p => p.usuarioId),
-      geral: permissions.filter(p => p.bolsao.nome === 'Geral').map(p => p.usuarioId),
+      prioritario: permissions.filter(p => p.bolsao.name === 'Prioritário').map(p => p.usuarioId),
+      geral: permissions.filter(p => p.bolsao.name === 'Geral').map(p => p.usuarioId),
     };
 
     return NextResponse.json({ config, users, permissions: permissionsByPool });
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
     }
 
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       });
 
       // 2. Atualiza as permissões
-      const bolsaoPrioritario = await tx.bolsao.findUnique({ where: { nome: 'Prioritário' } });
-      const bolsaoGeral = await tx.bolsao.findUnique({ where: { nome: 'Geral' } });
+      const bolsaoPrioritario = await tx.bolsao.findUnique({ where: { name: 'Prioritário' } });
+      const bolsaoGeral = await tx.bolsao.findUnique({ where: { name: 'Geral' } });
 
       // Limpa permissões antigas e insere as novas para o bolsão prioritário
       await tx.bolsaoUsuario.deleteMany({ where: { bolsaoId: bolsaoPrioritario!.id } });

@@ -46,10 +46,10 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
 
   const getRoleLabel = (role: Role | string) => {
     const labels: Record<Role | string, string> = {
-      [Role.marketing_adm]: 'Administrador',
-      [Role.diretor]: 'Diretor',
-      [Role.gerente]: 'Gerente',
-      [Role.corretor]: 'Corretor',
+      [Role.MARKETING_ADMIN]: 'Administrador',
+      [Role.DIRECTOR]: 'Diretor',
+      [Role.MANAGER]: 'Gerente',
+      [Role.BROKER]: 'Corretor',
       [Role.ADMIN]: 'Super Admin',
     };
     return labels[role] || role;
@@ -86,7 +86,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
         {/* Logo */}
         <div className="p-4 flex-shrink-0 border-b border-tertiary-custom/50 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center justify-start gap-3">
-            <img src="/rs-logo.png" alt="Real Sales Logo" className="w-8 h-8" />
+            <img src="/logo.png" alt="Real Sales Logo" className="w-8 h-8" />
             <div className={cn(
               "flex flex-col transition-opacity duration-200 whitespace-nowrap",
               isExpanded ? "opacity-100" : "opacity-0"

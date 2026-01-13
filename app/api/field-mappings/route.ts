@@ -2,13 +2,16 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromToken } from '@/lib/auth';
+import { Role } from '@prisma/client';
+// TODO: Substituir pela lógica de sessão do Supabase
+import { getUserFromToken } from '@/lib/auth'; 
 
 // GET: Busca os mapeamentos para uma fonte específica (ex: 'site' ou 'meta_ads')
 export async function GET(request: NextRequest) {
   try {
+    // TODO: Substituir pela lógica de sessão do Supabase
     const user = await getUserFromToken(request);
-    if (!user || user.role !== 'marketing_adm') {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
@@ -34,8 +37,9 @@ export async function GET(request: NextRequest) {
 // POST: Cria ou atualiza os mapeamentos para uma fonte
 export async function POST(request: NextRequest) {
   try {
+    // TODO: Substituir pela lógica de sessão do Supabase
     const user = await getUserFromToken(request);
-    if (!user || user.role !== 'marketing_adm') {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 

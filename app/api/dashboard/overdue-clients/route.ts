@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import { getUserFromToken } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { subDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(): Promise<NextResponse> {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('authToken')?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: 'Token de autenticação não encontrado' }, { status: 401 });
-    }
-
-    const user = await getUserFromToken(token);
+    const user = await getCurrentUser();
 
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -25,7 +17,7 @@ export async function GET() {
 
     // Encontra clientes atribuídos ao usuário logado (corretor)
     // cuja última atualização foi há mais de 7 dias.
-    const overdueClients = await prisma.cliente.findMany({
+    const overdueClients = await prisma.client.findMany({
       where: {
         proprietarioId: user.id, // Filtra pelo usuário logado
         updatedAt: {
@@ -38,7 +30,7 @@ export async function GET() {
       },
       select: {
         id: true,
-        nomeCompleto: true,
+        fullName: true,
         updatedAt: true,
       },
       orderBy: {

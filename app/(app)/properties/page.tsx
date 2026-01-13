@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2, Layout } from "lucide-react";
-import { type Imovel, StatusImovel, type TipologiaImovel } from "@/lib/types"; // CORREÇÃO: Importado StatusImovel
+import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2 } from "lucide-react";
+import { type Imovel, PropertyStatus, type TipologiaImovel } from "@/lib/types"; // CORREÇÃO: Importado PropertyStatus
 import { useToast } from "@/components/ui/use-toast";
-import PropertiesEmptyState from './empty-state'; // Importação estática
 
+const PropertiesEmptyState = dynamic(() =>
+  import('./empty-state'),
+  { loading: () => <Loader2 className="h-8 w-8 mx-auto my-12 animate-spin text-gray-300" /> }
+);
 
 export default function PropertiesPage() {
   const router = useRouter();
@@ -50,20 +53,20 @@ export default function PropertiesPage() {
 
   const filteredProperties = properties.filter((property) => {
     const matchesSearch =
-      property.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (property.endereco && property.endereco.toLowerCase().includes(searchTerm.toLowerCase()));
+      property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (property.address && property.address.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = statusFilter === "all" || property.status === statusFilter;
-    const matchesType = typeFilter === "all" || !property.tipo || property.tipo.toLowerCase() === typeFilter.toLowerCase();
+    const matchesType = typeFilter === "all" || !property.type || property.type.toLowerCase() === typeFilter.toLowerCase();
 
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const getStatusBadge = (status: StatusImovel) => {
-    const variants: Record<StatusImovel, "default" | "secondary" | "destructive"> = {
-      [StatusImovel.Disponivel]: "default",
-      [StatusImovel.Reservado]: "secondary",
-      [StatusImovel.Vendido]: "destructive",
+  const getStatusBadge = (status: PropertyStatus) => {
+    const variants: Record<PropertyStatus, "default" | "secondary" | "destructive"> = {
+      [PropertyStatus.AVAILABLE]: "default",
+      [PropertyStatus.Reservado]: "secondary",
+      [PropertyStatus.SOLD]: "destructive",
     };
     return <Badge variant={variants[status] || "default"}>{status}</Badge>;
   };
@@ -96,20 +99,10 @@ export default function PropertiesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
           <p className="text-gray-600">Gerencie todos os empreendimentos e propriedades</p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* BOTÃO NOVO */}
-          <Link href="/site-builder">
-            <Button variant="outline" className="flex items-center gap-2 border-gray-300 hover:bg-gray-50">
-              <Layout className="h-4 w-4" />
-              Editor de Site
-            </Button>
-          </Link>
-          
-          {/* Botão Existente */}
-          <Link href="/properties/new">
-            <Button><Plus className="h-4 w-4 mr-2" />Novo Imóvel</Button>
-          </Link>
-        </div>
+        <Button onClick={() => router.push('/properties/new')}>
+          <Plus className="h-4 w-4 mr-2" />
+          Novo Imóvel
+        </Button>
       </div>
 
       <Card>
@@ -124,7 +117,7 @@ export default function PropertiesPage() {
             <div className="relative md:col-span-2">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Buscar por nome ou endereço..."
+                placeholder="Buscar por name ou endereço..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -134,9 +127,9 @@ export default function PropertiesPage() {
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value={StatusImovel.Disponivel}>Disponível</SelectItem>
-                <SelectItem value={StatusImovel.Reservado}>Reservado</SelectItem>
-                <SelectItem value={StatusImovel.Vendido}>Vendido</SelectItem>
+                <SelectItem value={PropertyStatus.AVAILABLE}>Disponível</SelectItem>
+                <SelectItem value={PropertyStatus.Reservado}>Reservado</SelectItem>
+                <SelectItem value={PropertyStatus.SOLD}>Vendido</SelectItem>
               </SelectContent>
             </Select>
              <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -171,31 +164,31 @@ export default function PropertiesPage() {
                 <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/properties/${property.id}/view`)}>
                   <TableCell>
                     <img
-                      src={property.imagens?.[0]?.url || '/placeholder.svg'}
-                      alt={property.titulo}
+                      src={property.images?.[0]?.url || '/placeholder.svg'}
+                      alt={property.title}
                       className="h-12 w-12 object-cover rounded-md"
                     />
                   </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{property.titulo}</p>
+                      <p className="font-medium">{property.title}</p>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        {property.endereco || 'Endereço não informado'}
+                        {property.address || 'Endereço não informado'}
                       </p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="flex items-center gap-1 w-fit">
                       <Home className="h-3 w-3" />
-                      {property.tipo || 'N/A'}
+                      {property.type || 'N/A'}
                     </Badge>
                   </TableCell>
                   <TableCell>{getStatusBadge(property.status)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <DollarSign className="h-4 w-4 text-gray-400" />
-                      {getPriceRange(property.tipologias)}
+                      {getPriceRange(property.typelogias)}
                     </div>
                   </TableCell>
                   <TableCell>

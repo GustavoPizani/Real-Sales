@@ -18,7 +18,7 @@ interface ActiveOffer {
   status: string;
   createdAt: string;
   createdBy: {
-    nome: string;
+    name: string;
   };
   _count: {
     clients: number;
@@ -88,7 +88,7 @@ export default function ActiveOffersPage() {
             <Card key={offer.id}>
               <CardHeader>
                 <CardTitle>{offer.name}</CardTitle>
-                <CardDescription>Criada por {offer.createdBy.nome}</CardDescription>
+                <CardDescription>Criada por {offer.createdBy.name}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between text-sm">

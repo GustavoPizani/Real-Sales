@@ -23,9 +23,9 @@ export async function getSession() {
         return null;
     }
 
-    const user = await prisma.usuario.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, role: true, nome: true },
+      select: { id: true, role: true, name: true },
     });
     
     // Se a busca no banco de dados não retornar nada, o usuário não existe.

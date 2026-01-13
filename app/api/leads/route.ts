@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
     }
 
-    const leads = await prisma.lead.findMany({
+    const leads = await prisma.client.findMany({
       orderBy: {
         createdAt: 'desc',
       },
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verifica se já existe um lead ou cliente com este email para evitar duplicatas
-    const existingLead = await prisma.lead.findFirst({ where: { email } });
+    const existingLead = await prisma.client.findFirst({ where: { email } });
     const existingClient = await prisma.client.findUnique({ where: { email } });
 
     if (existingLead || existingClient) {
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newLead = await prisma.lead.create({
+    const newLead = await prisma.client.create({
       data: {
         name,
         email,

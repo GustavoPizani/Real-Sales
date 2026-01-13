@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         // Administradores e gerentes podem ver todos os funis
         // Outros usuários verão apenas os funis aos quais têm acesso
         let whereClause = {};
-        if (![Role.marketing_adm, Role.diretor, Role.gerente].includes(user.role)) {
+        if (![Role.MARKETING_ADMIN, Role.DIRECTOR, Role.MANAGER].includes(user.role)) {
             whereClause = {
                 userAccess: {
                     some: {
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
             // A inclusão das etapas foi movida para fora da cláusula 'where'
             include: {
                 stages: { orderBy: { order: 'asc' } }, // Garante que as etapas venham ordenadas
-                userAccess: { include: { user: { select: { id: true, nome: true, role: true } } } }
+                userAccess: { include: { user: { select: { id: true, name: true, role: true } } } }
             },
             orderBy: { createdAt: 'asc' }
         });
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         const token = authHeader?.split(' ')[1];
         const user = await getUserFromToken(token);
 
-        if (!user || ![Role.marketing_adm, Role.diretor].includes(user.role)) {
+        if (!user || ![Role.MARKETING_ADMIN, Role.DIRECTOR].includes(user.role)) {
             return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         const { name, isDefaultEntry } = body;
 
         if (!name) {
-            return NextResponse.json({ error: "O nome do funil é obrigatório" }, { status: 400 });
+            return NextResponse.json({ error: "O name do funil é obrigatório" }, { status: 400 });
         }
 
         // Se este funil for o padrão, desmarca qualquer outro

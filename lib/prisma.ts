@@ -1,27 +1,22 @@
 import { PrismaClient } from '@prisma/client';
 
-// Declaração global para evitar múltiplas instâncias em dev
+// Declara uma variável global para o Prisma Client para evitar múltiplas
+// instâncias em ambiente de desenvolvimento com hot-reloading.
 declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// LÓGICA DE CONEXÃO ROBUSTA (Baseada na sua versão estável):
-// Tenta encontrar a URL do banco na Vercel (database_...) ou no local (.env)
-const connectionUrl =
-  process.env.database_POSTGRES_PRISMA_URL || // Vercel (Produção)
-  process.env.POSTGRES_PRISMA_URL ||          // .env local alternative
-  process.env.DATABASE_URL;                   // Standard Default
+// A Vercel e ambientes locais modernos configuram a DATABASE_URL automaticamente.
+// Simplificar para usar apenas a variável de ambiente padrão melhora a portabilidade.
+const connectionUrl = process.env.DATABASE_URL;
 
-// Verificação de segurança
+// Lança um erro claro se a URL de conexão não for encontrada.
 if (!connectionUrl) {
-  // Em build time, se não houver variável, não deve quebrar, mas logar aviso.
-  // Porém, para runtime, precisamos da URL.
-  if (process.env.NODE_ENV !== 'production') {
-      console.warn("Aviso: Nenhuma variável de conexão de banco de dados encontrada.");
-  }
+  throw new Error("A variável de ambiente DATABASE_URL não foi encontrada. Verifique seu arquivo .env ou as configurações do seu provedor de hospedagem.");
 }
 
-// Inicialização PADRÃO (Sem Adapters)
+// Exporta uma única instância do Prisma Client.
+// Usa a instância global em desenvolvimento, ou cria uma nova em produção.
 export const prisma =
   global.prisma ||
   new PrismaClient({
@@ -30,13 +25,12 @@ export const prisma =
         url: connectionUrl,
       },
     },
-    // Log apenas em desenvolvimento
+    // Opcional: Log de queries em ambiente de desenvolvimento.
     log: process.env.NODE_ENV === 'development' ? ['query'] : [],
   });
 
+// Em desenvolvimento, atribui a instância ao objeto global para evitar
+// criar múltiplas instâncias durante o hot-reloading.
 if (process.env.NODE_ENV !== 'production') {
   global.prisma = prisma;
 }
-
-// Exportação padrão para garantir compatibilidade
-export default prisma;

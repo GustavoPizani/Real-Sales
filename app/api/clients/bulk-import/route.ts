@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     };
 
     const [users, funnels, etapas] = await Promise.all([
-      prisma.usuario.findMany({ 
+      prisma.user.findMany({ 
         where: { email: { in: emailsToFind }, ...tenantWhere }, 
         select: { id: true, email: true } 
       }),
@@ -100,23 +100,23 @@ export async function POST(request: NextRequest) {
 
     // Mapear para busca rápida
     const userMap = new Map(users.map(u => [u.email, u.id]));
-    const funnelMap = new Map(funnels.map(f => [f.nome, f.id]));
-    const etapaMap = new Map(etapas.map(e => [e.nome, { id: e.id, funilId: e.funilId }]));
+    const funnelMap = new Map(funnels.map(f => [f.name, f.id]));
+    const etapaMap = new Map(etapas.map(e => [e.name, { id: e.id, funilId: e.funilId }]));
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const lineNumber = i + 2; // +1 para index e +1 para cabeçalho
 
-      if (!row.nomeCompleto) {
-        errorDetails.push(`Linha ${lineNumber}: A coluna 'nomeCompleto' é obrigatória.`);
+      if (!row.fullName) {
+        errorDetails.push(`Linha ${lineNumber}: A coluna 'fullName' é obrigatória.`);
         continue;
       }
 
       try {
-        const clientData: Prisma.ClienteCreateInput = {
-          nomeCompleto: row.nomeCompleto,
+        const clientData: prisma.clientCreateInput = {
+          fullName: row.fullName,
           email: row.email || null,
-          telefone: row.telefone ? String(row.telefone) : null,
+          phone: row.phone ? String(row.phone) : null,
           criadoPor: { connect: { id: currentUser.id } },
           account: { connect: { id: currentUser.accountId } }, // Garante que o cliente pertence ao tenant correto
           // Adicione outros campos conforme o modelo
@@ -136,8 +136,8 @@ export async function POST(request: NextRequest) {
         const funnelId = funnelMap.get(row.funilNome);
         const etapaInfo = etapaMap.get(row.etapaNome);
 
-        if (!funnelId) { throw new Error(`Funil com nome '${row.funilNome}' não encontrado.`); }
-        if (!etapaInfo) { throw new Error(`Etapa com nome '${row.etapaNome}' não encontrada.`); }
+        if (!funnelId) { throw new Error(`Funil com name '${row.funilNome}' não encontrado.`); }
+        if (!etapaInfo) { throw new Error(`Etapa com name '${row.etapaNome}' não encontrada.`); }
         if (etapaInfo.funilId !== funnelId) { throw new Error(`A etapa '${row.etapaNome}' não pertence ao funil '${row.funilNome}'.`); }
 
         // Proprietário é opcional
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
             clientData.proprietario = { connect: { id: ownerId } };
         }
 
-        await prisma.cliente.create({ data: clientData });
+        await prisma.client.create({ data: clientData });
         successCount++;
       } catch (error: any) {
         errorDetails.push(`Linha ${lineNumber}: ${error.message}`);

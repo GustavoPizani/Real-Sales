@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   // 1. Move de 'Aguardando' para 'Prioritário'
   const timeLimitPrioritario = subMinutes(now, config.tempoAteBolsaoPrioritarioMinutos);
-  await prisma.cliente.updateMany({
+  await prisma.client.updateMany({
     where: {
       statusDeQualificacao: StatusQualificacao.Aguardando,
       createdAt: { lte: timeLimitPrioritario },
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   // 2. Move de 'Prioritário' para 'Geral'
   const timeLimitGeral = subMinutes(now, config.tempoAteBolsaoGeralMinutos);
-  await prisma.cliente.updateMany({
+  await prisma.client.updateMany({
     where: {
       statusDeQualificacao: StatusQualificacao.NoBolsaoPrioritario,
       entrouNoBolsaoEm: { lte: timeLimitGeral },

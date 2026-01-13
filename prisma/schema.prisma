@@ -4,305 +4,298 @@ generator client {
 }
 
 datasource db {
-  provider     = "postgresql"
-  url          = env("POSTGRES_PRISMA_URL")
-  directUrl    = env("POSTGRES_URL_NON_POOLING")
-  relationMode = "foreignKeys"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // --- ENUMS ---
 enum Role {
-  marketing_adm
-  diretor
-  gerente
-  corretor
-  ADMIN
-  pre_vendas // Novo perfil
+  MARKETING_ADMIN
+  DIRECTOR
+  MANAGER
+  BROKER
+  PRE_SALES
 }
 
 enum FunnelAccessLevel {
-  full
-  readonly
+  FULL
+  READONLY
 }
 
-// --- Modelos ---
-
-model Usuario {
-  id               String           @id @default(uuid())
-  nome             String
-  email            String           @unique
-  passwordHash     String?
-  role             Role             @default(corretor) // Atualizado para usar o novo Enum
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  superiorId       String?
-  superior         Usuario?         @relation("Hierarquia", fields: [superiorId], references: [id], onDelete: SetNull)
-  subordinados     Usuario[]        @relation("Hierarquia")
-  clientes         Cliente[]        @relation("ProprietarioCliente")
-  pushSubscription PushSubscription?
-  tarefas          Tarefa[]
-  roletas          RoletaCorretor[]
-  frequencias      FrequenciaRegistro[]
-
-  // ✅ --- RELAÇÕES DE OFERTA ATIVA ADICIONADAS ---
-  createdOffers    ActiveOffer[]       @relation("CreatedOffers")
-  assignedCalls    ActiveOfferClient[] @relation("AssignedCalls")
-
-  // ✅ --- RELAÇÃO DE ACESSO AO FUNIL ---
-  funnelAccess UserFunnelAccess[]
-
-  // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO DE IMÓVEIS ---
-  createdImoveis Imovel[] @relation("CreatedImoveis")
-  updatedImoveis Imovel[] @relation("UpdatedImoveis")
-
-  // ✅ --- RELAÇÕES DO BOLSÃO DE LEADS ---
-  leadsQualificadosParaMim Cliente[]       @relation("QualificadoPara")
-  bolsoesPermitidos        BolsaoUsuario[]
-  criadoPor                Cliente[]       @relation("CriadoPorCliente")
-
-  // Relação com os sites que o usuário possui
-  sites Site[]
-
-  // NOVOS CAMPOS PARA MULTI-TENANT
-  isSuperAdmin Boolean @default(false) // Se true, ignora filtros de tenant
-
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+enum PropertyStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  LAUNCH
 }
 
-model Cliente {
-  id                  String              @id @default(uuid())
-  nomeCompleto        String
-  email               String?             @unique
-  telefone            String?
-  cpf                 String?
-  cnpj                String?
-  dataNascimento      DateTime?
-  cidade              String?
-  estado              String?
-  cep                 String?
-  origem              String?
-  facebook_lead_id    String?             @unique
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  proprietarioId      String?
-  proprietario        Usuario?            @relation("ProprietarioCliente", fields: [proprietarioId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  imovelDeInteresseId String?
-  imovelDeInteresse   Imovel?             @relation(fields: [imovelDeInteresseId], references: [id], onDelete: SetNull)
-  overallStatus       ClientOverallStatus @default(Ativo)
-  criadoPorId         String
-  criadoPor           Usuario             @relation("CriadoPorCliente", fields: [criadoPorId], references: [id], onDelete: Cascade)
+enum ClientOverallStatus {
+  ACTIVE
+  WON
+  LOST
+}
 
-  // ✅ RELACIONAMENTO COM DOCUMENTOS ADICIONADO
-  documentos    DocumentoCliente[]
-  tags            Tag[]              @relation("ClienteTags")
-  tarefas         Tarefa[]
-  detalhesDeVenda ClientWonDetails?
-  notas           Nota[]
+enum TaskType {
+  CALL
+  EMAIL
+  WHATSAPP
+  VISIT
+  OTHER
+}
 
-  // ✅ --- CAMPOS DE FUNIL ATUALIZADOS ---
-  funilId       String
-  funnel        Funnel      @relation(fields: [funilId], references: [id], onDelete: Cascade)
-  funnelStageId String
-  funnelStage   FunnelStage @relation(fields: [funnelStageId], references: [id])
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
 
-  // ✅ --- CAMPOS PARA QUALIFICAÇÃO E BOLSÃO ---
-  statusDeQualificacao StatusQualificacao @default(Aguardando)
-  qualificadoParaId    String?
-  qualificadoPara      Usuario?           @relation("QualificadoPara", fields: [qualificadoParaId], references: [id], onDelete: SetNull)
-  entrouNoBolsaoEm     DateTime?
+enum ActiveOfferStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ActiveOfferClientStatus {
+  PENDING
+  CONTACTED
+  NO_ANSWER
+  DISCARDED
+}
+
+enum QualificationStatus {
+  WAITING
+  IN_PRIORITY_POOL
+  IN_GENERAL_POOL
+  ASSIGNED
+}
+
+// --- MODELS ---
+
+model User {
+  id                  String               @id // Supabase Auth UUID
+  name                String
+  email               String               @unique
+  accountId           String?
+  role                Role                 @default(BROKER)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   
-  siteOriginId String?
-  siteOrigin   Site?    @relation("SiteOrigin", fields: [siteOriginId], references: [id])
-  originUrl    String? // Para saber qual página converteu o lead
+  // Hierarchy
+  supervisorId        String?
+  supervisor          User?                @relation("Hierarchy", fields: [supervisorId], references: [id], onDelete: SetNull)
+  subordinates        User[]               @relation("Hierarchy")
+  
+  // CRM Relations
+  clientsAsBroker     Client[]             @relation("ClientBroker")
+  clientsCreatedByMe  Client[]             @relation("ClientCreatedBy")
+  tasks               Task[]
+  notes               Note[]
+  pushSubscription    PushSubscription?
+  
+  // Property Relations
+  createdProperties   Property[]           @relation("CreatedProperties")
+  updatedProperties   Property[]           @relation("UpdatedProperties")
 
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // Roulette & Access
+  rouletteAssignments LeadRouletteUser[]
+  funnelAccess        UserFunnelAccess[]
+  
+  // Attendance
+  attendanceRecords   AttendanceRecord[]
+
+  // Active Offers
+  createdOffers       ActiveOffer[]        @relation("CreatedOffers")
+  assignedCalls       ActiveOfferClient[]  @relation("AssignedCalls")
+
+  // Lead Pool
+  qualifiedLeadsForMe Client[]             @relation("QualifiedFor")
+  allowedLeadPools    LeadPoolUser[]
+
+  @@map("users")
 }
 
-// ✅ NOVO MODELO PARA DOCUMENTOS
-model DocumentoCliente {
-  id        String   @id @default(uuid())
-  fileName  String
-  url       String
-  createdAt DateTime @default(now())
+model Client {
+  id                   String               @id @default(uuid())
+  fullName             String
+  email                String?              @unique
+  phone                String?
+  facebookLeadId       String?              @unique @map("facebook_lead_id")
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  accountId            String?
 
-  clienteId String
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  // Ownership
+  createdById          String
+  createdBy            User                 @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  brokerId             String
+  broker               User                 @relation("ClientBroker", fields: [brokerId], references: [id], onDelete: Restrict)
+  
+  // Real Estate Logic
+  propertyOfInterestId String?
+  propertyOfInterest   Property?            @relation(fields: [propertyOfInterestId], references: [id], onDelete: SetNull)
+  overallStatus        ClientOverallStatus  @default(ACTIVE)
+  
+  // Relations
+  documents            ClientDocument[]
+  tags                 Tag[]                @relation("ClientTags")
+  tasks                Task[]
+  notes                Note[]
+  saleDetails          ClientWonDetails?
+  activeOfferClients   ActiveOfferClient[]
+
+  // Funnel Logic
+  funnelId             String
+  funnel               Funnel               @relation(fields: [funnelId], references: [id])
+  funnelStageId        String
+  funnelStage          FunnelStage          @relation(fields: [funnelStageId], references: [id])
+
+  // Lead Pool
+  qualificationStatus  QualificationStatus  @default(WAITING)
+  qualifiedForId       String?
+  qualifiedFor         User?                @relation("QualifiedFor", fields: [qualifiedForId], references: [id], onDelete: SetNull)
+  enteredLeadPoolAt    DateTime?
+
+  @@map("clients")
+}
+
+model ClientDocument {
+  id        String   @id @default(uuid())
+  name      String
+  url       String   // Supabase Storage URL
+  type      String?  // pdf, jpg, png
+  createdAt DateTime @default(now())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_documents")
 }
 
 model Tag {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  color     String
-  createdAt DateTime  @default(now())
-  clientes  Cliente[] @relation("ClienteTags")
-
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-}
-
-model Imovel {
-  id                   String            @id @default(uuid())
-  titulo               String
-  features             String[]          @default([])
-  endereco             String?
-  preco                Float?
-  tipo                 String?
-  status               StatusImovel      @default(Disponivel)
-  quartos              Int?
-  banheiros            Int?
-  area                 Int?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-  clientesComInteresse Cliente[]
-  tipologias           TipologiaImovel[]
-  imagens              ImagemImovel[]
-
-  // ✅ --- RELAÇÕES DE CRIAÇÃO E ATUALIZAÇÃO ---
-  creatorId String?
-  creator   Usuario? @relation("CreatedImoveis", fields: [creatorId], references: [id], onDelete: SetNull)
-  updaterId String?
-  updater   Usuario? @relation("UpdatedImoveis", fields: [updaterId], references: [id], onDelete: SetNull)
-
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-}
-
-model TipologiaImovel {
-  id          String         @id @default(uuid())
-  nome        String
-  valor       Float
-  area        Float?
-  dormitorios Int?
-  suites      Int?
-  vagas       Int?
-  imovelId    String
-  imovel      Imovel         @relation(fields: [imovelId], references: [id], onDelete: Cascade)
-  plantas     ImagemPlanta[]
-}
-
-model ImagemImovel {
   id        String   @id @default(uuid())
-  url       String
+  name      String   @unique
+  color     String
   createdAt DateTime @default(now())
-  imovelId  String
-  imovel    Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  clients   Client[] @relation("ClientTags")
+
+  @@map("tags")
 }
 
-model ImagemPlanta {
-  id          String          @id @default(uuid())
-  url         String
-  createdAt   DateTime        @default(now())
-  tipologiaId String
-  tipologia   TipologiaImovel @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
+model Property {
+  id                String          @id @default(uuid())
+  title             String
+  features          String[]        @default([])
+  address           String?
+  price             Float?
+  type              String?
+  status            PropertyStatus  @default(AVAILABLE)
+  bedrooms          Int?
+  bathrooms         Int?
+  areaSqMeters      Int?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  interestedClients Client[]
+  propertyTypes     PropertyType[]
+  images            PropertyImage[]
+  
+  creatorId         String?
+  creator           User?           @relation("CreatedProperties", fields: [creatorId], references: [id], onDelete: SetNull)
+  updaterId         String?
+  updater           User?           @relation("UpdatedProperties", fields: [updaterId], references: [id], onDelete: SetNull)
+
+  @@map("properties")
 }
 
-model Nota {
+model PropertyType {
+  id            String           @id @default(uuid())
+  name          String
+  value         Float
+  areaSqMeters  Float?
+  bedrooms      Int?
+  suites        Int?
+  parkingSpaces Int?
+  propertyId    String
+  property      Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  floorPlans    FloorPlanImage[]
+
+  @@map("property_types")
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  url        String
+  createdAt  DateTime @default(now())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_images")
+}
+
+model FloorPlanImage {
+  id             String       @id @default(uuid())
+  url            String
+  createdAt      DateTime     @default(now())
+  propertyTypeId String
+  propertyType   PropertyType @relation(fields: [propertyTypeId], references: [id], onDelete: Cascade)
+
+  @@map("floor_plan_images")
+}
+
+model Note {
   id        String   @id @default(uuid())
   content   String
   createdAt DateTime @default(now())
-  createdBy String
-  clienteId String
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
 }
 
-model Tarefa {
-  id         String   @id @default(uuid())
-  titulo     String
-  descricao  String?
-  status     String   @default("pendente")
-  dataHora   DateTime
-  concluida  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  clienteId  String
-  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  usuarioId  String
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  tipo       TaskType
-  prioridade Priority
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("pending")
+  dateTime    DateTime
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        TaskType
+  priority    Priority
+
+  @@map("tasks")
 }
 
-model PushSubscription {
-  id        String   @id @default(cuid())
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userId    String   @unique
-  user      Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-}
-
-model Roleta {
-  id                String           @id @default(uuid())
-  nome              String
-  ativa             Boolean          @default(true)
-  validFrom         DateTime? // Data e hora de início da validade
-  validUntil        DateTime? // Data e hora de fim da validade
-  lastAssignedIndex Int              @default(0)
-  corretores        RoletaCorretor[]
+model LeadRoulette {
+  id                String             @id @default(uuid())
+  name              String
+  isActive          Boolean            @default(true)
+  validFrom         DateTime?
+  validUntil        DateTime?
+  lastAssignedIndex Int                @default(0)
+  users             LeadRouletteUser[]
   funnelId          String?
-  funnel            Funnel?          @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  funnel            Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+
+  @@map("lead_roulettes")
 }
 
-model RoletaCorretor {
-  roletaId   String
-  roleta     Roleta  @relation(fields: [roletaId], references: [id], onDelete: Cascade)
-  corretorId String
-  corretor   Usuario @relation(fields: [corretorId], references: [id], onDelete: Cascade)
+model LeadRouletteUser {
+  rouletteId String
+  roulette   LeadRoulette @relation(fields: [rouletteId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([roletaId, corretorId])
+  @@id([rouletteId, userId])
+  @@map("roulette_users")
 }
-
-model LostReason {
-  id         String   @id @default(uuid())
-  reason     String
-  active     Boolean  @default(true)
-  created_at DateTime @default(now())
-}
-
-model RoleSetting {
-  roleName Role    @id
-  isActive Boolean @default(true)
-}
-
-model ClientWonDetails {
-  id         String   @id @default(uuid())
-  sale_value Float
-  sale_date  DateTime @default(now())
-  createdAt  DateTime @default(now())
-  clienteId  String   @unique
-  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-}
-
-// --- NOVOS MODELOS PARA OFERTA ATIVA ---
-
-model ActiveOffer {
-  id          String              @id @default(cuid())
-  name        String
-  createdAt   DateTime            @default(now())
-  createdBy   Usuario             @relation("CreatedOffers", fields: [createdById], references: [id])
-  createdById String
-  clients     ActiveOfferClient[]
-}
-
-model ActiveOfferClient {
-  id                String    @id @default(cuid())
-  offer             ActiveOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  offerId           String
-  assignedTo        Usuario   @relation("AssignedCalls", fields: [assignedToId], references: [id], onDelete: Cascade)
-  assignedToId      String
-  contactName       String
-  contactEmail      String?
-  contactPhone      String?
-  status            String    @default("Pendente") // Pendente, Contatado, Reaberto, Descartado
-  originalClienteId String? // Guarda o ID se o contato veio da base de clientes
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-}
-
-// --- NOVOS MODELOS PARA MÚLTIPLOS FUNIS ---
 
 model Funnel {
   id             String             @id @default(uuid())
@@ -313,216 +306,173 @@ model Funnel {
   updatedAt      DateTime           @updatedAt
   stages         FunnelStage[]
   userAccess     UserFunnelAccess[]
-  clients        Cliente[]
-  roletas        Roleta[]
+  clients        Client[]
+  roulettes      LeadRoulette[]
 
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@map("funnels")
 }
 
 model FunnelStage {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
   order     Int
   color     String
   funnelId  String
-  funnel    Funnel    @relation(fields: [funnelId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  clients   Cliente[]
+  funnel    Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  clients   Client[]
 
   @@unique([funnelId, name])
+  @@map("funnel_stages")
 }
 
 model UserFunnelAccess {
   userId      String
-  user        Usuario           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   funnelId    String
   funnel      Funnel            @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   accessLevel FunnelAccessLevel
 
   @@id([userId, funnelId])
+  @@map("user_funnel_access")
 }
 
-model FrequenciaConfig {
-  id           String               @id @default(cuid())
-  nome         String // Ex: "Stand de Vendas - Lançamento X"
+model ActiveOffer {
+  id          String              @id @default(uuid())
+  name        String
+  status      ActiveOfferStatus   @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  createdById String
+  createdBy   User                @relation("CreatedOffers", fields: [createdById], references: [id])
+  clients     ActiveOfferClient[]
+
+  @@map("active_offers")
+}
+
+model ActiveOfferClient {
+  id            String                  @id @default(uuid())
+  status        ActiveOfferClientStatus @default(PENDING)
+  notes         String?
+  contactedAt   DateTime?
+  activeOfferId String
+  activeOffer   ActiveOffer             @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedToId  String
+  assignedTo    User                    @relation("AssignedCalls", fields: [assignedToId], references: [id])
+
+  @@map("active_offer_clients")
+}
+
+model AttendanceConfig {
+  id           String             @id @default(cuid())
+  name         String
   latitude     Float
   longitude    Float
-  raio         Int // Raio em metros
-  horarios     Json // Ex: [{ inicio: "10:00", fim: "12:00" }, { inicio: "14:00", fim: "16:00" }]
-  diasDaSemana Int[]                @default([]) // ✅ Adicionado para salvar os dias da semana (0-6)
-  ativo        Boolean              @default(true)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  registros    FrequenciaRegistro[] // ✅ Adicionado para completar a relação
+  radiusMeters Int
+  schedules    Json
+  weekDays     Int[]              @default([])
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  records      AttendanceRecord[]
+
+  @@map("attendance_configs")
 }
 
-// --- NOVOS MODELOS PARA O BOLSÃO DE LEADS ---
+model AttendanceRecord {
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id])
+  latitude           Float
+  longitude          Float
+  distanceFromCenter Int
+  isWithinRadius     Boolean
+  configId           String?
+  config             AttendanceConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now())
 
-model ConfiguracaoBolsao {
-  id                               String   @id @default(cuid())
-  raioAtribuicaoMetros             Int      @default(5000)
-  tempoAteBolsaoPrioritarioMinutos Int      @default(60)
-  tempoAteBolsaoGeralMinutos       Int      @default(120)
-  updatedAt                        DateTime @updatedAt
+  @@map("attendance_records")
 }
 
-model Bolsao {
-  id       String          @id @default(cuid())
-  nome     String          @unique // "Prioritário" ou "Geral"
-  ativo    Boolean         @default(true)
-  usuarios BolsaoUsuario[]
+model LeadPoolConfig {
+  id                        String   @id @default(cuid())
+  assignmentRadiusMeters    Int      @default(5000)
+  timeToPriorityPoolMinutes Int      @default(60)
+  timeToGeneralPoolMinutes  Int      @default(120)
+  updatedAt                 DateTime @updatedAt
+
+  @@map("lead_pool_configs")
 }
 
-model BolsaoUsuario {
-  bolsaoId  String
-  bolsao    Bolsao  @relation(fields: [bolsaoId], references: [id], onDelete: Cascade)
-  usuarioId String
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+model LeadPool {
+  id       String         @id @default(cuid())
+  name     String         @unique
+  isActive Boolean        @default(true)
+  users    LeadPoolUser[]
 
-  @@id([bolsaoId, usuarioId])
+  @@map("lead_pools")
 }
 
-model FrequenciaRegistro {
-  id           String            @id @default(cuid())
-  userId       String
-  usuario      Usuario           @relation(fields: [userId], references: [id])
-  latitude     Float
-  longitude    Float
-  distancia    Int // Distância calculada do ponto central
-  dentroDoRaio Boolean
-  configId     String? // ✅ Adicionado para saber a qual config o registro pertence
-  config       FrequenciaConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
-  createdAt    DateTime          @default(now())
+model LeadPoolUser {
+  leadPoolId String
+  leadPool   LeadPool @relation(fields: [leadPoolId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([leadPoolId, userId])
+  @@map("lead_pool_users")
 }
 
-// --- ENUMS ---
-enum StatusImovel {
-  Disponivel
-  Reservado
-  Vendido
-  LANCAMENTO
-}
-
-enum ClientOverallStatus {
-  Ativo
-  Ganho
-  Perdido
-}
-
-enum TaskType {
-  LIGACAO
-  EMAIL
-  WHATSAPP
-  VISITA
-  OUTRO
-}
-
-enum Priority {
-  BAIXA
-  MEDIA
-  ALTA
-}
-
-enum ActiveOfferStatus {
-  Pendente
-  EmAndamento
-  Concluida
-}
-
-enum ActiveOfferClientStatus {
-  Pendente
-  Contactado
-  NaoAtendeu
-  Descartado
-}
-
-enum StatusQualificacao {
-  Aguardando
-  NoBolsaoPrioritario
-  NoBolsaoGeral
-  Atribuido
-}
-
-// --- MODELOS PARA O SITE BUILDER (MULTI-TENANT) ---
-
-// Configurações do Site do Corretor/Imobiliária
-model Site {
-  id           String  @id @default(uuid())
-  name         String // Nome interno
-  description  String?
-  subdomain    String? @unique // ex: "imobiliaria-top" (acessa via imobiliaria-top.crm.com)
-  customDomain String? @unique // ex: "www.minhaimobiliaria.com.br"
-
-  // Aparência Global
-  primaryColor String  @default("#000000")
-  fontFamily   String  @default("Inter")
-  logoUrl      String?
-  faviconUrl   String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userId String // Dono do site
-  user   Usuario @relation(fields: [userId], references: [id])
-
-  pages Page[]
-  leads Cliente[] @relation("SiteOrigin") // Leads capturados neste site
-
-  accountId String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-}
-
-// Domínios Personalizados (Para gestão na Vercel API)
-model Domain {
+model ClientWonDetails {
   id        String   @id @default(uuid())
-  name      String   @unique
-  siteId    String?
-  verified  Boolean  @default(false)
+  saleValue Float
+  saleDate  DateTime @default(now())
   createdAt DateTime @default(now())
+  clientId  String   @unique
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_won_details")
 }
 
-// Páginas do Site (Home, Contato, Quem Somos)
-model Page {
-  id          String    @id @default(uuid())
-  title       String
-  slug        String // ex: "home", "contato"
-  isPublished Boolean   @default(false)
-  siteId      String
-  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  sections    Section[]
-
-  @@unique([siteId, slug]) // Slug único por site
-}
-
-// Seções/Blocos da Página (Hero, Imóveis, Texto)
-model Section {
-  id      String @id @default(uuid())
-  type    String // ex: "HERO_SEARCH", "FEATURED_LIST", "RICH_TEXT", "CONTACT_FORM"
-  order   Int // Ordem na página
-  content Json // Dados flexíveis: { title: "...", bgImage: "...", showPrice: true }
-
-  pageId String
-  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
-}
-
-// --- MODELO PARA MULTI-TENANT ---
-
-model Account {
+model LostReason {
   id        String   @id @default(uuid())
-  name      String // Ex: "Imobiliária Silva", "Real Sales HQ"
-  document  String? // CNPJ/CPF
-  isActive  Boolean  @default(true) // Para bloquear caloteiros
+  reason    String
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  // Relacionamentos
-  users    Usuario[]
-  clients  Cliente[]
-  funnels  Funnel[]
-  properties Imovel[]
-  sites    Site[]
-  tags     Tag[]
+  @@map("lost_reasons")
 }
 
+model RoleSetting {
+  roleName Role    @id
+  isActive Boolean @default(true)
+
+  @@map("role_settings")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("push_subscriptions")
+}
+
+model FieldMapping {
+  id          String   @id @default(uuid())
+  source      String // ex: "meta_ads", "site_form"
+  fieldName   String // Nome do campo na fonte (ex: "full_name")
+  mappedField String // Nome do campo no modelo Client (ex: "fullName")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([source, fieldName])
+  @@map("field_mappings")
+}

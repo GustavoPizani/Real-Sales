@@ -8,7 +8,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 function buildParsePrompt(textContent: string): string {
     return `
-      Você é um assistente especialista em converter texto não estruturado em dados JSON. Sua tarefa é analisar o texto abaixo, que foi copiado de uma tabela de tipologias de um site de imóveis, e extrair todas as unidades.
+      Você é um assistente especialista em converter texto não estruturado em dados JSON. Sua tarefa é analisar o texto abaixo, que foi copiado de uma tabela de propertyTypes de um site de imóveis, e extrair todas as unidades.
 
       **Instruções de Extração:**
       1.  Cada linha do texto representa uma tipologia diferente.
@@ -18,7 +18,7 @@ function buildParsePrompt(textContent: string): string {
           - **dormitorios**: O número de quartos.
           - **suites**: O número de suítes.
           - **vagas**: O número de vagas de garagem.
-          - **nome**: Crie um nome descritivo usando a área, como "Apartamento de [area]m²".
+          - **name**: Crie um name descritivo usando a área, como "Apartamento de [area]m²".
 
       **Exemplo de Texto de Entrada:**
       "R$ 1.561.859 70,5 2 1 1
@@ -30,7 +30,7 @@ function buildParsePrompt(textContent: string): string {
       {
         "typologies": [
           {
-            "nome": "string",
+            "name": "string",
             "valor": "number | null",
             "area": "number | null",
             "dormitorios": "number | null",

@@ -15,18 +15,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const tasks = await prisma.tarefa.findMany({
+    const tasks = await prisma.task.findMany({
       where: { usuarioId: user.id },
       include: {
         cliente: {
           select: {
             id: true,
-            nomeCompleto: true,
+            fullName: true,
           },
         },
       },
       orderBy: {
-        dataHora: 'asc',
+        dateTime: 'asc',
       },
     });
 
@@ -57,16 +57,16 @@ export async function POST(request: NextRequest) {
     // Usar uma transação para garantir que ambas as operações (criar tarefa e atualizar cliente)
     // sejam concluídas com sucesso ou revertidas juntas.
     const [newTask] = await prisma.$transaction([
-      prisma.tarefa.create({
+      prisma.task.create({
         data: {
-          titulo: title,
+          title: title,
           descricao: description,
-          dataHora: new Date(due_date),
+          dateTime: new Date(due_date),
           clienteId: client_id,
           usuarioId: user.id,
         },
       }),
-      prisma.cliente.update({
+      prisma.client.update({
         where: { id: client_id },
         data: { updatedAt: new Date() },
       }),

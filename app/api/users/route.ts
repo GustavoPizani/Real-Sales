@@ -18,11 +18,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const users = await prisma.usuario.findMany({
+    const users = await prisma.user.findMany({
       include: { 
         superior: {
           select: {
-            nome: true
+            name: true
           }
         } 
       },
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   try {
     const token = cookies().get('authToken')?.value;
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
         return NextResponse.json({ error: "Sem permissão para criar utilizadores" }, { status: 403 });
     }
 
@@ -52,22 +52,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Nome, email, senha e cargo são obrigatórios." }, { status: 400 });
     }
 
-    const existingUser = await prisma.usuario.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
         return NextResponse.json({ error: "Este email já está em uso" }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const data: Prisma.UsuarioCreateInput = {
-      nome: name,
+    const data: prisma.userCreateInput = {
+      name: name,
       email,
       passwordHash,
       role,
       superior: superiorId ? { connect: { id: superiorId } } : undefined,
     };
 
-    const newUser = await prisma.usuario.create({
+    const newUser = await prisma.user.create({
         data,
     });
 

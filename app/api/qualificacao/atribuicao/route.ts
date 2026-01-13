@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     // 1. Leads qualificados diretamente para o usuário
-    const paraMim = await prisma.cliente.findMany({
+    const paraMim = await prisma.client.findMany({
       where: {
         qualificadoParaId: user.id,
         statusDeQualificacao: StatusQualificacao.Aguardando,
@@ -23,20 +23,20 @@ export async function GET(request: NextRequest) {
     });
 
     // 2. Leads nos bolsões permitidos
-    const permissoes = await prisma.bolsaoUsuario.findMany({
+    const permissoes = await prisma.leadPoolUsuario.findMany({
       where: { usuarioId: user.id },
       include: { bolsao: true },
     });
 
-    const bolsaoPrioritario = permissoes.some(p => p.bolsao.nome === 'Prioritário')
-      ? await prisma.cliente.findMany({
+    const bolsaoPrioritario = permissoes.some(p => p.bolsao.name === 'Prioritário')
+      ? await prisma.client.findMany({
           where: { statusDeQualificacao: StatusQualificacao.NoBolsaoPrioritario },
           orderBy: { entrouNoBolsaoEm: 'asc' },
         })
       : [];
 
-    const bolsaoGeral = permissoes.some(p => p.bolsao.nome === 'Geral')
-      ? await prisma.cliente.findMany({
+    const bolsaoGeral = permissoes.some(p => p.bolsao.name === 'Geral')
+      ? await prisma.client.findMany({
           where: { statusDeQualificacao: StatusQualificacao.NoBolsaoGeral },
           orderBy: { entrouNoBolsaoEm: 'asc' },
         })
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       const updatedLead = await tx.cliente.update({
         where: { id: leadId },
         data: {
-          corretorId: user.id,
+          brokerId: user.id,
           statusDeQualificacao: StatusQualificacao.Atribuido,
         },
       });

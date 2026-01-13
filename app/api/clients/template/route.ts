@@ -19,10 +19,10 @@ export async function GET(request: NextRequest) {
         // 1. Buscar dados do banco
         const [users, funnels] = await Promise.all([
             // Usuario mantido (está em PT no schema)
-            prisma.usuario.findMany({
+            prisma.user.findMany({
                 where: tenantWhere,
-                select: { nome: true, email: true, role: true },
-                orderBy: { nome: 'asc' }
+                select: { name: true, email: true, role: true },
+                orderBy: { name: 'asc' }
             }),
             // Funnel ajustado para EN (está em EN no schema)
             prisma.funnel.findMany({
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
                         orderBy: { order: 'asc' } 
                     } 
                 },
-                orderBy: { name: 'asc' } // Era 'nome', schema é 'name'
+                orderBy: { name: 'asc' } // Era 'name', schema é 'name'
             })
         ]);
 
@@ -44,9 +44,9 @@ export async function GET(request: NextRequest) {
         // --- Aba 1: Importação de Clientes ---
         const importSheet = workbook.addWorksheet('Importação de Clientes');
         importSheet.columns = [
-            { header: 'nomeCompleto', key: 'nomeCompleto', width: 30 },
+            { header: 'fullName', key: 'fullName', width: 30 },
             { header: 'email', key: 'email', width: 30 },
-            { header: 'telefone', key: 'telefone', width: 20 },
+            { header: 'phone', key: 'phone', width: 20 },
             { header: 'proprietarioEmail', key: 'proprietarioEmail', width: 30 },
             { header: 'funilNome', key: 'funilNome', width: 25 },
             { header: 'etapaNome', key: 'etapaNome', width: 25 },
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
             ref: 'A1',
             headerRow: true,
             columns: [{ name: 'Nome do Usuário' }, { name: 'Email do Usuário (para preencher em proprietarioEmail)' }, { name: 'Cargo' }],
-            rows: users.map(u => [u.nome, u.email, u.role]),
+            rows: users.map(u => [u.name, u.email, u.role]),
         });
         dataSheet.addTable({
             name: 'FunisEtapas',

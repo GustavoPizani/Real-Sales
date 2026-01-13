@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ArrowLeft, ClipboardPaste, Loader2, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { type TipologiaImovel, type ImagemPlanta, StatusImovel } from "@prisma/client";
+import { type TipologiaImovel, type ImagemPlanta, PropertyStatus } from "@prisma/client";
 
 type TypologyWithPlanta = Partial<TipologiaImovel> & {
   plantaFile?: File;
@@ -34,7 +34,7 @@ export default function EditPropertyPage() {
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
   const [type, setType] = useState("");
-  const [status, setStatus] = useState<StatusImovel>(StatusImovel.Disponivel);
+  const [status, setStatus] = useState<PropertyStatus>(PropertyStatus.AVAILABLE);
   const [images, setImages] = useState<{ url: string }[]>([]);
   const [typologies, setTypologies] = useState<TypologyWithPlanta[]>([]);
   const [features, setFeatures] = useState<string[]>([]); // ✅ Adicionado
@@ -125,7 +125,7 @@ export default function EditPropertyPage() {
         return null;
       }
       return {
-        nome: t.nome || '',
+        name: t.name || '',
         valor: parseFloat(t.valor) || 0,
         area: parseFloat(t.area) || 0,
         dormitorios: parseInt(t.dormitorios, 10) || 0,
@@ -136,7 +136,7 @@ export default function EditPropertyPage() {
       };
     }).filter(Boolean);
     setTypologies(newTypologies as TypologyWithPlanta[]);
-    toast({ title: "Sucesso!", description: "As tipologias foram atualizadas." });
+    toast({ title: "Sucesso!", description: "As propertyTypes foram atualizadas." });
     setParsedTypologies(null);
   };
 
@@ -149,7 +149,7 @@ export default function EditPropertyPage() {
             const formData = new FormData();
             formData.append("file", typology.plantaFile);
             const uploadResponse = await fetch("/api/upload", { method: "POST", body: formData });
-            if (!uploadResponse.ok) throw new Error(`Falha no upload da planta para ${typology.nome}.`);
+            if (!uploadResponse.ok) throw new Error(`Falha no upload da planta para ${typology.name}.`);
             const { url } = await uploadResponse.json();
             const newPlanta = { url };
             const existingPlantas = typology.plantas ? typology.plantas.map(p => ({ url: p.url })) : [];
@@ -223,7 +223,7 @@ export default function EditPropertyPage() {
     }
   };
 
-  const addTypology = () => setTypologies(prev => [...prev, { id: `temp-${Date.now()}`, nome: '', valor: 0, dormitorios: 0, suites: 0, vagas: 0, area: 0, plantas: [] }]);
+  const addTypology = () => setTypologies(prev => [...prev, { id: `temp-${Date.now()}`, name: '', valor: 0, dormitorios: 0, suites: 0, vagas: 0, area: 0, plantas: [] }]);
   const removeTypology = (id: string) => setTypologies(prev => prev.filter(t => t.id !== id));
   const updateTypology = (id: string, field: keyof TipologiaImovel, value: any) => {
     setTypologies(prev =>
@@ -304,7 +304,7 @@ export default function EditPropertyPage() {
                   <DialogContent>
                     <DialogHeader><DialogTitle>Importar Tipologias de Texto</DialogTitle></DialogHeader>
                     <DialogDescription>
-                      Vá até o site do imóvel, copie as linhas da tabela de tipologias e cole no campo abaixo.
+                      Vá até o site do imóvel, copie as linhas da tabela de propertyTypes e cole no campo abaixo.
                     </DialogDescription>
                     <Textarea
                       placeholder="Exemplo:&#10;R$ 1.561.859 70,5 2 1 1&#10;R$ 1.687.232 76,5 2 2 1"
@@ -328,7 +328,7 @@ export default function EditPropertyPage() {
                 <Card key={typology.id} className="p-4">
                   <div className="flex justify-end"><Button variant="ghost" size="icon" onClick={() => removeTypology(typology.id!)}><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><Label>Nome</Label><Input value={typology.nome ?? ''} onChange={(e) => updateTypology(typology.id!, "nome", e.target.value)} /></div>
+                    <div><Label>Nome</Label><Input value={typology.name ?? ''} onChange={(e) => updateTypology(typology.id!, "name", e.target.value)} /></div>
                     <div><Label>Valor (R$)</Label><Input type="number" value={typology.valor ?? 0} onChange={(e) => updateTypology(typology.id!, "valor", parseFloat(e.target.value) || 0)} /></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
@@ -341,8 +341,8 @@ export default function EditPropertyPage() {
                     <Label htmlFor={`planta-${index}`}>Planta da Tipologia</Label>
                     <Input id={`planta-${index}`} type="file" accept="image/*" onChange={(e) => handlePlantaImageChange(index, e)} />
                     <div className="flex gap-2 mt-2">
-                      {typology.plantaPreview && (<img src={typology.plantaPreview} alt={`Nova planta para ${typology.nome}`} className="h-24 w-auto rounded-md border" />)}
-                      {typology.plantas?.map((planta, pIndex) => (<div key={pIndex} className="relative"><img src={planta.url} alt={`Planta ${pIndex + 1} para ${typology.nome}`} className="h-24 w-auto rounded-md border" /></div>))}
+                      {typology.plantaPreview && (<img src={typology.plantaPreview} alt={`Nova planta para ${typology.name}`} className="h-24 w-auto rounded-md border" />)}
+                      {typology.plantas?.map((planta, pIndex) => (<div key={pIndex} className="relative"><img src={planta.url} alt={`Planta ${pIndex + 1} para ${typology.name}`} className="h-24 w-auto rounded-md border" /></div>))}
                     </div>
                   </div>
                 </Card>
@@ -354,7 +354,7 @@ export default function EditPropertyPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader><CardTitle>Status</CardTitle></CardHeader>
-            <CardContent><Select value={status} onValueChange={(value: StatusImovel) => setStatus(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value={StatusImovel.Disponivel}>Disponível</SelectItem><SelectItem value={StatusImovel.Reservado}>Reservado</SelectItem><SelectItem value={StatusImovel.Vendido}>Vendido</SelectItem></SelectContent></Select></CardContent>
+            <CardContent><Select value={status} onValueChange={(value: PropertyStatus) => setStatus(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value={PropertyStatus.AVAILABLE}>Disponível</SelectItem><SelectItem value={PropertyStatus.Reservado}>Reservado</SelectItem><SelectItem value={PropertyStatus.SOLD}>Vendido</SelectItem></SelectContent></Select></CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Imagens</CardTitle></CardHeader>
@@ -382,14 +382,14 @@ export default function EditPropertyPage() {
           <DialogHeader>
             <DialogTitle>Confirmar Tipologias Importadas</DialogTitle>
             <DialogDescription>
-              Encontrámos os seguintes dados. Deseja substituir as tipologias atuais?
+              Encontrámos os seguintes dados. Deseja substituir as propertyTypes atuais?
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto pr-4 space-y-3">{parsedTypologies?.typologies?.map((t: any, index: number) => {
-              if (!t || !t.nome) return null;
+              if (!t || !t.name) return null;
               return (
                 <div key={index} className="text-sm p-3 border rounded-lg bg-muted/50">
-                  <p className="font-semibold text-primary">{t.nome}</p>
+                  <p className="font-semibold text-primary">{t.name}</p>
                   <div className="mt-2 text-xs text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1">
                     <span><strong>Área:</strong> {t.area || 'N/A'} m²</span>
                     <span><strong>Dorms:</strong> {t.dormitorios || 'N/A'}</span>

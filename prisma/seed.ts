@@ -1,78 +1,68 @@
 // prisma/seed.ts
-import { PrismaClient, Role } from '@prisma/client'
-import { hash } from 'bcryptjs' // ou sua lib de hash preferida
+import { PrismaClient, Role, PropertyStatus } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  // 1. Criar a Conta da Headquarters (Sua empresa)
-  const adminAccount = await prisma.account.upsert({
-    where: { id: 'headquarters-id-fixed' }, // Use um UUID fixo se quiser
+  console.log('🌱 Starting seed...')
+
+  // 1. Create Super Admin (Gustavo)
+  const gustavo = await prisma.user.upsert({
+    where: { email: 'pizanicorretor@gmail.com' },
     update: {},
     create: {
-      id: 'headquarters-id-fixed',
-      name: 'Real Sales Administration',
-      isActive: true,
+      id: '7604095e-fd39-466b-96fc-e2e24602375a', // O UID que geramos no Supabase
+      name: 'Gustavo Pizani',
+      email: 'pizanicorretor@gmail.com',
+      role: Role.MARKETING_ADMIN,
+      accountId: 'main_account',
     },
   })
 
-  // 2. Criar o Super Usuário
-  const passwordHash = await hash('Piz@nig7p', 10) // Hash seguro
-
-  const superAdmin = await prisma.usuario.upsert({
-    where: { email: 'adm@realsales.com.br' },
+  // 2. Create a Sample Funnel
+  const salesFunnel = await prisma.funnel.upsert({
+    where: { name: 'Vendas Imóveis' },
     update: {
-      passwordHash,
-      isSuperAdmin: true,
-      role: 'ADMIN' // Assume o papel mais alto local
     },
     create: {
-      email: 'adm@realsales.com.br',
-      nome: 'ADM Real Sales',
-      passwordHash,
-      role: 'ADMIN',
-      isSuperAdmin: true, // O Segredo do sucesso
-      accountId: adminAccount.id
+      name: 'Vendas Imóveis',
+      stages: {
+        create: [
+          { name: 'Novo Lead', order: 1, color: '#3b82f6' },
+          { name: 'Contato Feito', order: 2, color: '#f59e0b' },
+          { name: 'Visita Agendada', order: 3, color: '#10b981' },
+          { name: 'Proposta', order: 4, color: '#8b5cf6' },
+        ],
+      },
     },
+    include: { stages: true }
   })
 
-  // 3. Criar a conta para o primeiro Tenant (VBrokers)
-  const vbrokersAccount = await prisma.account.upsert({
-    where: { id: 'vbrokers-account-id' }, // ID fixo para a conta VBrokers
-    update: {},
-    create: {
-      id: 'vbrokers-account-id',
-      name: 'VBrokers',
-      isActive: true,
-    },
-  })
-
-  // 4. Criar o usuário Administrador para a conta VBrokers
-  // A senha é a mesma do superadmin, então reutilizamos o hash.
-  const vbrokersAdmin = await prisma.usuario.upsert({
-    where: { email: 'pizani@vbrokers.com.br' },
+  // 3. Create a Sample Property
+  const sampleProperty = await prisma.property.upsert({
+    where: { id: 'sample-property-1' },
     update: {
-      passwordHash,
     },
     create: {
-      email: 'pizani@vbrokers.com.br',
-      nome: 'Admin VBrokers',
-      passwordHash,
-      role: 'ADMIN', // Administrador dentro da sua própria conta
-      isSuperAdmin: false, // Importante: não é um super admin do sistema todo
-      accountId: vbrokersAccount.id, // Associado à conta VBrokers
-    },
+      id: 'sample-property-1',
+      title: 'Residencial Eden',
+      address: 'Rua das Flores, 123',
+      price: 450000,
+      status: PropertyStatus.AVAILABLE,
+      areaSqMeters: 75,
+      bedrooms: 3,
+      bathrooms: 2,
+    }
   })
 
-  console.log({ adminAccount, superAdmin, vbrokersAccount, vbrokersAdmin })
+  console.log('✅ Seed finished successfully!')
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect()
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
   })
-  .catch(async (e) => {
-    console.error(e);
+  .finally(async () => {
     await prisma.$disconnect()
-    process.exit(1);
   })

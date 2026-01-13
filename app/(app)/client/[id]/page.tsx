@@ -128,8 +128,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [lostDetails, setLostDetails] = useState({ reason: "", feedback: "" });
   const [newFunnelStageId, setNewFunnelStageId] = useState(""); // Alterado de newFunnelStatus para newFunnelStageId
   const [newNote, setNewNote] = useState("");
-  const [taskForm, setTaskForm] = useState({ title: "", description: "", dataHora: "" });
-  const [editClientForm, setEditClientForm] = useState({ nomeCompleto: "", email: "", telefone: "" });
+  const [taskForm, setTaskForm] = useState({ title: "", description: "", dateTime: "" });
+  const [editClientForm, setEditClientForm] = useState({ fullName: "", email: "", phone: "" });
   const [newPropertyId, setNewPropertyId] = useState("");
   const [transferToUserId, setTransferToUserId] = useState("");
   const [visitDateTime, setVisitDateTime] = useState("");
@@ -180,11 +180,11 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       if (clientData.client) {
         setNewFunnelStageId(clientData.client.funnelStageId); // Inicializa com o ID da etapa atual
         setEditClientForm({
-          nomeCompleto: clientData.client.nomeCompleto,
+          fullName: clientData.client.fullName,
           email: clientData.client.email || "",
-          telefone: clientData.client.telefone || ""
+          phone: clientData.client.phone || ""
         });
-        setNewPropertyId(clientData.client.imovelDeInteresseId || "");
+        setNewPropertyId(clientData.client.propertyOfInterestId || "");
       }
     } catch (err: any) {
       setError(err.message);
@@ -241,7 +241,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const handleCreateTag = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTagData.name || !newTagData.color) {
-        toast({ variant: "destructive", title: "Erro", description: "O nome e a cor da etiqueta são obrigatórios." });
+        toast({ variant: "destructive", title: "Erro", description: "O name e a cor da etiqueta são obrigatórios." });
         return;
     }
     try {
@@ -376,7 +376,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       await Promise.all(filePromises);
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      saveAs(zipBlob, `documentos_${client.nomeCompleto.replace(/\s/g, '_')}.zip`);
+      saveAs(zipBlob, `documentos_${client.fullName.replace(/\s/g, '_')}.zip`);
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro no Download", description: error.message });
@@ -392,13 +392,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleEditPropertySubmit = async () => {
-    const success = await handleUpdateClient({ imovelDeInteresseId: newPropertyId }, { successMessage: "Imóvel de interesse atualizado." });
+    const success = await handleUpdateClient({ propertyOfInterestId: newPropertyId }, { successMessage: "Imóvel de interesse atualizado." });
     if (success) setIsEditPropertyDialogOpen(false);
   };
 
   const handleTransferLead = async () => {
     if (!transferToUserId) return;
-    const success = await handleUpdateClient({ corretorId: transferToUserId }, { successMessage: "Lead transferido com sucesso." });
+    const success = await handleUpdateClient({ brokerId: transferToUserId }, { successMessage: "Lead transferido com sucesso." });
     if (success) setIsTransferDialogOpen(false);
   };
 
@@ -417,7 +417,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       content: 'Gerar sugestão', // Este texto é apenas um gatilho, não é usado pela IA.
     }, {
       body: {
-        clientName: client.nomeCompleto,
+        clientName: client.fullName,
         notes: client.notas,
         tasks: client.tarefas,
       }
@@ -441,9 +441,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     const startDate = new Date(visitDateTime);
     const endDate = addHours(startDate, 1);
     const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-    const title = `Visita ao empreendimento ${client.imovelDeInteresse.titulo}`;
+    const title = `Visita ao empreendimento ${client.imovelDeInteresse.title}`;
     const location = client.imovelDeInteresse.endereco;
-    const details = `Visita agendada com o cliente ${client.nomeCompleto} para conhecer o imóvel ${client.imovelDeInteresse.titulo}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
+    const details = `Visita agendada com o cliente ${client.fullName} para conhecer o imóvel ${client.imovelDeInteresse.title}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
     const url = ["https://www.google.com/calendar/render?action=TEMPLATE", `text=${encodeURIComponent(title)}`, `dates=${formatDate(startDate)}/${formatDate(endDate)}`, `details=${encodeURIComponent(details)}`, `location=${encodeURIComponent(location || '')}`, `add=${encodeURIComponent(client.email)}`, "reminders=30", "reminders=1440"].join("&");
     window.open(url, "_blank");
     setIsScheduleVisitOpen(false);
@@ -584,12 +584,12 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dataHora: new Date(taskForm.dataHora), clienteId: clientId }),
+        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dateTime: new Date(taskForm.dateTime), clienteId: clientId }),
       });
       if (!response.ok) throw new Error("Falha ao criar tarefa.");
       toast({ title: "Sucesso!", description: "Tarefa criada." });
       setIsTaskDialogOpen(false);
-      setTaskForm({ title: "", description: "", dataHora: "" });
+      setTaskForm({ title: "", description: "", dateTime: "" });
       fetchData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -650,18 +650,18 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" onClick={() => router.push("/pipeline")}><ArrowLeft className="h-4 w-4" /></Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{client.nomeCompleto}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{client.fullName}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge {...getStatusProps(client.funnelStage?.name ?? '')}>
                 {client.funnel?.name} &gt; {client.funnelStage?.name}
               </Badge>
               <span className="hidden sm:block text-sm text-gray-500">|</span>
-              <span className="text-sm text-gray-600">Corretor: {client.corretor?.nome}</span>
+              <span className="text-sm text-gray-600">Corretor: {client.corretor?.name}</span>
             </div>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {client.overallStatus === ClientOverallStatus.Ativo && (
+          {client.overallStatus === ClientOverallStatus.ACTIVE && (
             <>
               <Button variant="outline" className="text-green-600 hover:text-green-700 flex-grow sm:flex-grow-0" onClick={() => setIsWonDialogOpen(true)}><CheckCircle className="h-4 w-4 mr-2" /> Cliente Ganho</Button>
               <Button variant="outline" className="text-red-600 hover:text-red-700 flex-grow sm:flex-grow-0" onClick={() => setIsLostDialogOpen(true)}><XCircle className="h-4 w-4 mr-2" /> Cliente Perdido</Button>
@@ -686,8 +686,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <TabsContent value="info" className="mt-4">
                 <Card>
                   <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
-                    <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
+                    <div><Label>Nome Completo</Label><p className="font-medium">{client.fullName}</p></div>
+                    <div><Label>Telefone</Label><p className="font-medium">{client.phone || "N/A"}</p></div>
                     <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
                     <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
                   </CardContent>
@@ -709,7 +709,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                     <Separator />
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
-                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
+                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.phone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
                     <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
                       <Sparkles className="h-4 w-4 mr-2 text-primary-custom" />
@@ -740,8 +740,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               </Dialog>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><Label>Nome Completo</Label><p className="font-medium">{client.nomeCompleto}</p></div>
-              <div><Label>Telefone</Label><p className="font-medium">{client.telefone || "N/A"}</p></div>
+              <div><Label>Nome Completo</Label><p className="font-medium">{client.fullName}</p></div>
+              <div><Label>Telefone</Label><p className="font-medium">{client.phone || "N/A"}</p></div>
               <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
               <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
             </CardContent>
@@ -753,9 +753,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <CardContent>
               {client.imovelDeInteresse ? (
                 <>
-                  <h3 className="font-semibold">{client.imovelDeInteresse.titulo}</h3>
+                  <h3 className="font-semibold">{client.imovelDeInteresse.title}</h3>
                   <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
-                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.imovelDeInteresseId}/view`)}>Ver Detalhes</Button>
+                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.propertyOfInterestId}/view`)}>Ver Detalhes</Button>
                   <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
                 </>
               ) : (
@@ -782,7 +782,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   <Table>
                     <TableHeader><TableRow><TableHead>Tarefa</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {client.tarefas?.length > 0 ? client.tarefas.map(task => (<TableRow key={task.id}><TableCell>{task.titulo}</TableCell><TableCell>{format(new Date(task.dataHora), "dd/MM/yy HH:mm")}</TableCell><TableCell><Badge variant={task.concluida ? "secondary" : "default"}>{task.concluida ? "Concluída" : "Pendente"}</Badge></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
+                      {client.tarefas?.length > 0 ? client.tarefas.map(task => (<TableRow key={task.id}><TableCell>{task.title}</TableCell><TableCell>{format(new Date(task.dateTime), "dd/MM/yy HH:mm")}</TableCell><TableCell><Badge variant={task.concluida ? "secondary" : "default"}>{task.concluida ? "Concluída" : "Pendente"}</Badge></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </TabsContent>
@@ -945,7 +945,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               )}
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
-              <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.telefone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
+              <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.phone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Sparkles className="h-4 w-4 mr-2 text-primary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
             </CardContent>
           </Card>
@@ -953,7 +953,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center justify-between"><span>Status Atual</span><Badge {...getStatusProps(client.overallStatus)}>{client.overallStatus ?? 'N/A'}</Badge></div>
-              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.corretor?.nome ?? 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.corretor?.name ?? 'N/A'}</span></div>
               <Separator />
               <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notas?.length ?? 0}</span></div>
               <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tarefas?.filter(t => !t.concluida).length ?? 0}</span></div>
@@ -986,15 +986,15 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           <Label>Descrição</Label>
           <Textarea value={taskForm.description || ''} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} />
           <Label>Data e Hora</Label>
-          <Input type="datetime-local" value={taskForm.dataHora} onChange={e => setTaskForm({ ...taskForm, dataHora: e.target.value })} required />
+          <Input type="datetime-local" value={taskForm.dateTime} onChange={e => setTaskForm({ ...taskForm, dateTime: e.target.value })} required />
           <DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsTaskDialogOpen(false)}>Cancelar</Button><Button type="submit">Criar Tarefa</Button></DialogFooter>
         </form>
       </DialogContent></Dialog>
-      <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.nomeCompleto} onChange={e => setEditClientForm({ ...editClientForm, nomeCompleto: e.target.value })} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({ ...editClientForm, email: e.target.value })} /><Label>Telefone</Label><Input value={editClientForm.telefone} onChange={e => setEditClientForm({ ...editClientForm, telefone: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.titulo}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.fullName} onChange={e => setEditClientForm({ ...editClientForm, fullName: e.target.value })} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({ ...editClientForm, email: e.target.value })} /><Label>Telefone</Label><Input value={editClientForm.phone} onChange={e => setEditClientForm({ ...editClientForm, phone: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
 
-      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um corretor..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.corretorId).map(u => <SelectItem key={u.id} value={u.id}>{u.nome} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um corretor..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.brokerId).map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={isRiaDialogOpen} onOpenChange={handleRiaDialogClose}>
         <DialogContent className="sm:max-w-2xl h-[70vh] flex flex-col">
@@ -1051,7 +1051,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Documentação do Cliente</DialogTitle>
-            <DialogDescription>Gerencie os arquivos de {client.nomeCompleto}.</DialogDescription>
+            <DialogDescription>Gerencie os arquivos de {client.fullName}.</DialogDescription>
           </DialogHeader>
 
           {/* Input de arquivo escondido */}
@@ -1105,7 +1105,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <Select value={targetRoletaId} onValueChange={setTargetRoletaId}>
               <SelectTrigger id="target-roleta"><SelectValue placeholder="Selecione uma roleta..." /></SelectTrigger>
               <SelectContent>
-                {activeRoletas.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                {activeRoletas.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

@@ -14,9 +14,9 @@ const noteSchema = z.object({
 });
 
 const taskSchema = z.object({
-  titulo: z.string(),
+  title: z.string(),
   concluida: z.boolean(),
-  dataHora: z.string().datetime(),
+  dateTime: z.string().datetime(),
 });
 
 const riaSystemPrompt = `Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente e sugerir os próximos passos para o corretor.
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     clientHistory += '\nTarefas Relacionadas:\n';
     tasks?.forEach(task => {
       const status = task.concluida ? 'Concluída' : 'Pendente';
-      clientHistory += `- ${task.titulo} (Status: ${status}, Vencimento: ${new Date(task.dataHora).toLocaleString('pt-BR')})\n`;
+      clientHistory += `- ${task.title} (Status: ${status}, Vencimento: ${new Date(task.dateTime).toLocaleString('pt-BR')})\n`;
     });
 
     const fullPrompt = `${riaSystemPrompt}\n\n${clientHistory}`;

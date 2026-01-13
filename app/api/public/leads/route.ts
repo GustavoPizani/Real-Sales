@@ -12,28 +12,28 @@ export async function POST(request: Request) {
     }
 
     const broker = await prisma.user.findUnique({ where: { id: brokerId } });
-    const property = await prisma.imovel.findUnique({ where: { id: propertyId } });
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
 
     if (!broker || !property) {
       return NextResponse.json({ error: 'Corretor ou imóvel inválido.' }, { status: 404 });
     }
 
-    // Limpa o número de telefone e adiciona o prefixo +55
+    // Limpa o número de phone e adiciona o prefixo +55
     const cleanedPhone = phone.replace(/\D/g, '');
     const formattedPhone = `+55${cleanedPhone}`;
 
-    const newClient = await prisma.cliente.create({
+    const newClient = await prisma.client.create({
       data: {
-        nomeCompleto: name,
+        fullName: name,
         email,
-        telefone: formattedPhone,
-        overallStatus: ClientOverallStatus.Ativo,
-        corretorId: brokerId,
-        imovelDeInteresseId: propertyId,
+        phone: formattedPhone,
+        overallStatus: ClientOverallStatus.ACTIVE,
+        brokerId: brokerId,
+        propertyOfInterestId: propertyId,
         notas: {
           create: [
             {
-              content: `Lead recebido através da página pública do imóvel: ${property.titulo}. Mensagem: ${message || 'Nenhuma'}`,
+              content: `Lead recebido através da página pública do imóvel: ${property.title}. Mensagem: ${message || 'Nenhuma'}`,
               createdBy: 'Sistema',
             },
           ],

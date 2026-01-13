@@ -14,13 +14,13 @@ export interface Task {
   client_id?: string
   client_name?: string
   user_id: string
-  created_at: string
+  createdAt: string
   updated_at: string
 }
 
 interface TaskContextType {
   tasks: Task[]
-  addTask: (task: Omit<Task, "id" | "created_at" | "updated_at">) => void
+  addTask: (task: Omit<Task, "id" | "createdAt" | "updated_at">) => void
   updateTask: (id: string, updates: Partial<Task>) => void
   deleteTask: (id: string) => void
   getTodayTasks: () => Task[]
@@ -45,7 +45,7 @@ const mockTasks: Task[] = [
     client_id: "1",
     client_name: "João Silva",
     user_id: "4",
-    created_at: "2024-01-20T00:00:00Z",
+    createdAt: "2024-01-20T00:00:00Z",
     updated_at: "2024-01-20T00:00:00Z",
   },
   {
@@ -60,7 +60,7 @@ const mockTasks: Task[] = [
     client_id: "2",
     client_name: "Maria Santos",
     user_id: "5",
-    created_at: "2024-01-20T00:00:00Z",
+    createdAt: "2024-01-20T00:00:00Z",
     updated_at: "2024-01-20T00:00:00Z",
   },
   {
@@ -75,7 +75,7 @@ const mockTasks: Task[] = [
     client_id: "3",
     client_name: "Pedro Costa",
     user_id: "4",
-    created_at: "2024-01-21T00:00:00Z",
+    createdAt: "2024-01-21T00:00:00Z",
     updated_at: "2024-01-21T00:00:00Z",
   },
 ]
@@ -83,11 +83,11 @@ const mockTasks: Task[] = [
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(mockTasks)
 
-  const addTask = (taskData: Omit<Task, "id" | "created_at" | "updated_at">) => {
+  const addTask = (taskData: Omit<Task, "id" | "createdAt" | "updated_at">) => {
     const newTask: Task = {
       ...taskData,
       id: Date.now().toString(),
-      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
     setTasks((prev) => [newTask, ...prev])

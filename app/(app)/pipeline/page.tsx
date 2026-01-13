@@ -79,7 +79,7 @@ function DraggableClientCard({ client }: { client: Cliente }) {
     >
       <CardContent className="p-3 space-y-2">
         <div className="flex justify-between items-start">
-          <h4 className="font-semibold text-gray-900 text-sm">{client.nomeCompleto}</h4>
+          <h4 className="font-semibold text-gray-900 text-sm">{client.fullName}</h4>
           <div className="flex items-center text-xs text-gray-500">
             <CalendarIcon className="h-3 w-3 mr-1" />
             {client.updatedAt ? format(new Date(client.updatedAt), "dd/MM/yy") : ''}
@@ -88,16 +88,16 @@ function DraggableClientCard({ client }: { client: Cliente }) {
         {client.corretor && (
           <div className="flex items-center text-xs text-gray-600">
             <User className="h-3 w-3 text-gray-400 mr-1" />
-            <span>{client.corretor.nome}</span>
+            <span>{client.corretor.name}</span>
           </div>
         )}
-        {client.telefone && (
+        {client.phone && (
             <div className="flex items-center justify-between text-xs text-gray-700">
                 <div className="flex items-center">
                     <Phone className="h-3 w-3 text-gray-400 mr-2" />
-                    <span>{client.telefone}</span>
+                    <span>{client.phone}</span>
                 </div>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 hover:bg-green-100" onClick={(e) => openWhatsApp(client.telefone!, e)}>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 hover:bg-green-100" onClick={(e) => openWhatsApp(client.phone!, e)}>
                     <MessageCircle className="h-3 w-3 text-green-600" />
                 </Button>
             </div>
@@ -156,7 +156,7 @@ export default function PipelinePage() {
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [newClientForm, setNewClientForm] = useState({ nomeCompleto: "", telefone: "", email: "", selectedCorretorId: "" });
+  const [newClientForm, setNewClientForm] = useState({ fullName: "", phone: "", email: "", selectedbrokerId: "" });
   const [newStageForm, setNewStageForm] = useState({ name: "", color: "#010f27" });
   const [editingStages, setEditingStages] = useState<FunnelStage[]>([]);
   
@@ -168,7 +168,7 @@ export default function PipelinePage() {
     tagId: string;
   }>({
     searchTerm: '',
-    status: ClientOverallStatus.Ativo,
+    status: ClientOverallStatus.ACTIVE,
     dateRange: undefined as DateRange | undefined,
     brokerId: 'all',
     tagId: 'all',
@@ -241,13 +241,13 @@ export default function PipelinePage() {
     return allClients.filter(client => {
       const searchTermLower = filters.searchTerm.toLowerCase();
       const matchesSearch = !filters.searchTerm ||
-        client.nomeCompleto.toLowerCase().includes(searchTermLower) ||
+        client.fullName.toLowerCase().includes(searchTermLower) ||
         (client.email && client.email.toLowerCase().includes(searchTermLower)) ||
-        (client.telefone && client.telefone.includes(filters.searchTerm));
+        (client.phone && client.phone.includes(filters.searchTerm));
       
       const matchesStatus = filters.status.toString() === 'all' || client.overallStatus === filters.status;
       
-      const matchesBroker = filters.brokerId === 'all' || client.corretorId === filters.brokerId;
+      const matchesBroker = filters.brokerId === 'all' || client.brokerId === filters.brokerId;
 
       const matchesDate = !filters.dateRange?.from || (
         new Date(client.createdAt) >= filters.dateRange.from &&
@@ -302,9 +302,9 @@ export default function PipelinePage() {
     e.preventDefault();
 
     const isManager = user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role as Role);
-    const corretorId = isManager ? newClientForm.selectedCorretorId : user?.id;
+    const brokerId = isManager ? newClientForm.selectedbrokerId : user?.id;
 
-    if (!corretorId) {
+    if (!brokerId) {
         toast({
             variant: "destructive",
             title: "Campo obrigatório",
@@ -326,20 +326,20 @@ export default function PipelinePage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
-                nomeCompleto: newClientForm.nomeCompleto,
-                telefone: newClientForm.telefone,
+                fullName: newClientForm.fullName,
+                phone: newClientForm.phone,
                 email: newClientForm.email,
                 // Atribui ao funil e etapa padrão
                 funnelId: defaultFunnel.id,
                 funnelStageId: firstStageOfDefaultFunnel.id,
                 // Mantém a lógica de atribuição de corretor
-                corretorId: corretorId
+                brokerId: brokerId
             }),
         });
         if (!response.ok) throw new Error('Falha ao criar cliente.');
         toast({ title: 'Sucesso!', description: 'Novo cliente adicionado.' });
         setIsClientDialogOpen(false);
-        setNewClientForm({ nomeCompleto: "", telefone: "", email: "", selectedCorretorId: "" });
+        setNewClientForm({ fullName: "", phone: "", email: "", selectedbrokerId: "" });
         fetchData();
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Erro', description: error.message || 'Não foi possível criar o cliente.' });
@@ -409,7 +409,7 @@ export default function PipelinePage() {
 
   const onStageAdd = async () => {
     if (!newStageForm.name.trim()) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'O nome do estágio não pode ser vazio.' });
+        toast({ variant: 'destructive', title: 'Erro', description: 'O name do estágio não pode ser vazio.' });
         return;
     }
     try {
@@ -439,13 +439,13 @@ export default function PipelinePage() {
     <div className={`flex flex-wrap items-center gap-2 ${inModal ? 'flex-col' : ''}`}>
         <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
+            <Input placeholder="Buscar por name, email, phone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
         </div>
         <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
             <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
             <SelectContent>
                 <SelectItem value="all">Todos os Status</SelectItem>
-                <SelectItem value={ClientOverallStatus.Ativo}>Em andamento</SelectItem>
+                <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
                 <SelectItem value={ClientOverallStatus.Ganho}>Ganho</SelectItem>
                 <SelectItem value={ClientOverallStatus.Perdido}>Perdido</SelectItem>
             </SelectContent>
@@ -464,9 +464,9 @@ export default function PipelinePage() {
                 <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({...f, dateRange: date}))} locale={ptBR} />
             </PopoverContent>
         </Popover>
-        <Select value={filters.brokerId} onValueChange={(value) => setFilters(f => ({...f, brokerId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os corretores</SelectItem>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>)}</SelectContent></Select>
+        <Select value={filters.brokerId} onValueChange={(value) => setFilters(f => ({...f, brokerId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os corretores</SelectItem>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>
         <Select value={filters.tagId} onValueChange={(value) => setFilters(f => ({...f, tagId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as etiquetas</SelectItem>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.Ativo, dateRange: undefined, brokerId: 'all', tagId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
+        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.ACTIVE, dateRange: undefined, brokerId: 'all', tagId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
     </div>
   );
 
@@ -502,21 +502,21 @@ export default function PipelinePage() {
                   <DialogContent>
                       <DialogHeader><DialogTitle>Adicionar Novo Cliente</DialogTitle></DialogHeader>
                       <form onSubmit={handleAddClient} className="space-y-4 pt-4">
-                          <div><Label htmlFor="nomeCompleto">Nome Completo</Label><Input id="nomeCompleto" value={newClientForm.nomeCompleto} onChange={(e) => setNewClientForm(p => ({...p, nomeCompleto: e.target.value}))} required /></div>
-                          <div><Label htmlFor="telefone">Telefone</Label><Input id="telefone" value={newClientForm.telefone} onChange={(e) => setNewClientForm(p => ({...p, telefone: e.target.value}))} /></div>
+                          <div><Label htmlFor="fullName">Nome Completo</Label><Input id="fullName" value={newClientForm.fullName} onChange={(e) => setNewClientForm(p => ({...p, fullName: e.target.value}))} required /></div>
+                          <div><Label htmlFor="phone">Telefone</Label><Input id="phone" value={newClientForm.phone} onChange={(e) => setNewClientForm(p => ({...p, phone: e.target.value}))} /></div>
                           <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm(p => ({...p, email: e.target.value}))} /></div>
                         {user && ['marketing_adm', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
                           <div>
                             <Label htmlFor="corretor">Corretor Responsável</Label>
                             <Select
-                              value={newClientForm.selectedCorretorId}
-                              onValueChange={(value) => setNewClientForm(p => ({ ...p, selectedCorretorId: value }))}
+                              value={newClientForm.selectedbrokerId}
+                              onValueChange={(value) => setNewClientForm(p => ({ ...p, selectedbrokerId: value }))}
                             >
                               <SelectTrigger id="corretor" className="w-full">
                                 <SelectValue placeholder="Selecione um corretor" />
                               </SelectTrigger>
                               <SelectContent>
-                                {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.nome}</SelectItem>)}
+                                {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>

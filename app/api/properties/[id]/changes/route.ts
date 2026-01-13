@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       LEFT JOIN users u ON pc.user_id = u.id
       LEFT JOIN users approver ON pc.approved_by = approver.id
       WHERE pc.property_id = ${params.id}
-      ORDER BY pc.created_at DESC
+      ORDER BY pc.createdAt DESC
     `
 
     return NextResponse.json(changes)

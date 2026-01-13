@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const configs = await prisma.frequenciaConfig.findMany({
+    const configs = await prisma.attendanceConfig.findMany({
       orderBy: { createdAt: 'desc' },
     });
 
@@ -30,19 +30,19 @@ export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
     const user = await getUserFromToken(token);
-    if (!user || user.role !== Role.marketing_adm) {
+    if (!user || user.role !== Role.MARKETING_ADMIN) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { nome, latitude, longitude, raio, horarios, diasDaSemana, ativo } = await request.json();
+    const { name, latitude, longitude, raio, horarios, diasDaSemana, ativo } = await request.json();
 
-    if (!nome || latitude === undefined || longitude === undefined || raio === undefined || !horarios) {
+    if (!name || latitude === undefined || longitude === undefined || raio === undefined || !horarios) {
       return NextResponse.json({ error: 'Dados incompletos para criar configuração' }, { status: 400 });
     }
 
-    const newConfig = await prisma.frequenciaConfig.create({
+    const newConfig = await prisma.attendanceConfig.create({
       data: {
-        nome,
+        name,
         latitude,
         longitude,
         raio,

@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role');
     const superiorId = searchParams.get('superiorId');
 
-    const whereClause: Prisma.UsuarioWhereInput = {};
+    const whereClause: prisma.userWhereInput = {};
 
     if (role) {
       if (!isValidRole(role)) {
@@ -44,14 +44,14 @@ export async function GET(request: NextRequest) {
       whereClause.superiorId = superiorId;
     }
 
-    const users = await prisma.usuario.findMany({
+    const users = await prisma.user.findMany({
       where: whereClause,
       select: {
         id: true,
-        nome: true,
+        name: true,
       },
       orderBy: {
-        nome: 'asc',
+        name: 'asc',
       },
     });
 

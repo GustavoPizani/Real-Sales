@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const currentDay = now.getDay();
     const currentTime = format(now, 'HH:mm');
 
-    const activeConfigs = await prisma.frequenciaConfig.findMany({
+    const activeConfigs = await prisma.attendanceConfig.findMany({
       where: { ativo: true, diasDaSemana: { has: currentDay } },
     });
 
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     const todayStart = startOfDay(now);
     const todayEnd = endOfDay(now);
 
-    const existingRegistrationsToday = await prisma.frequenciaRegistro.findMany({
+    const existingRegistrationsToday = await prisma.attendanceRecord.findMany({
       where: { userId: user.id, createdAt: { gte: todayStart, lte: todayEnd } },
     });
 
