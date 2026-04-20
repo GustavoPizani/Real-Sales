@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const loggedInUser = await getUserFromToken(token);
 
-    if (!loggedInUser || loggedInUser.role !== 'marketing_adm') {
+    if (!loggedInUser || loggedInUser.role !== 'MARKETING_ADMIN') {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 

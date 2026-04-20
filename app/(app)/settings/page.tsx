@@ -381,7 +381,7 @@ function TeamManagementTab() {
                 </Card>
             </div>
 
-            {currentUser?.role === 'marketing_adm' && (
+            {currentUser?.role === 'MARKETING_ADMIN' && (
                 <RoleManagementCard settings={roleSettings} onUpdate={fetchData} />
             )}
 
@@ -391,7 +391,7 @@ function TeamManagementTab() {
                         <CardTitle>Usuários cadastrados</CardTitle>
                         <CardDescription>Gerencie os Usuários da sua equipa e as suas permissões</CardDescription>
                     </div>
-                    {currentUser?.role === 'marketing_adm' && (
+                    {currentUser?.role === 'MARKETING_ADMIN' && (
                         <Button onClick={() => openDialog(null)}><Plus className="h-4 w-4 mr-2" /> Novo Usuário</Button>
                     )}
                 </CardHeader>
@@ -464,7 +464,7 @@ function TeamManagementTab() {
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {Object.entries(USER_ROLE_LABELS)
-                                        .filter(([role]) => role !== 'marketing_adm')
+                                        .filter(([role]) => role !== 'MARKETING_ADMIN')
                                         .map(([role, label]) => (
                                             <SelectItem key={role} value={role}>{label}</SelectItem>
                                     ))}
@@ -980,7 +980,7 @@ function LostReasonsTab() {
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'marketing_adm';
+  const isAdmin = user?.role === 'MARKETING_ADMIN';
 
   return (
     <div className="flex-1 p-6">

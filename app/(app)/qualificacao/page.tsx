@@ -204,12 +204,12 @@ export default function QualificacaoPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
       <h1 className="text-3xl font-bold">Qualificação de Leads</h1>
       <Tabs defaultValue="atribuicao" className="w-full">
-        <TabsList className={`grid w-full ${user?.role === 'marketing_adm' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <TabsList className={`grid w-full ${user?.role === 'MARKETING_ADMIN' ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <TabsTrigger value="atribuicao"><UserCheck className="h-4 w-4 mr-2" /> Atribuição</TabsTrigger>
-          {user?.role === 'marketing_adm' && <TabsTrigger value="configuracao"><Users className="h-4 w-4 mr-2" /> Configuração</TabsTrigger>}
+          {user?.role === 'MARKETING_ADMIN' && <TabsTrigger value="configuracao"><Users className="h-4 w-4 mr-2" /> Configuração</TabsTrigger>}
         </TabsList>
         <TabsContent value="atribuicao" className="mt-6"><AtribuicaoTab /></TabsContent>
-        {user?.role === 'marketing_adm' && <TabsContent value="configuracao" className="mt-6"><ConfiguracaoTab /></TabsContent>}
+        {user?.role === 'MARKETING_ADMIN' && <TabsContent value="configuracao" className="mt-6"><ConfiguracaoTab /></TabsContent>}
       </Tabs>
     </div>
   );

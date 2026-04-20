@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Apenas usuários com permissão podem ver todos os leads
-    if (user.role !== 'marketing_adm' && user.role !== 'diretor') {
+    if (user.role !== 'MARKETING_ADMIN' && user.role !== 'diretor') {
         return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
     }
 

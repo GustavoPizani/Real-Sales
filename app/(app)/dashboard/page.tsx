@@ -136,13 +136,13 @@ export default function DashboardPage() {
   const handleClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const isManager = user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role);
+    const isManager = user && ['MARKETING_ADMIN', 'diretor', 'gerente'].includes(user.role);
 
     if (isManager && !clientForm.selectedbrokerId) {
       toast({
         variant: "destructive",
         title: "Campo obrigatório",
-        description: "Por favor, selecione um corretor responsável.",
+        description: "Por favor, selecione um BROKER responsável.",
       });
       return;
     }
@@ -314,18 +314,18 @@ export default function DashboardPage() {
                 <div className="space-y-2"><Label htmlFor="fullName">Nome Completo</Label><Input id="fullName" value={clientForm.fullName} onChange={(e) => setClientForm({ ...clientForm, fullName: e.target.value })} required /></div>
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} /></div>
                 <div className="space-y-2"><Label htmlFor="phone">Telefone</Label><Input id="phone" value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} /></div>
-                {user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role) && (
+                {user && ['MARKETING_ADMIN', 'diretor', 'gerente'].includes(user.role) && (
                   <div className="space-y-2">
-                    <Label htmlFor="corretor">Corretor Responsável</Label>
+                    <Label htmlFor="BROKER">Corretor Responsável</Label>
                     <Select
                       value={clientForm.selectedbrokerId}
                       onValueChange={(value) => setClientForm(p => ({ ...p, selectedbrokerId: value }))}
                     >
-                      <SelectTrigger id="corretor" className="w-full">
-                        <SelectValue placeholder="Selecione um corretor" />
+                      <SelectTrigger id="BROKER" className="w-full">
+                        <SelectValue placeholder="Selecione um BROKER" />
                       </SelectTrigger>
                       <SelectContent>
-                        {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
+                        {brokers.filter(b => b.role === 'BROKER').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

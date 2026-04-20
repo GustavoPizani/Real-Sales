@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
-// PUT: Atualiza uma configuração de frequência (marketing_adm)
+// PUT: Atualiza uma configuração de frequência (MARKETING_ADMIN)
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
@@ -53,7 +53,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-// DELETE: Apaga uma configuração de frequência (marketing_adm)
+// DELETE: Apaga uma configuração de frequência (MARKETING_ADMIN)
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];

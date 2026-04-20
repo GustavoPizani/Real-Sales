@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const clients = await prisma.client.findMany({
       where,
       include: { 
-        corretor: { select: { name: true, id: true } },
+        BROKER: { select: { name: true, id: true } },
         // ✅ Adicionado para incluir as tags na listagem de clientes
         tags: {
           select: { id: true, name: true, color: true },
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 // Schema de validação para a criação de um novo cliente
 const createClientSchema = z.object({
     fullName: z.string().min(1, { message: "Nome completo é obrigatório." }),
-    brokerId: z.string().uuid({ message: "ID do corretor inválido." }),
+    brokerId: z.string().uuid({ message: "ID do BROKER inválido." }),
     funnelId: z.string().uuid({ message: "ID do funil é obrigatório." }),
     funnelStageId: z.string().uuid({ message: "ID da etapa do funil é obrigatório." }),
     email: z.string().email({ message: "Email inválido." }).optional().or(z.literal('')),

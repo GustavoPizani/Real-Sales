@@ -24,7 +24,7 @@ export async function GET(
       const roleta = await prisma.leadRoulette.findUnique({
         where: { id: params.id },
         include: {
-          corretores: { include: { corretor: true } },
+          corretores: { include: { BROKER: true } },
           funnel: true,
         },
       });

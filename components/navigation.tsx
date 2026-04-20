@@ -5,21 +5,36 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { Home, Building, Kanban, Settings, LogOut, CheckSquare, X, Phone, RotateCcw, Target, UserCheck } from 'lucide-react';
+// ADICIONADO: Megaphone na lista de imports abaixo
+import { 
+  Home, 
+  Building, 
+  Kanban, 
+  Settings, 
+  LogOut, 
+  CheckSquare, 
+  X, 
+  Phone, 
+  RotateCcw, 
+  Target, 
+  UserCheck, 
+  Megaphone 
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Role } from '@prisma/client';
 
 const navigationLinks = [
-  { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  { name: 'Imóveis', href: '/properties', icon: Building, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente', 'corretor'] },
-  //{ name: "Integrações", href: "/integrations", icon: Megaphone, roles: ['marketing_adm'] },
-  { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'marketing_adm', 'diretor', 'gerente'] },
+  { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  // ADICIONADO: Menu de Marketing apontando para a pasta que você criou
+  { name: 'Marketing', href: '/marketing', icon: Megaphone, roles: ['ADMIN', 'MARKETING_ADMIN'] },
+  { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  { name: 'Imóveis', href: '/properties', icon: Building, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
+  { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente'] },
 ];
 
 interface NavigationProps {
@@ -36,10 +51,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
   const isExpanded = isDesktopExpanded || isMobileOpen;
 
   const filteredNavigation = navigationLinks.filter((link) => {
-    // 1. Se for Super Admin, vê tudo irrestritamente
     if (user?.isSuperAdmin) return true;
-  
-    // 2. Lógica padrão para outros usuários
     if (!user?.role || !link.roles) return false;
     return link.roles.includes(user.role);
   });
@@ -62,7 +74,6 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
 
   return (
     <>
-      {/* Overlay para fechar o menu no mobile */}
       {isMobileOpen && (
         <div 
           className="lg:hidden fixed inset-0 bg-black/50 z-40"
@@ -73,17 +84,14 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
       <aside 
         className={cn(
           "bg-black text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
-          // Lógica para Mobile: controlado por isMobileOpen
           isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64", 
-          // Lógica para Desktop: sobrepõe a lógica mobile
           "lg:translate-x-0",
-          "overflow-y-auto overflow-x-hidden", // ✅ Garante que o scroll vertical seja possível e esconde o horizontal
+          "overflow-y-auto overflow-x-hidden",
           isDesktopExpanded ? "lg:w-64" : "lg:w-16"
         )}
         onMouseEnter={() => !isMobileOpen && setIsDesktopExpanded(true)}
         onMouseLeave={() => !isMobileOpen && setIsDesktopExpanded(false)}
       >
-        {/* Logo */}
         <div className="p-4 flex-shrink-0 border-b border-tertiary-custom/50 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center justify-start gap-3">
             <img src="/logo.png" alt="Real Sales Logo" className="w-8 h-8" />
@@ -100,7 +108,6 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
           </Button>
         </div>
         
-        {/* Navigation Links */}
         <nav className="flex-grow px-2 py-4">
           <ul className="space-y-2">
             {filteredNavigation.map((item) => {
@@ -111,7 +118,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    onClick={() => isMobileOpen && setIsMobileOpen(false)} // Fecha o menu ao clicar num link no mobile
+                    onClick={() => isMobileOpen && setIsMobileOpen(false)}
                     className={cn(
                       "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 group relative border-l-4",
                       isActive
@@ -133,7 +140,6 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
           </ul>
         </nav>
 
-        {/* User Profile & Logout */}
         <div className="p-3 border-t border-tertiary-custom/50 flex-shrink-0">
           <div className="flex items-center min-w-0 mb-3">
               <div className="w-10 h-10 bg-tertiary-custom rounded-full flex items-center justify-center flex-shrink-0">

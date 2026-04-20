@@ -5,7 +5,7 @@ import { Cliente } from '@prisma/client';
 // Função auxiliar movida para fora do handler principal para melhor estrutura
 async function sendSlackNotification(brokerId: string, client: Cliente) {
   // Lógica para enviar notificação para o Slack
-  console.log(`Notificando Slack para o corretor ${brokerId} sobre o cliente ${client.fullName}`);
+  console.log(`Notificando Slack para o BROKER ${brokerId} sobre o cliente ${client.fullName}`);
 }
 
 export async function POST(
@@ -24,7 +24,7 @@ export async function POST(
         status: 'ATIVO',
       },
       include: {
-        corretor: true,
+        BROKER: true,
       },
     });
 

@@ -137,9 +137,9 @@ const useFrequenciaData = (user, selectedReportUserId, reportDateRange) => {
     const fetchAllData = useCallback(() => {
         if (!user) return;
         
-        const isAdminOrDirector = ['marketing_adm', 'diretor'].includes(user.role);
+        const isAdminOrDirector = ['MARKETING_ADMIN', 'diretor'].includes(user.role);
 
-        if (user.role === 'marketing_adm') {
+        if (user.role === 'MARKETING_ADMIN') {
             setLoading(prev => ({ ...prev, configs: true }));
             fetcher('/api/frequencia/config')
                 .then(data => setConfigs(data))
@@ -228,14 +228,14 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
                 <CardDescription>Visualize os registros de frequência da equipe.</CardDescription>
             </CardHeader>
             <CardContent>
-                {(user?.role === 'marketing_adm' || user?.role === 'diretor') && (
+                {(user?.role === 'MARKETING_ADMIN' || user?.role === 'diretor') && (
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                         <Select value={selectedUserId} onValueChange={onSelectedUserIdChange}>
                             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Todos os Usuários" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Todos os Usuários</SelectItem>
                                 {reportUsers
-                                    .filter(u => u.role === 'corretor' || u.role === 'gerente')
+                                    .filter(u => u.role === 'BROKER' || u.role === 'gerente')
                                     .map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
@@ -268,11 +268,11 @@ function FrequenciaReportView({ user, registros, reportUsers, loading, dateRange
                             <div key={weekKey}>
                                 <h3 className="text-lg font-semibold mb-3">Semana de {weekKey}</h3>
                                 <Table>
-                                    <TableHeader><TableRow>{(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableHead>Usuário</TableHead>}<TableHead>Data/Hora</TableHead><TableHead>Distância</TableHead><TableHead>Local</TableHead></TableRow></TableHeader>
+                                    <TableHeader><TableRow>{(user?.role === 'MARKETING_ADMIN' || user?.role === 'diretor') && <TableHead>Usuário</TableHead>}<TableHead>Data/Hora</TableHead><TableHead>Distância</TableHead><TableHead>Local</TableHead></TableRow></TableHeader>
                                     <TableBody>
                                         {weekRegistros.map(registro => (
                                             <TableRow key={registro.id}>
-                                                {(user?.role === 'marketing_adm' || user?.role === 'diretor') && <TableCell>{registro.usuario.name}</TableCell>}
+                                                {(user?.role === 'MARKETING_ADMIN' || user?.role === 'diretor') && <TableCell>{registro.usuario.name}</TableCell>}
                                                 <TableCell>{format(parseISO(registro.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                                                 <TableCell>{registro.distancia}m</TableCell>
                                                 <TableCell>{registro.config?.name || 'N/A'}</TableCell>
@@ -610,7 +610,7 @@ function FrequenciaTabContent() {
 
     return (
         <>
-            {user.role === 'marketing_adm' ? (
+            {user.role === 'MARKETING_ADMIN' ? (
                 <Tabs defaultValue="report" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="report"><List className="h-4 w-4 mr-2" /> Relatório</TabsTrigger>
@@ -731,7 +731,7 @@ function FrequenciaTabContent() {
                             <Label htmlFor="userId">Usuário</Label>
                             <Select name="userId" required><SelectTrigger><SelectValue placeholder="Selecione um usuário" /></SelectTrigger>
                                 <SelectContent>{reportUsers
-                                    .filter(u => u.role === 'corretor' || u.role === 'gerente')
+                                    .filter(u => u.role === 'BROKER' || u.role === 'gerente')
                                     .map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
@@ -855,7 +855,7 @@ export default function RoletaPage() {
     const handleCreateRoleta = async (e: React.FormEvent) => {
         e.preventDefault()
         if (formData.usuarios.length === 0) {
-            setMessage("Selecione pelo menos um corretor ou gerente para a roleta.")
+            setMessage("Selecione pelo menos um BROKER ou gerente para a roleta.")
             setTimeout(() => setMessage(""), 3000);
             return
         }
@@ -886,7 +886,7 @@ export default function RoletaPage() {
         e.preventDefault()
         if (!editingRoleta) return
         if (formData.usuarios.length === 0) {
-            setMessage("Selecione pelo menos um corretor ou gerente para a roleta.")
+            setMessage("Selecione pelo menos um BROKER ou gerente para a roleta.")
             setTimeout(() => setMessage(""), 3000);
             return
         }
@@ -999,7 +999,7 @@ export default function RoletaPage() {
     };
 
     if (!user) { return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div> }
-    if (!["marketing_adm", "diretor", "gerente", "corretor"].includes(user.role)) {
+    if (!["MARKETING_ADMIN", "diretor", "gerente", "BROKER"].includes(user.role)) {
         return <div className="p-6"><Alert><AlertDescription>Acesso negado.</AlertDescription></Alert></div>
     }
 
@@ -1013,7 +1013,7 @@ export default function RoletaPage() {
         });
     }, [roletas]);
 
-    const usersForRoleta = useMemo(() => allUsers.filter(u => u.role === 'corretor' || u.role === 'gerente'), [allUsers]);
+    const usersForRoleta = useMemo(() => allUsers.filter(u => u.role === 'BROKER' || u.role === 'gerente'), [allUsers]);
     const funnelsForRoleta = useMemo(() => funnels.filter(f => !f.isPreSales), [funnels]);
 
     return (
@@ -1028,9 +1028,9 @@ export default function RoletaPage() {
             {message && <Alert className="mb-4"><AlertDescription>{message}</AlertDescription></Alert>}
 
             <Tabs defaultValue="overview" className="w-full">
-                <TabsList className={`grid w-full ${user?.role === 'marketing_adm' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <TabsList className={`grid w-full ${user?.role === 'MARKETING_ADMIN' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <TabsTrigger value="overview">Ordem de Atendimento</TabsTrigger>                    
-                    {user?.role === 'marketing_adm' && (
+                    {user?.role === 'MARKETING_ADMIN' && (
                         <TabsTrigger value="manage">Gerenciar Roletas</TabsTrigger>
                     )}
                     <TabsTrigger value="frequencia">Frequência</TabsTrigger>                    
@@ -1046,13 +1046,13 @@ export default function RoletaPage() {
                                     <CardHeader><CardTitle className="text-xl">{roleta.name}</CardTitle><CardDescription>{roleta.funnel?.name || 'Sem funil associado'}</CardDescription></CardHeader>
                                     <CardContent>
                                         <div className="space-y-1">
-                                            {roleta.usuarios.map((corretor, index) => {
+                                            {roleta.usuarios.map((BROKER, index) => {
                                                 const isNext = index === nextCorretorIndex;
-                                                const leadCount = corretor.leadCount ?? 0;
+                                                const leadCount = BROKER.leadCount ?? 0;
                                                 return (
-                                                    <div key={corretor.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50">
+                                                    <div key={BROKER.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50">
                                                         <div>
-                                                            <p className="font-medium text-gray-900">{corretor.name || corretor.email}</p>
+                                                            <p className="font-medium text-gray-900">{BROKER.name || BROKER.email}</p>
                                                             <p className={`text-sm font-semibold ${isNext ? 'text-green-600' : 'text-gray-500'}`}>{isNext ? 'NA VEZ - ' : ''}{leadCount} QUALIFICADO(S)</p>
                                                         </div>
                                                         <span className="text-lg font-medium text-gray-400">{index + 1}</span>
@@ -1074,7 +1074,7 @@ export default function RoletaPage() {
                                 <CardTitle className="flex items-center gap-2 text-primary-custom"><RotateCcw className="h-5 w-5" />Roletas Configuradas</CardTitle>
                                 <CardDescription>Gerencie as roletas de distribuição de leads</CardDescription>
                             </div>
-                        {user?.role === 'marketing_adm' && (
+                        {user?.role === 'MARKETING_ADMIN' && (
                             <Button onClick={() => { setShowCreateModal(true); setParticipantOrder([]); setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' }) }} className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                                 <Plus className="h-4 w-4 mr-2" />Nova Roleta
                             </Button>
@@ -1129,7 +1129,7 @@ export default function RoletaPage() {
                                                     <TableCell>{safeFormatDate(roleta.createdAt, "dd/MM/yyyy")}</TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
-                                                        {user?.role === 'marketing_adm' && (
+                                                        {user?.role === 'MARKETING_ADMIN' && (
                                                             <>
                                                                 <Button size="sm" variant="ghost" onClick={() => openEditModal(roleta)}><Edit className="h-4 w-4" /></Button>
                                                                 <Button size="sm" variant="ghost" onClick={() => handleDeleteRoleta(roleta.id)} className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>

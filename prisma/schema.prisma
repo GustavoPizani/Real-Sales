@@ -9,7 +9,10 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// --- ENUMS ---
+// =======================================================================
+// ENUMS (CRM + MARKETING)
+// =======================================================================
+
 enum Role {
   MARKETING_ADMIN
   DIRECTOR
@@ -70,7 +73,9 @@ enum QualificationStatus {
   ASSIGNED
 }
 
-// --- MODELS ---
+// =======================================================================
+// MODELS UNIFICADOS (O CORAÇÃO DO SISTEMA)
+// =======================================================================
 
 model User {
   id                  String               @id // Supabase Auth UUID
@@ -81,7 +86,7 @@ model User {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   
-  // Hierarchy
+  // Hierarquia
   supervisorId        String?
   supervisor          User?                @relation("Hierarchy", fields: [supervisorId], references: [id], onDelete: SetNull)
   subordinates        User[]               @relation("Hierarchy")
@@ -108,7 +113,7 @@ model User {
   createdOffers       ActiveOffer[]        @relation("CreatedOffers")
   assignedCalls       ActiveOfferClient[]  @relation("AssignedCalls")
 
-  // Lead Pool
+  // Lead Pool (O que causou o erro anterior)
   qualifiedLeadsForMe Client[]             @relation("QualifiedFor")
   allowedLeadPools    LeadPoolUser[]
 
@@ -159,27 +164,72 @@ model Client {
   @@map("clients")
 }
 
-model ClientDocument {
-  id        String   @id @default(uuid())
-  name      String
-  url       String   // Supabase Storage URL
-  type      String?  // pdf, jpg, png
-  createdAt DateTime @default(now())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+// =======================================================================
+// MARKETING MODELS (REAL ROI HUB - UNIFICAÇÃO)
+// =======================================================================
 
-  @@map("client_documents")
+model AdMetric {
+  id              String    @id @default(uuid())
+  ad_id           String
+  ad_name         String?
+  clicks          Int?
+  conversions     Int?
+  cost_per_result Float?
+  date_start      DateTime? @db.Date
+  date_stop       DateTime? @db.Date
+  device          String?
+  impressions     Int?
+  spend           Float?
+  thumbnail_url   String?
+  user_id         String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@map("ad_metrics")
 }
 
-model Tag {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  color     String
-  createdAt DateTime @default(now())
-  clients   Client[] @relation("ClientTags")
+model ApiSetting {
+  id              String   @id @default(uuid())
+  setting_key     String   // Onde você salvará Meta App ID, Token, etc.
+  encrypted_value String
+  user_id         String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
-  @@map("tags")
+  @@map("api_settings")
 }
+
+model CampaignMetric {
+  id                 String   @id @default(uuid())
+  campaign_name      String
+  campaign_id        String?
+  spend              Float?
+  impressions        Int?
+  clicks             Int?
+  leads              Int?
+  date               DateTime @db.Date
+  user_id            String
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("campaign_metrics")
+}
+
+model FieldMapping {
+  id            String   @id @default(uuid())
+  source        String   // ex: "meta_ads"
+  fieldName     String   // Nome no Meta
+  mappedField   String   // Nome no modelo Client
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([source, fieldName])
+  @@map("field_mappings")
+}
+
+// =======================================================================
+// CRM MODELS (PROPRIEDADES, FUNIS, ROLETA, POOL)
+// =======================================================================
 
 model Property {
   id                String          @id @default(uuid())
@@ -187,37 +237,27 @@ model Property {
   features          String[]        @default([])
   address           String?
   price             Float?
-  type              String?
   status            PropertyStatus  @default(AVAILABLE)
-  bedrooms          Int?
-  bathrooms         Int?
-  areaSqMeters      Int?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
-
   interestedClients Client[]
-  propertyTypes     PropertyType[]
   images            PropertyImage[]
+  propertyTypes     PropertyType[]
   
   creatorId         String?
-  creator           User?           @relation("CreatedProperties", fields: [creatorId], references: [id], onDelete: SetNull)
+  creator           User?           @relation("CreatedProperties", fields: [creatorId], references: [id])
   updaterId         String?
-  updater           User?           @relation("UpdatedProperties", fields: [updaterId], references: [id], onDelete: SetNull)
+  updater           User?           @relation("UpdatedProperties", fields: [updaterId], references: [id])
 
   @@map("properties")
 }
 
 model PropertyType {
-  id            String           @id @default(uuid())
+  id            String   @id @default(uuid())
   name          String
   value         Float
-  areaSqMeters  Float?
-  bedrooms      Int?
-  suites        Int?
-  parkingSpaces Int?
   propertyId    String
-  property      Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  floorPlans    FloorPlanImage[]
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_types")
 }
@@ -225,61 +265,42 @@ model PropertyType {
 model PropertyImage {
   id         String   @id @default(uuid())
   url        String
-  createdAt  DateTime @default(now())
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_images")
 }
 
-model FloorPlanImage {
-  id             String       @id @default(uuid())
-  url            String
-  createdAt      DateTime     @default(now())
-  propertyTypeId String
-  propertyType   PropertyType @relation(fields: [propertyTypeId], references: [id], onDelete: Cascade)
+model Funnel {
+  id             String             @id @default(uuid())
+  name           String             @unique
+  isPreSales     Boolean            @default(false)
+  isDefaultEntry Boolean            @default(false)
+  stages         FunnelStage[]
+  clients        Client[]
+  roulettes      LeadRoulette[]
+  userAccess     UserFunnelAccess[]
 
-  @@map("floor_plan_images")
+  @@map("funnels")
 }
 
-model Note {
+model FunnelStage {
   id        String   @id @default(uuid())
-  content   String
-  createdAt DateTime @default(now())
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int
+  color     String
+  funnelId  String
+  funnel    Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  clients   Client[]
 
-  @@map("notes")
-}
-
-model Task {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  status      String   @default("pending")
-  dateTime    DateTime
-  isCompleted Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        TaskType
-  priority    Priority
-
-  @@map("tasks")
+  @@unique([funnelId, name])
+  @@map("funnel_stages")
 }
 
 model LeadRoulette {
   id                String             @id @default(uuid())
   name              String
   isActive          Boolean            @default(true)
-  validFrom         DateTime?
-  validUntil        DateTime?
-  lastAssignedIndex Int                @default(0)
   users             LeadRouletteUser[]
   funnelId          String?
   funnel            Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
@@ -297,34 +318,90 @@ model LeadRouletteUser {
   @@map("roulette_users")
 }
 
-model Funnel {
-  id             String             @id @default(uuid())
-  name           String             @unique
-  isPreSales     Boolean            @default(false)
-  isDefaultEntry Boolean            @default(false)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  stages         FunnelStage[]
-  userAccess     UserFunnelAccess[]
-  clients        Client[]
-  roulettes      LeadRoulette[]
+model LeadPoolUser {
+  leadPoolId String
+  leadPool   LeadPool @relation(fields: [leadPoolId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("funnels")
+  @@id([leadPoolId, userId])
+  @@map("lead_pool_users")
 }
 
-model FunnelStage {
-  id        String   @id @default(uuid())
-  name      String
-  order     Int
-  color     String
-  funnelId  String
-  funnel    Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clients   Client[]
+model LeadPool {
+  id       String         @id @default(cuid())
+  name     String         @unique
+  isActive Boolean        @default(true)
+  users    LeadPoolUser[]
 
-  @@unique([funnelId, name])
-  @@map("funnel_stages")
+  @@map("lead_pools")
+}
+
+model AttendanceConfig {
+  id           String             @id @default(cuid())
+  name         String
+  latitude     Float
+  longitude    Float
+  radiusMeters Int
+  schedules    Json
+  isActive     Boolean            @default(true)
+  records      AttendanceRecord[]
+
+  @@map("attendance_configs")
+}
+
+model AttendanceRecord {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id])
+  configId  String?
+  config    AttendanceConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+
+  @@map("attendance_records")
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  dateTime    DateTime
+  isCompleted Boolean  @default(false)
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        TaskType
+  priority    Priority
+
+  @@map("tasks")
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String
+  clients   Client[] @relation("ClientTags")
+
+  @@map("tags")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
 }
 
 model UserFunnelAccess {
@@ -342,8 +419,6 @@ model ActiveOffer {
   id          String              @id @default(uuid())
   name        String
   status      ActiveOfferStatus   @default(PENDING)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
   createdById String
   createdBy   User                @relation("CreatedOffers", fields: [createdById], references: [id])
   clients     ActiveOfferClient[]
@@ -353,9 +428,6 @@ model ActiveOffer {
 
 model ActiveOfferClient {
   id            String                  @id @default(uuid())
-  status        ActiveOfferClientStatus @default(PENDING)
-  notes         String?
-  contactedAt   DateTime?
   activeOfferId String
   activeOffer   ActiveOffer             @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
   clientId      String
@@ -366,71 +438,9 @@ model ActiveOfferClient {
   @@map("active_offer_clients")
 }
 
-model AttendanceConfig {
-  id           String             @id @default(cuid())
-  name         String
-  latitude     Float
-  longitude    Float
-  radiusMeters Int
-  schedules    Json
-  weekDays     Int[]              @default([])
-  isActive     Boolean            @default(true)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  records      AttendanceRecord[]
-
-  @@map("attendance_configs")
-}
-
-model AttendanceRecord {
-  id                 String            @id @default(cuid())
-  userId             String
-  user               User              @relation(fields: [userId], references: [id])
-  latitude           Float
-  longitude          Float
-  distanceFromCenter Int
-  isWithinRadius     Boolean
-  configId           String?
-  config             AttendanceConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
-  createdAt          DateTime          @default(now())
-
-  @@map("attendance_records")
-}
-
-model LeadPoolConfig {
-  id                        String   @id @default(cuid())
-  assignmentRadiusMeters    Int      @default(5000)
-  timeToPriorityPoolMinutes Int      @default(60)
-  timeToGeneralPoolMinutes  Int      @default(120)
-  updatedAt                 DateTime @updatedAt
-
-  @@map("lead_pool_configs")
-}
-
-model LeadPool {
-  id       String         @id @default(cuid())
-  name     String         @unique
-  isActive Boolean        @default(true)
-  users    LeadPoolUser[]
-
-  @@map("lead_pools")
-}
-
-model LeadPoolUser {
-  leadPoolId String
-  leadPool   LeadPool @relation(fields: [leadPoolId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([leadPoolId, userId])
-  @@map("lead_pool_users")
-}
-
 model ClientWonDetails {
   id        String   @id @default(uuid())
   saleValue Float
-  saleDate  DateTime @default(now())
-  createdAt DateTime @default(now())
   clientId  String   @unique
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
@@ -438,41 +448,19 @@ model ClientWonDetails {
 }
 
 model LostReason {
-  id        String   @id @default(uuid())
-  reason    String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id     String  @id @default(uuid())
+  reason String
+  active Boolean @default(true)
 
   @@map("lost_reasons")
 }
 
-model RoleSetting {
-  roleName Role    @id
-  isActive Boolean @default(true)
+model ClientDocument {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@map("role_settings")
-}
-
-model PushSubscription {
-  id        String   @id @default(cuid())
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@map("push_subscriptions")
-}
-
-model FieldMapping {
-  id          String   @id @default(uuid())
-  source      String // ex: "meta_ads", "site_form"
-  fieldName   String // Nome do campo na fonte (ex: "full_name")
-  mappedField String // Nome do campo no modelo Client (ex: "fullName")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([source, fieldName])
-  @@map("field_mappings")
+  @@map("client_documents")
 }

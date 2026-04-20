@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     data: {
       statusDeQualificacao: StatusQualificacao.NoBolsaoPrioritario,
       entrouNoBolsaoEm: now,
-      qualificadoParaId: null, // Libera o lead do corretor original
+      qualificadoParaId: null, // Libera o lead do BROKER original
     },
   });
 

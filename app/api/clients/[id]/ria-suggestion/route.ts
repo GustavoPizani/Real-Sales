@@ -19,7 +19,7 @@ const taskSchema = z.object({
   dateTime: z.string().datetime(),
 });
 
-const riaSystemPrompt = `Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente e sugerir os próximos passos para o corretor.
+const riaSystemPrompt = `Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente e sugerir os próximos passos para o BROKER.
 Siga sempre esta estrutura de resposta:
 1. **[Análise Rápida]**
    * Um parágrafo curto resumindo o status atual do cliente.

@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Atribui um lead a um corretor
+// POST: Atribui um lead a um BROKER
 export async function POST(request: NextRequest) {
   const token = request.headers.get('authorization')?.split(' ')[1];
   const user = await getUserFromToken(token);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
       // 2. Verifica se o lead já foi atribuído
       if (lead.statusDeQualificacao === StatusQualificacao.Atribuido) {
-        throw new Error('Este lead já foi atribuído a outro corretor.');
+        throw new Error('Este lead já foi atribuído a outro BROKER.');
       }
 
       // 3. Valida as regras de negócio

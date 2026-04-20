@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Cria um novo registo de frequência (corretor/gerente)
+// POST: Cria um novo registo de frequência (BROKER/gerente)
 export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];

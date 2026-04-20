@@ -60,7 +60,7 @@ export default function PublicPropertyViewPage() {
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!brokerId || !propertyId) {
-      toast({ variant: "destructive", title: "Erro de configuração", description: "Não foi possível identificar o corretor." });
+      toast({ variant: "destructive", title: "Erro de configuração", description: "Não foi possível identificar o BROKER." });
       return;
     }
     setIsSubmitting(true);
@@ -74,7 +74,7 @@ export default function PublicPropertyViewPage() {
         const errorData = await response.json();
         throw new Error(errorData.error || "Falha ao enviar seu contato.");
       }
-      toast({ title: "Contato enviado com sucesso!", description: "O corretor responsável entrará em contato em breve." });
+      toast({ title: "Contato enviado com sucesso!", description: "O BROKER responsável entrará em contato em breve." });
       setLeadName("");
       setLeadEmail("");
       setLeadPhone("");

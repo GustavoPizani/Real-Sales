@@ -15,7 +15,7 @@ export async function GET(): Promise<NextResponse> {
 
     const sevenDaysAgo = subDays(new Date(), 7);
 
-    // Encontra clientes atribuídos ao usuário logado (corretor)
+    // Encontra clientes atribuídos ao usuário logado (BROKER)
     // cuja última atualização foi há mais de 7 dias.
     const overdueClients = await prisma.client.findMany({
       where: {

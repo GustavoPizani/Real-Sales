@@ -13,8 +13,8 @@ async function getClientWithDetails(id: string) {
     const client = await prisma.client.findUnique({
         where: { id },
         include: {
-            // FIX: The relation is named 'corretor', not 'proprietario'
-            corretor: {
+            // FIX: The relation is named 'BROKER', not 'proprietario'
+            BROKER: {
                 select: {
                     id: true,
                     name: true,

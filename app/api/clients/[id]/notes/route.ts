@@ -27,7 +27,7 @@ export async function GET(
     const client = await prisma.client.findUnique({
       where: { id: clientId },
       include: {
-        corretor: true,
+        BROKER: true,
         imovelDeInteresse: true,
         notas: {
           orderBy: {

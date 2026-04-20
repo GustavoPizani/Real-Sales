@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
         // --- Lógica da Roleta ---
         const roleta = await prisma.leadRoulette.findUnique({
             where: { id: roletaId },
-            include: { corretores: { include: { corretor: true }, orderBy: { corretor: { name: 'asc' } } } }
+            include: { corretores: { include: { BROKER: true }, orderBy: { BROKER: { name: 'asc' } } } }
         });
 
         if (!roleta || !roleta.ativa || roleta.corretores.length === 0) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
 
         // Lógica Round-Robin
         const nextIndex = (roleta.lastAssignedIndex + 1) % roleta.corretores.length;
-        const nextCorretor = roleta.corretores[nextIndex].corretor;
+        const nextCorretor = roleta.corretores[nextIndex].BROKER;
 
         // Encontrar o funil de vendas principal (ou o primeiro que não seja de pré-vendas)
         const targetFunnel = await prisma.funnel.findFirst({

@@ -23,8 +23,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       include: {
         clients: {
           where: {
-            // O corretor só vê os clientes atribuídos a ele nesta campanha
-            assignedToId: user.role === 'corretor' ? user.id : undefined,
+            // O BROKER só vê os clientes atribuídos a ele nesta campanha
+            assignedToId: user.role === 'BROKER' ? user.id : undefined,
           },
           include: {
             cliente: {

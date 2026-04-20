@@ -5,7 +5,7 @@ import { Role } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Retorna todas as configurações de frequência (marketing_adm)
+// GET: Retorna todas as configurações de frequência (MARKETING_ADMIN)
 export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Cria uma nova configuração de frequência (marketing_adm)
+// POST: Cria uma nova configuração de frequência (MARKETING_ADMIN)
 export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.split(' ')[1];

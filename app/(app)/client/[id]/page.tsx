@@ -656,7 +656,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                 {client.funnel?.name} &gt; {client.funnelStage?.name}
               </Badge>
               <span className="hidden sm:block text-sm text-gray-500">|</span>
-              <span className="text-sm text-gray-600">Corretor: {client.corretor?.name}</span>
+              <span className="text-sm text-gray-600">Corretor: {client.BROKER?.name}</span>
             </div>
           </div>
         </div>
@@ -953,7 +953,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center justify-between"><span>Status Atual</span><Badge {...getStatusProps(client.overallStatus)}>{client.overallStatus ?? 'N/A'}</Badge></div>
-              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.corretor?.name ?? 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.BROKER?.name ?? 'N/A'}</span></div>
               <Separator />
               <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notas?.length ?? 0}</span></div>
               <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tarefas?.filter(t => !t.concluida).length ?? 0}</span></div>
@@ -994,7 +994,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
 
-      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um corretor..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.brokerId).map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um BROKER..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.brokerId).map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={isRiaDialogOpen} onOpenChange={handleRiaDialogClose}>
         <DialogContent className="sm:max-w-2xl h-[70vh] flex flex-col">

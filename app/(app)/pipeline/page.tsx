@@ -85,10 +85,10 @@ function DraggableClientCard({ client }: { client: Cliente }) {
             {client.updatedAt ? format(new Date(client.updatedAt), "dd/MM/yy") : ''}
           </div>
         </div>
-        {client.corretor && (
+        {client.BROKER && (
           <div className="flex items-center text-xs text-gray-600">
             <User className="h-3 w-3 text-gray-400 mr-1" />
-            <span>{client.corretor.name}</span>
+            <span>{client.BROKER.name}</span>
           </div>
         )}
         {client.phone && (
@@ -192,41 +192,45 @@ export default function PipelinePage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) throw new Error("Token não encontrado");
-      const headers = { 'Authorization': `Bearer ${token}` };
-      
+      // REMOVIDO: Não precisamos mais de localStorage nem headers manuais
+      // O Middleware do Supabase cuida dos cookies automaticamente.
+
       const [clientsRes, funnelsRes, brokersRes, tagsRes] = await Promise.all([
-        fetch('/api/clients', { headers }),
-        fetch('/api/funnels', { headers }),
-        fetch('/api/users', { headers }),
-        fetch('/api/tags', { headers }),
+        fetch('/api/clients'),
+        fetch('/api/funnels'),
+        fetch('/api/users'),
+        fetch('/api/tags'),
       ]);
 
-      if (!clientsRes.ok || !funnelsRes.ok || !brokersRes.ok || !tagsRes.ok) throw new Error('Falha ao carregar dados do pipeline.');
+      if (!clientsRes.ok || !funnelsRes.ok || !brokersRes.ok || !tagsRes.ok) 
+        throw new Error('Falha ao carregar dados do pipeline.');
       
       const clientsData = await clientsRes.json();
       const funnelsData = await funnelsRes.json();
       const brokersData = await brokersRes.json();
       const tagsData = await tagsRes.json();
 
-      setAllClients(clientsData.clients || []);
-      setFunnels(funnelsData.funnels || []);
+      // AJUSTE AQUI: Verificamos se o dado vem como array ou objeto
+      const clientsArray = Array.isArray(clientsData) ? clientsData : (clientsData.clients || []);
+      const funnelsArray = Array.isArray(funnelsData) ? funnelsData : (funnelsData.funnels || []);
+      const brokersArray = Array.isArray(brokersData) ? brokersData : (brokersData.users || []);
+      const tagsArray = Array.isArray(tagsData) ? tagsData : (tagsData.tags || []);
 
-      if (funnelsData.funnels && funnelsData.funnels.length > 0 && !selectedFunnelId) {
-        setSelectedFunnelId(funnelsData.funnels[0].id);
+      setAllClients(clientsArray);
+      setFunnels(funnelsArray);
+
+      if (funnelsArray.length > 0 && !selectedFunnelId) {
+        setSelectedFunnelId(funnelsArray[0].id);
       }
 
-      // Manter a lógica de edição de estágios, mas agora precisa ser por funil
-      // setEditingStages(sortedStages);
-      setBrokers(brokersData.users || []);
-      setTags(tagsData.tags || []);
+      setBrokers(brokersArray);
+      setTags(tagsArray);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Erro', description: error.message });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, selectedFunnelId]);
 
   const selectedFunnel = useMemo(() => {
     if (!selectedFunnelId) return null;
@@ -301,14 +305,14 @@ export default function PipelinePage() {
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const isManager = user && ['marketing_adm', 'diretor', 'gerente'].includes(user.role as Role);
+    const isManager = user && ['MARKETING_ADMIN', 'diretor', 'gerente'].includes(user.role as Role);
     const brokerId = isManager ? newClientForm.selectedbrokerId : user?.id;
 
     if (!brokerId) {
         toast({
             variant: "destructive",
             title: "Campo obrigatório",
-            description: isManager ? "Por favor, selecione um corretor responsável." : "Usuário não identificado.",
+            description: isManager ? "Por favor, selecione um BROKER responsável." : "Usuário não identificado.",
         });
         return;
     }
@@ -332,7 +336,7 @@ export default function PipelinePage() {
                 // Atribui ao funil e etapa padrão
                 funnelId: defaultFunnel.id,
                 funnelStageId: firstStageOfDefaultFunnel.id,
-                // Mantém a lógica de atribuição de corretor
+                // Mantém a lógica de atribuição de BROKER
                 brokerId: brokerId
             }),
         });
@@ -485,7 +489,7 @@ export default function PipelinePage() {
                   </SelectContent>
                 </Select>
 
-                {user?.role === 'marketing_adm' && (
+                {user?.role === 'MARKETING_ADMIN' && (
                   <Link href="/settings/funnels">
                       <Button variant="outline" size="sm">
                           <Pencil className="h-3 w-3 mr-2" />
@@ -505,18 +509,18 @@ export default function PipelinePage() {
                           <div><Label htmlFor="fullName">Nome Completo</Label><Input id="fullName" value={newClientForm.fullName} onChange={(e) => setNewClientForm(p => ({...p, fullName: e.target.value}))} required /></div>
                           <div><Label htmlFor="phone">Telefone</Label><Input id="phone" value={newClientForm.phone} onChange={(e) => setNewClientForm(p => ({...p, phone: e.target.value}))} /></div>
                           <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm(p => ({...p, email: e.target.value}))} /></div>
-                        {user && ['marketing_adm', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
+                        {user && ['MARKETING_ADMIN', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
                           <div>
-                            <Label htmlFor="corretor">Corretor Responsável</Label>
+                            <Label htmlFor="BROKER">Corretor Responsável</Label>
                             <Select
                               value={newClientForm.selectedbrokerId}
                               onValueChange={(value) => setNewClientForm(p => ({ ...p, selectedbrokerId: value }))}
                             >
-                              <SelectTrigger id="corretor" className="w-full">
-                                <SelectValue placeholder="Selecione um corretor" />
+                              <SelectTrigger id="BROKER" className="w-full">
+                                <SelectValue placeholder="Selecione um BROKER" />
                               </SelectTrigger>
                               <SelectContent>
-                                {brokers.filter(b => b.role === 'corretor').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
+                                {brokers.filter(b => b.role === 'BROKER').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
