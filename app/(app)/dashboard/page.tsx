@@ -241,70 +241,70 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col space-y-2">
-        <h1 className="text-3xl font-bold text-primary-custom flex items-center gap-2">
+        <h1 className="text-3xl font-bold text-secondary-custom flex items-center gap-2">
           👋 Olá, {user ? user.name : 'Usuário'}!
         </h1>
-        <p className="text-gray-600">Aqui está um resumo das suas atividades e performance</p>
+        <p className="text-muted-foreground">Aqui está um resumo das suas atividades e performance</p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-l-4 border-l-primary-custom">
+        <Card className="border-l-4 border-l-secondary-custom">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total de Clientes</CardTitle>
-            <Users className="h-4 w-4 text-primary-custom" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Clientes</CardTitle>
+            <Users className="h-4 w-4 text-secondary-custom" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary-custom">{stats.hierarchicalTotalClients}</div>
-            <p className="text-xs text-gray-500">Todos os clientes cadastrados</p>
+            <div className="text-2xl font-bold text-foreground">{stats.hierarchicalTotalClients}</div>
+            <p className="text-xs text-muted-foreground">Todos os clientes cadastrados</p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-tertiary-custom">
+        <Card className="border-l-4 border-l-blue-400">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Clientes Ativos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-tertiary-custom" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Clientes Ativos</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-tertiary-custom">{stats.hierarchicalActiveClients}</div>
-            <p className="text-xs text-gray-500">Em andamento no pipeline</p>
+            <div className="text-2xl font-bold text-blue-400">{stats.hierarchicalActiveClients}</div>
+            <p className="text-xs text-muted-foreground">Em andamento no pipeline</p>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-l-secondary-custom">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total de Imóveis</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Imóveis</CardTitle>
             <Building2 className="h-4 w-4 text-secondary-custom" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-secondary-custom">{stats.totalProperties}</div>
-            <p className="text-xs text-gray-500">Imóveis cadastrados</p>
+            <p className="text-xs text-muted-foreground">Imóveis cadastrados</p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500">
+        <Card className="border-l-4 border-l-emerald-400">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Taxa de Conversão</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Taxa de Conversão</CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{stats.conversionRate}%</div>
-            <p className="text-xs text-gray-500">Clientes ativos vs total</p>
+            <div className="text-2xl font-bold text-emerald-400">{stats.conversionRate}%</div>
+            <p className="text-xs text-muted-foreground">Clientes ativos vs total</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Quick Actions */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-primary-custom">Ações Rápidas</h2>
+        <h2 className="text-xl font-semibold text-secondary-custom">Ações Rápidas</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
             <DialogTrigger asChild>
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 border-dashed border-gray-300 hover:border-primary-custom">
+              <Card className="cursor-pointer hover:shadow-lg hover:shadow-secondary-custom/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-secondary-custom/60">
                 <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                  <Plus className="h-6 w-6 text-primary-custom mb-2" />
-                  <h3 className="font-medium text-primary-custom">Novo Cliente</h3>
+                  <Plus className="h-6 w-6 text-secondary-custom mb-2" />
+                  <h3 className="font-medium text-foreground">Novo Cliente</h3>
                 </CardContent>
               </Card>
             </DialogTrigger>
@@ -337,10 +337,10 @@ export default function DashboardPage() {
 
           <Dialog open={isPropertyModalOpen} onOpenChange={setIsPropertyModalOpen}>
             <DialogTrigger asChild>
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 border-dashed border-gray-300 hover:border-tertiary-custom">
+              <Card className="cursor-pointer hover:shadow-lg hover:shadow-blue-400/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-blue-400/60">
                 <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                  <Building2 className="h-6 w-6 text-tertiary-custom mb-2" />
-                  <h3 className="font-medium text-tertiary-custom">Novo Imóvel</h3>
+                  <Building2 className="h-6 w-6 text-blue-400 mb-2" />
+                  <h3 className="font-medium text-foreground">Novo Imóvel</h3>
                 </CardContent>
               </Card>
             </DialogTrigger>
@@ -357,10 +357,10 @@ export default function DashboardPage() {
 
           <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
             <DialogTrigger asChild>
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 border-dashed border-gray-300 hover:border-secondary-custom">
+              <Card className="cursor-pointer hover:shadow-lg hover:shadow-secondary-custom/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-secondary-custom/60">
                 <CardContent className="flex flex-col items-center justify-center p-4 text-center">
                   <Calendar className="h-6 w-6 text-secondary-custom mb-2" />
-                  <h3 className="font-medium text-secondary-custom">Nova Tarefa</h3>
+                  <h3 className="font-medium text-foreground">Nova Tarefa</h3>
                 </CardContent>
               </Card>
             </DialogTrigger>
@@ -379,10 +379,10 @@ export default function DashboardPage() {
           </Dialog>
 
           <Link href="/pipeline">
-            <Card className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 border-dashed border-gray-300 hover:border-green-500">
+            <Card className="cursor-pointer hover:shadow-lg hover:shadow-emerald-400/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-emerald-400/60">
               <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                <ExternalLink className="h-6 w-6 text-green-500 mb-2" />
-                <h3 className="font-medium text-green-500">Ver Pipeline</h3>
+                <ExternalLink className="h-6 w-6 text-emerald-400 mb-2" />
+                <h3 className="font-medium text-foreground">Ver Pipeline</h3>
               </CardContent>
             </Card>
           </Link>
@@ -393,12 +393,12 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-primary-custom">Clientes em Atraso</CardTitle>
+            <CardTitle className="text-secondary-custom">Clientes em Atraso</CardTitle>
           </CardHeader>
           <CardContent className="h-72 overflow-y-auto space-y-4">
             {isDataLoading ? <p>Carregando...</p> : overdueClients.length > 0 ? (
               overdueClients.map(client => (
-                <Link href={`/client/${client.id}`} key={client.id} className="block p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
+                <Link href={`/client/${client.id}`} key={client.id} className="block p-3 rounded-md hover:bg-accent">
                   <div className="flex items-center justify-between">
                     <p className="font-medium text-gray-800 dark:text-gray-200">{client.fullName}</p>
                     <span className="text-xs text-red-500 flex items-center gap-1">
@@ -409,14 +409,14 @@ export default function DashboardPage() {
                 </Link>
               ))
             ) : (
-              <div className="text-center text-gray-500 py-8">Nenhum cliente em atraso.</div>
+              <div className="text-center text-muted-foreground py-8">Nenhum cliente em atraso.</div>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-primary-custom">Tarefas</CardTitle>
+            <CardTitle className="text-secondary-custom">Tarefas</CardTitle>
           </CardHeader>
           <CardContent className="h-72 overflow-y-auto p-0">
             <Tabs defaultValue="pendentes" className="w-full">
@@ -424,7 +424,7 @@ export default function DashboardPage() {
               <TabsContent value="pendentes" className="space-y-4 p-4">
                 {isDataLoading ? <p>Carregando...</p> : pendingTasks.length > 0 ? (
                   pendingTasks.map(task => (
-                    <Link href={task.cliente ? `/client/${task.cliente.id}` : '#'} key={task.id} className="block p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <Link href={task.cliente ? `/client/${task.cliente.id}` : '#'} key={task.id} className="block p-3 rounded-md hover:bg-accent">
                       <div className="flex justify-between items-start">
                         <p className="font-medium">{task.title}</p>
                         {task.cliente && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.cliente.fullName}</span>}
@@ -432,12 +432,12 @@ export default function DashboardPage() {
                       <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><Clock className="h-3 w-3" /> {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}</p>
                     </Link>
                   ))
-                ) : <p className="text-center text-gray-500 py-8">Nenhuma tarefa pendente.</p>}
+                ) : <p className="text-center text-muted-foreground py-8">Nenhuma tarefa pendente.</p>}
               </TabsContent>
               <TabsContent value="atrasadas" className="space-y-4 p-4">
                 {isDataLoading ? <p>Carregando...</p> : overdueTasks.length > 0 ? (
                   overdueTasks.map(task => (
-                    <Link href={task.cliente ? `/client/${task.cliente.id}` : '#'} key={task.id} className="block p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <Link href={task.cliente ? `/client/${task.cliente.id}` : '#'} key={task.id} className="block p-3 rounded-md hover:bg-accent">
                       <div className="flex justify-between items-start">
                         <p className="font-medium text-red-500">{task.title}</p>
                         {task.cliente && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.cliente.fullName}</span>}
@@ -445,7 +445,7 @@ export default function DashboardPage() {
                       <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><AlertCircle className="h-3 w-3 text-red-500" /> {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}</p>
                     </Link>
                   ))
-                ) : <p className="text-center text-gray-500 py-8">Nenhuma tarefa atrasada.</p>}
+                ) : <p className="text-center text-muted-foreground py-8">Nenhuma tarefa atrasada.</p>}
               </TabsContent>
             </Tabs>
           </CardContent>

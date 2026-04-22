@@ -78,88 +78,88 @@ enum QualificationStatus {
 // =======================================================================
 
 model User {
-  id                  String               @id // Supabase Auth UUID
-  name                String
-  email               String               @unique
-  accountId           String?
-  role                Role                 @default(BROKER)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  
+  id        String   @id // Supabase Auth UUID
+  name      String
+  email     String   @unique
+  accountId String?
+  role      Role     @default(BROKER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Hierarquia
-  supervisorId        String?
-  supervisor          User?                @relation("Hierarchy", fields: [supervisorId], references: [id], onDelete: SetNull)
-  subordinates        User[]               @relation("Hierarchy")
-  
+  supervisorId String?
+  supervisor   User?   @relation("Hierarchy", fields: [supervisorId], references: [id], onDelete: SetNull)
+  subordinates User[]  @relation("Hierarchy")
+
   // CRM Relations
-  clientsAsBroker     Client[]             @relation("ClientBroker")
-  clientsCreatedByMe  Client[]             @relation("ClientCreatedBy")
-  tasks               Task[]
-  notes               Note[]
-  pushSubscription    PushSubscription?
-  
+  clientsAsBroker    Client[]          @relation("ClientBroker")
+  clientsCreatedByMe Client[]          @relation("ClientCreatedBy")
+  tasks              Task[]
+  notes              Note[]
+  pushSubscription   PushSubscription?
+
   // Property Relations
-  createdProperties   Property[]           @relation("CreatedProperties")
-  updatedProperties   Property[]           @relation("UpdatedProperties")
+  createdProperties Property[] @relation("CreatedProperties")
+  updatedProperties Property[] @relation("UpdatedProperties")
 
   // Roulette & Access
   rouletteAssignments LeadRouletteUser[]
   funnelAccess        UserFunnelAccess[]
-  
+
   // Attendance
-  attendanceRecords   AttendanceRecord[]
+  attendanceRecords AttendanceRecord[]
 
   // Active Offers
-  createdOffers       ActiveOffer[]        @relation("CreatedOffers")
-  assignedCalls       ActiveOfferClient[]  @relation("AssignedCalls")
+  createdOffers ActiveOffer[]       @relation("CreatedOffers")
+  assignedCalls ActiveOfferClient[] @relation("AssignedCalls")
 
   // Lead Pool (O que causou o erro anterior)
-  qualifiedLeadsForMe Client[]             @relation("QualifiedFor")
+  qualifiedLeadsForMe Client[]       @relation("QualifiedFor")
   allowedLeadPools    LeadPoolUser[]
 
   @@map("users")
 }
 
 model Client {
-  id                   String               @id @default(uuid())
-  fullName             String
-  email                String?              @unique
-  phone                String?
-  facebookLeadId       String?              @unique @map("facebook_lead_id")
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  accountId            String?
+  id             String   @id @default(uuid())
+  fullName       String
+  email          String?  @unique
+  phone          String?
+  facebookLeadId String?  @unique @map("facebook_lead_id")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  accountId      String?
 
   // Ownership
-  createdById          String
-  createdBy            User                 @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  brokerId             String
-  broker               User                 @relation("ClientBroker", fields: [brokerId], references: [id], onDelete: Restrict)
-  
+  createdById String
+  createdBy   User   @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  brokerId    String
+  broker      User   @relation("ClientBroker", fields: [brokerId], references: [id], onDelete: Restrict)
+
   // Real Estate Logic
   propertyOfInterestId String?
-  propertyOfInterest   Property?            @relation(fields: [propertyOfInterestId], references: [id], onDelete: SetNull)
-  overallStatus        ClientOverallStatus  @default(ACTIVE)
-  
+  propertyOfInterest   Property?           @relation(fields: [propertyOfInterestId], references: [id], onDelete: SetNull)
+  overallStatus        ClientOverallStatus @default(ACTIVE)
+
   // Relations
-  documents            ClientDocument[]
-  tags                 Tag[]                @relation("ClientTags")
-  tasks                Task[]
-  notes                Note[]
-  saleDetails          ClientWonDetails?
-  activeOfferClients   ActiveOfferClient[]
+  documents          ClientDocument[]
+  tags               Tag[]               @relation("ClientTags")
+  tasks              Task[]
+  notes              Note[]
+  saleDetails        ClientWonDetails?
+  activeOfferClients ActiveOfferClient[]
 
   // Funnel Logic
-  funnelId             String
-  funnel               Funnel               @relation(fields: [funnelId], references: [id])
-  funnelStageId        String
-  funnelStage          FunnelStage          @relation(fields: [funnelStageId], references: [id])
+  funnelId      String
+  funnel        Funnel      @relation(fields: [funnelId], references: [id])
+  funnelStageId String
+  funnelStage   FunnelStage @relation(fields: [funnelStageId], references: [id])
 
   // Lead Pool
-  qualificationStatus  QualificationStatus  @default(WAITING)
-  qualifiedForId       String?
-  qualifiedFor         User?                @relation("QualifiedFor", fields: [qualifiedForId], references: [id], onDelete: SetNull)
-  enteredLeadPoolAt    DateTime?
+  qualificationStatus QualificationStatus @default(WAITING)
+  qualifiedForId      String?
+  qualifiedFor        User?               @relation("QualifiedFor", fields: [qualifiedForId], references: [id], onDelete: SetNull)
+  enteredLeadPoolAt   DateTime?
 
   @@map("clients")
 }
@@ -190,7 +190,7 @@ model AdMetric {
 
 model ApiSetting {
   id              String   @id @default(uuid())
-  setting_key     String   // Onde você salvará Meta App ID, Token, etc.
+  setting_key     String // Onde você salvará Meta App ID, Token, etc.
   encrypted_value String
   user_id         String
   created_at      DateTime @default(now())
@@ -200,28 +200,28 @@ model ApiSetting {
 }
 
 model CampaignMetric {
-  id                 String   @id @default(uuid())
-  campaign_name      String
-  campaign_id        String?
-  spend              Float?
-  impressions        Int?
-  clicks             Int?
-  leads              Int?
-  date               DateTime @db.Date
-  user_id            String
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  id            String   @id @default(uuid())
+  campaign_name String
+  campaign_id   String?
+  spend         Float?
+  impressions   Int?
+  clicks        Int?
+  leads         Int?
+  date          DateTime @db.Date
+  user_id       String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
   @@map("campaign_metrics")
 }
 
 model FieldMapping {
-  id            String   @id @default(uuid())
-  source        String   // ex: "meta_ads"
-  fieldName     String   // Nome no Meta
-  mappedField   String   // Nome no modelo Client
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(uuid())
+  source      String // ex: "meta_ads"
+  fieldName   String // Nome no Meta
+  mappedField String // Nome no modelo Client
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([source, fieldName])
   @@map("field_mappings")
@@ -243,21 +243,21 @@ model Property {
   interestedClients Client[]
   images            PropertyImage[]
   propertyTypes     PropertyType[]
-  
-  creatorId         String?
-  creator           User?           @relation("CreatedProperties", fields: [creatorId], references: [id])
-  updaterId         String?
-  updater           User?           @relation("UpdatedProperties", fields: [updaterId], references: [id])
+
+  creatorId String?
+  creator   User?   @relation("CreatedProperties", fields: [creatorId], references: [id])
+  updaterId String?
+  updater   User?   @relation("UpdatedProperties", fields: [updaterId], references: [id])
 
   @@map("properties")
 }
 
 model PropertyType {
-  id            String   @id @default(uuid())
-  name          String
-  value         Float
-  propertyId    String
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  name       String
+  value      Float
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_types")
 }
@@ -285,25 +285,25 @@ model Funnel {
 }
 
 model FunnelStage {
-  id        String   @id @default(uuid())
-  name      String
-  order     Int
-  color     String
-  funnelId  String
-  funnel    Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
-  clients   Client[]
+  id       String   @id @default(uuid())
+  name     String
+  order    Int
+  color    String
+  funnelId String
+  funnel   Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  clients  Client[]
 
   @@unique([funnelId, name])
   @@map("funnel_stages")
 }
 
 model LeadRoulette {
-  id                String             @id @default(uuid())
-  name              String
-  isActive          Boolean            @default(true)
-  users             LeadRouletteUser[]
-  funnelId          String?
-  funnel            Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  id       String             @id @default(uuid())
+  name     String
+  isActive Boolean            @default(true)
+  users    LeadRouletteUser[]
+  funnelId String?
+  funnel   Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
 
   @@map("lead_roulettes")
 }
@@ -351,11 +351,11 @@ model AttendanceConfig {
 }
 
 model AttendanceRecord {
-  id        String            @id @default(cuid())
-  userId    String
-  user      User              @relation(fields: [userId], references: [id])
-  configId  String?
-  config    AttendanceConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+  id       String            @id @default(cuid())
+  userId   String
+  user     User              @relation(fields: [userId], references: [id])
+  configId String?
+  config   AttendanceConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
 
   @@map("attendance_records")
 }
@@ -376,30 +376,30 @@ model Task {
 }
 
 model Note {
-  id        String   @id @default(uuid())
-  content   String
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  content  String
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("notes")
 }
 
 model Tag {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  color     String
-  clients   Client[] @relation("ClientTags")
+  id      String   @id @default(uuid())
+  name    String   @unique
+  color   String
+  clients Client[] @relation("ClientTags")
 
   @@map("tags")
 }
 
 model PushSubscription {
-  id        String   @id @default(cuid())
-  endpoint  String   @unique
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  endpoint String @unique
+  userId   String @unique
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("push_subscriptions")
 }
@@ -427,22 +427,22 @@ model ActiveOffer {
 }
 
 model ActiveOfferClient {
-  id            String                  @id @default(uuid())
+  id            String      @id @default(uuid())
   activeOfferId String
-  activeOffer   ActiveOffer             @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
+  activeOffer   ActiveOffer @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
   clientId      String
-  client        Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
   assignedToId  String
-  assignedTo    User                    @relation("AssignedCalls", fields: [assignedToId], references: [id])
+  assignedTo    User        @relation("AssignedCalls", fields: [assignedToId], references: [id])
 
   @@map("active_offer_clients")
 }
 
 model ClientWonDetails {
-  id        String   @id @default(uuid())
+  id        String @id @default(uuid())
   saleValue Float
-  clientId  String   @unique
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String @unique
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("client_won_details")
 }
@@ -456,11 +456,11 @@ model LostReason {
 }
 
 model ClientDocument {
-  id        String   @id @default(uuid())
-  name      String
-  url       String
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  name     String
+  url      String
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("client_documents")
 }

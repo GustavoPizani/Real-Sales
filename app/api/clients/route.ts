@@ -16,25 +16,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const where: prisma.clientWhereInput = {
+    const where: Prisma.ClientWhereInput = {
       // Filtro de Tenant: Garante que a query só retorne dados da conta do usuário
       accountId: user.isSuperAdmin ? undefined : user.accountId,
     };
 
     // Lógica de permissão por cargo (mantida)
     if (user.role === Role.MANAGER) {
-      const subordinateIds = (await prisma.user.findMany({ 
-        where: { superiorId: user.id },
+      const subordinateIds = (await prisma.user.findMany({
+        where: { supervisorId: user.id },
         select: { id: true }
       })).map(u => u.id);
       where.brokerId = { in: [user.id, ...subordinateIds] };
     } else if (user.role === Role.BROKER) {
       where.brokerId = user.id;
-    } else if (user.role === Role.pre_vendas) {
-        // Pré-vendas só vê clientes no funil de pré-vendas
-        const preSalesFunnel = await prisma.funil.findFirst({ where: { isPreSales: true }});
+    } else if (user.role === Role.PRE_SALES) {
+        const preSalesFunnel = await prisma.funnel.findFirst({ where: { isPreSales: true }});
         if (preSalesFunnel) {
-            where.funilId = preSalesFunnel.id;
+            where.funnelId = preSalesFunnel.id;
         } else {
             // Se não houver funil de pré-vendas, eles não veem ninguém.
             where.id = '-1'; // Condição impossível
@@ -44,8 +43,8 @@ export async function GET(request: NextRequest) {
 
     const clients = await prisma.client.findMany({
       where,
-      include: { 
-        BROKER: { select: { name: true, id: true } },
+      include: {
+        broker: { select: { name: true, id: true } },
         // ✅ Adicionado para incluir as tags na listagem de clientes
         tags: {
           select: { id: true, name: true, color: true },

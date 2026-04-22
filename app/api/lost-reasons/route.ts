@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const reasons = await prisma.lostReason.findMany({ orderBy: { createdAt: 'asc' } });
+    const reasons = await prisma.lostReason.findMany({ orderBy: { reason: 'asc' } });
     return NextResponse.json({ reasons });
   } catch (error) {
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

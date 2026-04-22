@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -164,47 +164,29 @@ function TeamManagementTab() {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     
     // State for hierarchy form
-    const [directors, setDirectors] = useState<HierarchyUser[]>([]);
-    const [managers, setManagers] = useState<HierarchyUser[]>([]);
     const [selectedDirectorId, setSelectedDirectorId] = useState<string>('');
-    
+
     interface UserFormData { name: string; email: string; password?: string; role: Role; supervisorId?: string | null; }
     const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.BROKER, supervisorId: null });
-
-    const fetchHierarchyData = useCallback(async () => {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-        try {
-            const directorsRes = await fetch('/api/users/hierarchy?role=diretor', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (directorsRes.ok) {
-                const directorsData = await directorsRes.json();
-                setDirectors(directorsData);
-            }
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar a lista de diretores.' });
-        }
-    }, [toast]);
+    const [showUserPassword, setShowUserPassword] = useState(false);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('authToken');
-            if (!token) return;
-            const headers = { 'Authorization': `Bearer ${token}` };
             const [usersRes, rolesRes] = await Promise.all([
-                fetch('/api/users', { headers }),
-                fetch('/api/role-settings', { headers })
+                fetch('/api/users'),
+                fetch('/api/role-settings')
             ]);
 
-            if (!usersRes.ok || !rolesRes.ok) throw new Error('Falha ao buscar dados');
-            
-            const usersData = await usersRes.json();
-            const rolesData = await rolesRes.json();
+            if (!usersRes.ok) throw new Error('Falha ao buscar utilizadores');
 
+            const usersData = await usersRes.json();
             setUsers(usersData.users || []);
-            setRoleSettings(rolesData.settings || []);
+
+            if (rolesRes.ok) {
+                const rolesData = await rolesRes.json();
+                setRoleSettings(rolesData.settings || []);
+            }
         } catch (error) {
             toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os dados da página.' });
         } finally {
@@ -212,29 +194,13 @@ function TeamManagementTab() {
         }
     }, [toast]);
 
-    useEffect(() => { 
-        fetchData();
-        fetchHierarchyData();
-    }, [fetchData, fetchHierarchyData]);
+    useEffect(() => { fetchData(); }, [fetchData]);
 
-    // Effect for cascading managers
-    useEffect(() => {
-        const fetchManagers = async () => {
-            if (userForm.role === Role.BROKER && selectedDirectorId) {
-                const token = localStorage.getItem('authToken');
-                const res = await fetch(`/api/users/hierarchy?role=MANAGER&superiorId=${selectedDirectorId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const managersData = await res.json();
-                    setManagers(managersData);
-                }
-            } else {
-                setManagers([]);
-            }
-        };
-        fetchManagers();
-    }, [selectedDirectorId, userForm.role]);
+    const directors = users.filter(u => u.role === Role.DIRECTOR);
+    const managers = users.filter(u =>
+        u.role === Role.MANAGER &&
+        (!selectedDirectorId || u.supervisorId === selectedDirectorId)
+    );
 
 
     const openDialog = (user: User | null = null) => {
@@ -253,7 +219,6 @@ function TeamManagementTab() {
             // Reset for new user
             setEditingUser(null);
             setSelectedDirectorId('');
-            setManagers([]);
             setUserForm({ name: '', email: '', password: '', role: Role.BROKER, supervisorId: null });
         }
         setIsDialogOpen(true);
@@ -278,7 +243,6 @@ function TeamManagementTab() {
     const resetForm = () => {
         setUserForm({ name: '', email: '', password: '', role: Role.BROKER, supervisorId: null });
         setSelectedDirectorId('');
-        setManagers([]);
         setEditingUser(null);
         setIsDialogOpen(false);
     };
@@ -452,19 +416,27 @@ function TeamManagementTab() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="password">Senha {editingUser && "(Opcional)"}</Label>
-                            <Input id="password" type="password" placeholder={editingUser ? "Deixe em branco para não alterar" : ""} onChange={(e) => setUserForm({...userForm, password: e.target.value})} required={!editingUser} />
+                            <div className="relative">
+                                <Input id="password" type={showUserPassword ? 'text' : 'password'} placeholder={editingUser ? "Deixe em branco para não alterar" : ""} onChange={(e) => setUserForm({...userForm, password: e.target.value})} required={!editingUser} className="pr-10" />
+                                <button type="button" onClick={() => setShowUserPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                                    {showUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="role">Cargo</Label>
                             <Select value={userForm.role} onValueChange={(value: Role) => {
                                 setUserForm(p => ({...p, role: value, supervisorId: null}));
                                 setSelectedDirectorId('');
-                                setManagers([]);
                             }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {Object.entries(USER_ROLE_LABELS)
                                         .filter(([role]) => role !== 'MARKETING_ADMIN')
+                                        .filter(([role]) => {
+                                            const setting = roleSettings.find(r => r.roleName === role);
+                                            return setting ? setting.isActive : true;
+                                        })
                                         .map(([role, label]) => (
                                             <SelectItem key={role} value={role}>{label}</SelectItem>
                                     ))}
@@ -472,12 +444,12 @@ function TeamManagementTab() {
                             </Select>
                         </div>
                         
-                        {(userForm.role === Role.MANAGER || userForm.role === Role.BROKER) && (
+                        {(userForm.role === Role.MANAGER || userForm.role === Role.BROKER) && roleSettings.find(r => r.roleName === 'DIRECTOR')?.isActive !== false && (
                             <div className="space-y-2">
                                 <Label htmlFor="directorId">Diretor Responsável</Label>
                                 <Select value={selectedDirectorId} onValueChange={(value) => {
                                     setSelectedDirectorId(value);
-                                    setUserForm(p => ({...p, supervisorId: null})); // Reset manager selection
+                                    setUserForm(p => ({...p, supervisorId: null}));
                                 }}>
                                     <SelectTrigger><SelectValue placeholder="Selecione um diretor" /></SelectTrigger>
                                     <SelectContent>
@@ -489,7 +461,7 @@ function TeamManagementTab() {
                             </div>
                         )}
 
-                        {userForm.role === Role.BROKER && (
+                        {userForm.role === Role.BROKER && roleSettings.find(r => r.roleName === 'MANAGER')?.isActive !== false && (
                              <div className="space-y-2">
                                 <Label htmlFor="supervisorId">Gerente Responsável</Label>
                                 <Select 
@@ -522,6 +494,8 @@ function SecurityTab() {
   const { toast } = useToast();
   const [passwords, setPasswords] = useState({ newPassword: '', confirmPassword: '' });
   const [isLoading, setIsLoading] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPasswords({ ...passwords, [e.target.name]: e.target.value });
@@ -573,11 +547,21 @@ function SecurityTab() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="newPassword">Nova Senha</Label>
-            <Input id="newPassword" name="newPassword" type="password" value={passwords.newPassword} onChange={handleChange} required/>
+            <div className="relative">
+              <Input id="newPassword" name="newPassword" type={showNew ? 'text' : 'password'} value={passwords.newPassword} onChange={handleChange} required className="pr-10" />
+              <button type="button" onClick={() => setShowNew(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
-            <Input id="confirmPassword" name="confirmPassword" type="password" value={passwords.confirmPassword} onChange={handleChange} required/>
+            <div className="relative">
+              <Input id="confirmPassword" name="confirmPassword" type={showConfirm ? 'text' : 'password'} value={passwords.confirmPassword} onChange={handleChange} required className="pr-10" />
+              <button type="button" onClick={() => setShowConfirm(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <Button type="submit" disabled={isLoading}>{isLoading ? 'Salvando...' : 'Alterar Senha'}</Button>
         </form>

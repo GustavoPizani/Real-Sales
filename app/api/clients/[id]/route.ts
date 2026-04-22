@@ -1,6 +1,5 @@
 // app/api/clients/[id]/route.ts
 import { type NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 
@@ -13,14 +12,13 @@ async function getClientWithDetails(id: string) {
     const client = await prisma.client.findUnique({
         where: { id },
         include: {
-            // FIX: The relation is named 'BROKER', not 'proprietario'
-            BROKER: {
+            broker: {
                 select: {
                     id: true,
                     name: true,
                     email: true,
                     role: true,
-                    superior: {
+                    supervisor: {
                         select: {
                             id: true,
                             name: true,
@@ -28,7 +26,7 @@ async function getClientWithDetails(id: string) {
                     },
                 },
             },
-            imovelDeInteresse: {
+            propertyOfInterest: {
                 include: {
                     propertyTypes: true,
                 },
@@ -43,15 +41,11 @@ async function getClientWithDetails(id: string) {
                     name: true,
                 },
             },
-            documentos: {
-                orderBy: { createdAt: 'desc' }
+            documents: true,
+            notes: {
+                orderBy: { id: 'desc' },
             },
-            notas: {
-                orderBy: {
-                    createdAt: 'desc',
-                },
-            },
-            tarefas: {
+            tasks: {
                 orderBy: {
                     dateTime: 'desc',
                 },
@@ -73,8 +67,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = cookies().get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
 
     if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -82,8 +75,8 @@ export async function GET(
 
     const client = await getClientWithDetails(params.id);
 
-    if (!client || (!user.isSuperAdmin && client.accountId !== user.accountId)) {
-      return NextResponse.json({ error: "Cliente não encontrado ou acesso negado." }, { status: 404 });
+    if (!client) {
+      return NextResponse.json({ error: "Cliente não encontrado." }, { status: 404 });
     }
 
     return NextResponse.json({ client });

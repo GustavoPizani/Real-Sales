@@ -1020,8 +1020,8 @@ export default function RoletaPage() {
         <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-primary-custom">Sistema de Roleta e Frequência</h1>
-                    <p className="text-gray-600">Gerencie a distribuição de leads e a frequência da equipa.</p>
+                    <h1 className="text-3xl font-bold text-secondary-custom">Sistema de Roleta e Frequência</h1>
+                    <p className="text-muted-foreground">Gerencie a distribuição de leads e a frequência da equipa.</p>
                 </div>
             </div>
 
@@ -1050,12 +1050,12 @@ export default function RoletaPage() {
                                                 const isNext = index === nextCorretorIndex;
                                                 const leadCount = BROKER.leadCount ?? 0;
                                                 return (
-                                                    <div key={BROKER.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50">
+                                                    <div key={BROKER.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-accent/40">
                                                         <div>
-                                                            <p className="font-medium text-gray-900">{BROKER.name || BROKER.email}</p>
-                                                            <p className={`text-sm font-semibold ${isNext ? 'text-green-600' : 'text-gray-500'}`}>{isNext ? 'NA VEZ - ' : ''}{leadCount} QUALIFICADO(S)</p>
+                                                            <p className="font-medium text-foreground">{BROKER.name || BROKER.email}</p>
+                                                            <p className={`text-sm font-semibold ${isNext ? 'text-green-500' : 'text-muted-foreground'}`}>{isNext ? 'NA VEZ - ' : ''}{leadCount} QUALIFICADO(S)</p>
                                                         </div>
-                                                        <span className="text-lg font-medium text-gray-400">{index + 1}</span>
+                                                        <span className="text-lg font-medium text-muted-foreground">{index + 1}</span>
                                                     </div>
                                                 );
                                             })}
@@ -1071,7 +1071,7 @@ export default function RoletaPage() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
-                                <CardTitle className="flex items-center gap-2 text-primary-custom"><RotateCcw className="h-5 w-5" />Roletas Configuradas</CardTitle>
+                                <CardTitle className="flex items-center gap-2 text-secondary-custom"><RotateCcw className="h-5 w-5" />Roletas Configuradas</CardTitle>
                                 <CardDescription>Gerencie as roletas de distribuição de leads</CardDescription>
                             </div>
                         {user?.role === 'MARKETING_ADMIN' && (
@@ -1084,7 +1084,7 @@ export default function RoletaPage() {
                             {loading ? (
                                 <div className="text-center py-8">Carregando...</div>
                             ) : roletas.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">Nenhuma roleta configurada.</div>
+                                <div className="text-center py-8 text-muted-foreground">Nenhuma roleta configurada.</div>
                             ) : (
                                 <div className="overflow-x-auto">
                                     <Table>

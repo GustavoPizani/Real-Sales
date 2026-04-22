@@ -96,8 +96,8 @@ export default function PropertiesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Imóveis</h1>
-          <p className="text-gray-600">Gerencie todos os empreendimentos e propriedades</p>
+          <h1 className="text-3xl font-bold text-foreground">Imóveis</h1>
+          <p className="text-muted-foreground">Gerencie todos os empreendimentos e propriedades</p>
         </div>
         <Button onClick={() => router.push('/properties/new')}>
           <Plus className="h-4 w-4 mr-2" />

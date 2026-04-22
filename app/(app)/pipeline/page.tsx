@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter } from "lucide-react";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
@@ -69,54 +70,97 @@ function DraggableClientCard({ client }: { client: Cliente }) {
   };
 
   return (
-    <Card
+    <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className="cursor-grab active:cursor-grabbing touch-none bg-white border border-gray-200 hover:shadow-md mb-2"
       onClick={onClientClick}
+      className="cursor-grab active:cursor-grabbing touch-none mb-3 rounded-xl overflow-hidden group transition-all duration-200"
+      style={{
+        background: 'hsl(var(--card))',
+        border: '1px solid hsl(var(--border) / 0.6)',
+        boxShadow: '0 1px 0 0 rgba(255,255,255,0.04) inset, 0 4px 12px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4)',
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 0 0 rgba(255,255,255,0.06) inset, 0 8px 24px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(170,141,68,0.25)';
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 0 0 rgba(255,255,255,0.04) inset, 0 4px 12px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4)';
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+      }}
     >
-      <CardContent className="p-3 space-y-2">
-        <div className="flex justify-between items-start">
-          <h4 className="font-semibold text-gray-900 text-sm">{client.fullName}</h4>
-          <div className="flex items-center text-xs text-gray-500">
-            <CalendarIcon className="h-3 w-3 mr-1" />
+      {/* Barra de cor do topo */}
+      <div className="h-0.5 w-full bg-gradient-to-r from-secondary-custom/60 to-secondary-custom/10" />
+
+      <div className="p-4 space-y-3">
+        {/* Cabeçalho: tags + data */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap gap-1">
+            {client.tags && client.tags.length > 0
+              ? client.tags.map(tag => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                    style={{ backgroundColor: tag.color + '28', color: tag.color, border: `1px solid ${tag.color}55` }}
+                  >
+                    {tag.name}
+                  </span>
+                ))
+              : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">Lead</span>
+            }
+          </div>
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap flex items-center gap-1 flex-shrink-0">
+            <CalendarIcon className="h-3 w-3" />
             {client.updatedAt ? format(new Date(client.updatedAt), "dd/MM/yy") : ''}
-          </div>
+          </span>
         </div>
-        {client.BROKER && (
-          <div className="flex items-center text-xs text-gray-600">
-            <User className="h-3 w-3 text-gray-400 mr-1" />
-            <span>{client.BROKER.name}</span>
-          </div>
-        )}
-        {client.phone && (
-            <div className="flex items-center justify-between text-xs text-gray-700">
-                <div className="flex items-center">
-                    <Phone className="h-3 w-3 text-gray-400 mr-2" />
-                    <span>{client.phone}</span>
+
+        {/* Nome */}
+        <p className="font-semibold text-foreground text-sm leading-snug">{client.fullName}</p>
+
+        {/* Contatos */}
+        {(client.phone || client.email) && (
+          <div className="space-y-1.5 border-t border-border/50 pt-2">
+            {client.phone && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Phone className="h-3 w-3 flex-shrink-0" />
+                  <span>{client.phone}</span>
                 </div>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 hover:bg-green-100" onClick={(e) => openWhatsApp(client.phone!, e)}>
-                    <MessageCircle className="h-3 w-3 text-green-600" />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 rounded-full hover:bg-green-500/15 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => openWhatsApp(client.phone!, e)}
+                >
+                  <MessageCircle className="h-3.5 w-3.5 text-green-500" />
                 </Button>
-            </div>
-        )}
-        {client.email && (
-            <div className="flex items-center text-xs text-gray-700">
-                <Mail className="h-3 w-3 text-gray-400 mr-2" />
+              </div>
+            )}
+            {client.email && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Mail className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate">{client.email}</span>
-            </div>
-        )}
-        {client.tags && client.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {client.tags.map(tag => (
-              <Badge key={tag.id} style={{ backgroundColor: tag.color, color: '#fff' }} className="text-xs px-1.5 py-0.5">{tag.name}</Badge>
-            ))}
+              </div>
+            )}
           </div>
         )}
-      </CardContent>
-    </Card>
+
+        {/* Rodapé: corretor */}
+        {client.BROKER && (
+          <div className="flex items-center gap-2 border-t border-border/50 pt-2">
+            <div className="h-5 w-5 rounded-full bg-secondary-custom/20 border border-secondary-custom/30 flex items-center justify-center flex-shrink-0">
+              <span className="text-[9px] font-bold text-secondary-custom uppercase">
+                {client.BROKER.name.charAt(0)}
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground truncate">{client.BROKER.name}</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -124,7 +168,7 @@ function DraggableClientCard({ client }: { client: Cliente }) {
 function FunnelColumn({ stage, clients }: { stage: FunnelStage; clients: Cliente[] }) {
     const { setNodeRef } = useSortable({ id: stage.id, data: { isContainer: true } });
     return (
-        <div ref={setNodeRef} className="flex flex-col bg-gray-100 rounded-lg h-full w-[300px] flex-shrink-0">
+        <div ref={setNodeRef} className="flex flex-col bg-card/50 border border-border rounded-lg h-full w-[300px] flex-shrink-0">
             <div className="p-3 font-semibold text-center text-white rounded-t-lg sticky top-0 z-10" style={{ backgroundColor: stage.color }}>
                 {stage.name} ({clients.length})
             </div>
@@ -151,26 +195,29 @@ export default function PipelinePage() {
   const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [roleSettings, setRoleSettings] = useState<{ roleName: string; isActive: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeClient, setActiveClient] = useState<Cliente | null>(null);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [newClientForm, setNewClientForm] = useState({ fullName: "", phone: "", email: "", selectedbrokerId: "" });
+  const [newClientForm, setNewClientForm] = useState({ fullName: "", phone: "", email: "", selectedbrokerId: "", selectedStageId: "" });
   const [newStageForm, setNewStageForm] = useState({ name: "", color: "#010f27" });
   const [editingStages, setEditingStages] = useState<FunnelStage[]>([]);
-  
+
   const [filters, setFilters] = useState<{
     searchTerm: string;
     status: ClientOverallStatus | 'all';
     dateRange: DateRange | undefined;
     brokerId: string;
+    managerId: string;
     tagId: string;
   }>({
     searchTerm: '',
     status: ClientOverallStatus.ACTIVE,
     dateRange: undefined as DateRange | undefined,
     brokerId: 'all',
+    managerId: 'all',
     tagId: 'all',
   });
 
@@ -195,26 +242,31 @@ export default function PipelinePage() {
       // REMOVIDO: Não precisamos mais de localStorage nem headers manuais
       // O Middleware do Supabase cuida dos cookies automaticamente.
 
-      const [clientsRes, funnelsRes, brokersRes, tagsRes] = await Promise.all([
+      const [clientsRes, funnelsRes, brokersRes, tagsRes, rolesRes] = await Promise.all([
         fetch('/api/clients'),
         fetch('/api/funnels'),
         fetch('/api/users'),
         fetch('/api/tags'),
+        fetch('/api/role-settings'),
       ]);
 
-      if (!clientsRes.ok || !funnelsRes.ok || !brokersRes.ok || !tagsRes.ok) 
+      if (!clientsRes.ok || !funnelsRes.ok || !brokersRes.ok || !tagsRes.ok)
         throw new Error('Falha ao carregar dados do pipeline.');
-      
+
       const clientsData = await clientsRes.json();
       const funnelsData = await funnelsRes.json();
       const brokersData = await brokersRes.json();
       const tagsData = await tagsRes.json();
 
-      // AJUSTE AQUI: Verificamos se o dado vem como array ou objeto
       const clientsArray = Array.isArray(clientsData) ? clientsData : (clientsData.clients || []);
       const funnelsArray = Array.isArray(funnelsData) ? funnelsData : (funnelsData.funnels || []);
       const brokersArray = Array.isArray(brokersData) ? brokersData : (brokersData.users || []);
       const tagsArray = Array.isArray(tagsData) ? tagsData : (tagsData.tags || []);
+
+      if (rolesRes.ok) {
+        const rolesData = await rolesRes.json();
+        setRoleSettings(rolesData.settings || []);
+      }
 
       setAllClients(clientsArray);
       setFunnels(funnelsArray);
@@ -241,17 +293,31 @@ export default function PipelinePage() {
 
   useEffect(() => { if (user) fetchData(); }, [user, fetchData]);
 
+  const isRoleActive = useCallback((roleName: string) => {
+    const setting = roleSettings.find(r => r.roleName === roleName);
+    return setting ? setting.isActive : true;
+  }, [roleSettings]);
+
+  const managers = useMemo(() => brokers.filter(b => b.role === Role.MANAGER), [brokers]);
+
   const filteredClients = useMemo(() => {
+    // Brokers da equipe do gerente selecionado
+    const teamBrokerIds = filters.managerId !== 'all'
+      ? brokers.filter(b => b.supervisorId === filters.managerId).map(b => b.id)
+      : null;
+
     return allClients.filter(client => {
       const searchTermLower = filters.searchTerm.toLowerCase();
       const matchesSearch = !filters.searchTerm ||
         client.fullName.toLowerCase().includes(searchTermLower) ||
         (client.email && client.email.toLowerCase().includes(searchTermLower)) ||
         (client.phone && client.phone.includes(filters.searchTerm));
-      
+
       const matchesStatus = filters.status.toString() === 'all' || client.overallStatus === filters.status;
-      
+
       const matchesBroker = filters.brokerId === 'all' || client.brokerId === filters.brokerId;
+
+      const matchesManager = !teamBrokerIds || teamBrokerIds.includes(client.brokerId);
 
       const matchesDate = !filters.dateRange?.from || (
         new Date(client.createdAt) >= filters.dateRange.from &&
@@ -260,9 +326,9 @@ export default function PipelinePage() {
 
       const matchesTag = filters.tagId === 'all' || client.tags?.some(tag => tag.id === filters.tagId);
 
-      return matchesSearch && matchesStatus && matchesBroker && matchesDate && matchesTag;
+      return matchesSearch && matchesStatus && matchesBroker && matchesManager && matchesDate && matchesTag;
     });
-  }, [allClients, filters, selectedFunnelId]);
+  }, [allClients, filters, brokers]);
 
   const handleDragStart = (event: DragEndEvent) => {
     const { active } = event;
@@ -318,32 +384,29 @@ export default function PipelinePage() {
     }
 
     const defaultFunnel = funnels.find(f => f.isDefaultEntry) || funnels[0];
-    if (!defaultFunnel || !defaultFunnel.stages.length > 0) {
+    if (!defaultFunnel || !defaultFunnel.stages.length) {
         toast({ variant: "destructive", title: "Configuração necessária", description: "Nenhum funil de entrada padrão foi configurado." });
         return;
     }
-    const firstStageOfDefaultFunnel = defaultFunnel.stages[0];
+    const stageId = newClientForm.selectedStageId || defaultFunnel.stages[0].id;
 
     try {
-        const token = localStorage.getItem('authToken');
         const response = await fetch('/api/clients', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 fullName: newClientForm.fullName,
                 phone: newClientForm.phone,
                 email: newClientForm.email,
-                // Atribui ao funil e etapa padrão
                 funnelId: defaultFunnel.id,
-                funnelStageId: firstStageOfDefaultFunnel.id,
-                // Mantém a lógica de atribuição de BROKER
-                brokerId: brokerId
+                funnelStageId: stageId,
+                brokerId: brokerId,
             }),
         });
         if (!response.ok) throw new Error('Falha ao criar cliente.');
         toast({ title: 'Sucesso!', description: 'Novo cliente adicionado.' });
         setIsClientDialogOpen(false);
-        setNewClientForm({ fullName: "", phone: "", email: "", selectedbrokerId: "" });
+        setNewClientForm({ fullName: "", phone: "", email: "", selectedbrokerId: "", selectedStageId: "" });
         fetchData();
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Erro', description: error.message || 'Não foi possível criar o cliente.' });
@@ -468,18 +531,38 @@ export default function PipelinePage() {
                 <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({...f, dateRange: date}))} locale={ptBR} />
             </PopoverContent>
         </Popover>
-        <Select value={filters.brokerId} onValueChange={(value) => setFilters(f => ({...f, brokerId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os corretores</SelectItem>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>
-        <Select value={filters.tagId} onValueChange={(value) => setFilters(f => ({...f, tagId: value}))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as etiquetas</SelectItem>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.ACTIVE, dateRange: undefined, brokerId: 'all', tagId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
+        {isRoleActive('MANAGER') && managers.length > 0 && (
+          <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
+            <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as equipes</SelectItem>
+              {managers.map(m => <SelectItem key={m.id} value={m.id}>Equipe {m.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+        {isRoleActive('BROKER') && (
+          <Select value={filters.brokerId} onValueChange={value => setFilters(f => ({ ...f, brokerId: value }))}>
+            <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os corretores</SelectItem>
+              {(filters.managerId !== 'all'
+                ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId)
+                : brokers.filter(b => b.role === 'BROKER')
+              ).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+        <Select value={filters.tagId} onValueChange={value => setFilters(f => ({ ...f, tagId: value }))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as etiquetas</SelectItem>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
+        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.ACTIVE, dateRange: undefined, brokerId: 'all', managerId: 'all', tagId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
     </div>
   );
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      <header className="p-4 border-b bg-white flex-shrink-0">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <header className="p-4 border-b bg-card flex-shrink-0">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold text-gray-900 hidden sm:block">Pipeline de Vendas</h1>
+                <h1 className="text-xl font-bold text-foreground hidden sm:block">Pipeline de Vendas</h1>
                 <Select value={selectedFunnelId || ''} onValueChange={setSelectedFunnelId}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Selecione um funil..." />
@@ -507,20 +590,48 @@ export default function PipelinePage() {
                       <DialogHeader><DialogTitle>Adicionar Novo Cliente</DialogTitle></DialogHeader>
                       <form onSubmit={handleAddClient} className="space-y-4 pt-4">
                           <div><Label htmlFor="fullName">Nome Completo</Label><Input id="fullName" value={newClientForm.fullName} onChange={(e) => setNewClientForm(p => ({...p, fullName: e.target.value}))} required /></div>
-                          <div><Label htmlFor="phone">Telefone</Label><Input id="phone" value={newClientForm.phone} onChange={(e) => setNewClientForm(p => ({...p, phone: e.target.value}))} /></div>
+                          <div><Label htmlFor="phone">Telefone</Label><PhoneInput value={newClientForm.phone} onChange={v => setNewClientForm(p => ({...p, phone: v}))} /></div>
                           <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm(p => ({...p, email: e.target.value}))} /></div>
-                        {user && ['MARKETING_ADMIN', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
+                        {(() => {
+                          const defaultFunnel = funnels.find(f => f.isDefaultEntry) || funnels[0];
+                          return defaultFunnel?.stages.length ? (
+                            <div>
+                              <Label htmlFor="stage">Etapa do Funil</Label>
+                              <Select
+                                value={newClientForm.selectedStageId || defaultFunnel.stages[0].id}
+                                onValueChange={value => setNewClientForm(p => ({ ...p, selectedStageId: value }))}
+                              >
+                                <SelectTrigger id="stage" className="w-full">
+                                  <SelectValue placeholder="Selecione a etapa" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {defaultFunnel.stages.map(s => (
+                                    <SelectItem key={s.id} value={s.id}>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                                        {s.name}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ) : null;
+                        })()}
+                        {isRoleActive('BROKER') && user && ['MARKETING_ADMIN', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
                           <div>
-                            <Label htmlFor="BROKER">Corretor Responsável</Label>
+                            <Label htmlFor="broker">Corretor Responsável</Label>
                             <Select
                               value={newClientForm.selectedbrokerId}
-                              onValueChange={(value) => setNewClientForm(p => ({ ...p, selectedbrokerId: value }))}
+                              onValueChange={value => setNewClientForm(p => ({ ...p, selectedbrokerId: value }))}
                             >
-                              <SelectTrigger id="BROKER" className="w-full">
-                                <SelectValue placeholder="Selecione um BROKER" />
+                              <SelectTrigger id="broker" className="w-full">
+                                <SelectValue placeholder="Selecione um corretor" />
                               </SelectTrigger>
                               <SelectContent>
-                                {brokers.filter(b => b.role === 'BROKER').map(broker => <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>)}
+                                {brokers.filter(b => b.role === 'BROKER').map(broker => (
+                                  <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -534,7 +645,7 @@ export default function PipelinePage() {
       </header>
       
       {/* Filtros para Desktop */}
-      <div className="p-4 border-b bg-white flex-shrink-0 hidden lg:flex">
+      <div className="p-4 border-b bg-card flex-shrink-0 hidden lg:flex">
         <FilterControls />
       </div>
       

@@ -23,7 +23,7 @@ export default function IntegrationsClient({ initialStatus }: IntegrationsClient
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Integrações</h1>
-      <div className="bg-white p-4 rounded-lg shadow-md">
+      <div className="bg-card p-4 rounded-lg border border-border">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Google Drive</h2>

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
+  ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useChat } from 'ai/react';
@@ -359,14 +359,14 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleDownloadAllAsZip = async () => {
-    if (!client?.documentos || client.documentos.length === 0) return;
+    if (!client?.documentos || client.documents.length === 0) return;
     setIsDownloading(true);
     toast({ title: "Preparando download...", description: "Baixando e compactando arquivos." });
 
     try {
       const zip = new JSZip();
 
-      const filePromises = client.documentos.map(async (doc) => {
+      const filePromises = client.documents.map(async (doc) => {
         const response = await fetch(doc.url);
         if (!response.ok) throw new Error(`Falha ao baixar ${doc.fileName}`);
         const blob = await response.blob();
@@ -418,8 +418,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     }, {
       body: {
         clientName: client.fullName,
-        notes: client.notas,
-        tasks: client.tarefas,
+        notes: client.notes,
+        tasks: client.tasks,
       }
     });
   };
@@ -434,16 +434,16 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleScheduleVisit = () => {
-    if (!visitDateTime || !client?.imovelDeInteresse || !client.email) {
+    if (!visitDateTime || !client?.propertyOfInterest || !client.email) {
       toast({ variant: "destructive", title: "Erro", description: "Data, imóvel de interesse e email do cliente são necessários." });
       return;
     }
     const startDate = new Date(visitDateTime);
     const endDate = addHours(startDate, 1);
     const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-    const title = `Visita ao empreendimento ${client.imovelDeInteresse.title}`;
-    const location = client.imovelDeInteresse.endereco;
-    const details = `Visita agendada com o cliente ${client.fullName} para conhecer o imóvel ${client.imovelDeInteresse.title}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
+    const title = `Visita ao empreendimento ${client.propertyOfInterest.title}`;
+    const location = client.propertyOfInterest.address;
+    const details = `Visita agendada com o cliente ${client.fullName} para conhecer o imóvel ${client.propertyOfInterest.title}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
     const url = ["https://www.google.com/calendar/render?action=TEMPLATE", `text=${encodeURIComponent(title)}`, `dates=${formatDate(startDate)}/${formatDate(endDate)}`, `details=${encodeURIComponent(details)}`, `location=${encodeURIComponent(location || '')}`, `add=${encodeURIComponent(client.email)}`, "reminders=30", "reminders=1440"].join("&");
     window.open(url, "_blank");
     setIsScheduleVisitOpen(false);
@@ -650,13 +650,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" onClick={() => router.push("/pipeline")}><ArrowLeft className="h-4 w-4" /></Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{client.fullName}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{client.fullName}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge {...getStatusProps(client.funnelStage?.name ?? '')}>
                 {client.funnel?.name} &gt; {client.funnelStage?.name}
               </Badge>
-              <span className="hidden sm:block text-sm text-gray-500">|</span>
-              <span className="text-sm text-gray-600">Corretor: {client.BROKER?.name}</span>
+              <span className="hidden sm:block text-sm text-muted-foreground">|</span>
+              <span className="text-sm text-muted-foreground">Corretor: {client.broker?.name ?? 'N/A'}</span>
             </div>
           </div>
         </div>
@@ -712,7 +712,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.phone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
                     <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
-                      <Sparkles className="h-4 w-4 mr-2 text-primary-custom" />
+                      <Bot className="h-4 w-4 mr-2 text-secondary-custom" />
                       {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
                     </Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
@@ -751,10 +751,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           <Card>
             <CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader>
             <CardContent>
-              {client.imovelDeInteresse ? (
+              {client.propertyOfInterest ? (
                 <>
-                  <h3 className="font-semibold">{client.imovelDeInteresse.title}</h3>
-                  <p className="text-sm text-muted-foreground">{client.imovelDeInteresse.endereco || "Endereço não disponível"}</p>
+                  <h3 className="font-semibold">{client.propertyOfInterest.title}</h3>
+                  <p className="text-sm text-muted-foreground">{client.propertyOfInterest.address || "Endereço não disponível"}</p>
                   <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.propertyOfInterestId}/view`)}>Ver Detalhes</Button>
                   <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
                 </>
@@ -782,15 +782,15 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   <Table>
                     <TableHeader><TableRow><TableHead>Tarefa</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {client.tarefas?.length > 0 ? client.tarefas.map(task => (<TableRow key={task.id}><TableCell>{task.title}</TableCell><TableCell>{format(new Date(task.dateTime), "dd/MM/yy HH:mm")}</TableCell><TableCell><Badge variant={task.concluida ? "secondary" : "default"}>{task.concluida ? "Concluída" : "Pendente"}</Badge></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
+                      {client.tasks?.length > 0 ? client.tasks.map(task => (<TableRow key={task.id}><TableCell>{task.title}</TableCell><TableCell>{format(new Date(task.dateTime), "dd/MM/yy HH:mm")}</TableCell><TableCell><Badge variant={task.isCompleted ? "secondary" : "default"}>{task.isCompleted ? "Concluída" : "Pendente"}</Badge></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </TabsContent>
                 <TabsContent value="anotacoes" className="p-4 sm:p-6 pt-4">
                   <div className="space-y-4">
-                    {client.notas && client.notas.length > 0 ? (
-                      client.notas
-                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    {client.notes && client.notes.length > 0 ? (
+                      [...(client.notes || [])]
+                        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
                         .map((note) => (
                           <Card key={note.id} className="shadow-sm">
                             <CardHeader className="flex flex-row items-center justify-between p-4">
@@ -799,11 +799,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                                   <User className="h-4 w-4 text-slate-600" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <CardTitle className="text-sm font-semibold">
-                                    {note.createdBy || 'Sistema'}
-                                  </CardTitle>
+                                  <CardTitle className="text-sm font-semibold">Anotação</CardTitle>
                                   <p className="text-xs text-muted-foreground">
-                                    {format(new Date(note.createdAt), "dd/MM/yyyy 'às' HH:mm")}
+                                    {note.createdAt ? format(new Date(note.createdAt), "dd/MM/yyyy 'às' HH:mm") : ''}
                                   </p>
                                 </div>
                               </div>
@@ -946,17 +944,22 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.phone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Sparkles className="h-4 w-4 mr-2 text-primary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
             </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center justify-between"><span>Status Atual</span><Badge {...getStatusProps(client.overallStatus)}>{client.overallStatus ?? 'N/A'}</Badge></div>
-              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.BROKER?.name ?? 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.broker?.name ?? 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Gerente</span><span className="font-medium">{(client.broker as any)?.supervisor?.name ?? 'N/A'}</span></div>
               <Separator />
-              <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notas?.length ?? 0}</span></div>
-              <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tarefas?.filter(t => !t.concluida).length ?? 0}</span></div>
+              <div className="flex justify-between"><span>Funil</span><span className="font-medium">{client.funnel?.name ?? 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Etapa</span><span className="font-medium">{client.funnelStage?.name ?? 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Campanha de Origem</span><span className="font-medium text-muted-foreground">{(client as any).campaignSource ?? 'Orgânico'}</span></div>
+              <Separator />
+              <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notes?.length ?? 0}</span></div>
+              <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tasks?.filter(t => !t.isCompleted).length ?? 0}</span></div>
               <Separator />
               <div className="flex justify-between"><span>Cliente desde</span><span className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</span></div>
             </CardContent>
@@ -991,7 +994,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         </form>
       </DialogContent></Dialog>
       <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.fullName} onChange={e => setEditClientForm({ ...editClientForm, fullName: e.target.value })} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({ ...editClientForm, email: e.target.value })} /><Label>Telefone</Label><Input value={editClientForm.phone} onChange={e => setEditClientForm({ ...editClientForm, phone: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.imovelDeInteresse ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.propertyOfInterest ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um BROKER..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.brokerId).map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
@@ -1000,7 +1003,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         <DialogContent className="sm:max-w-2xl h-[70vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary-custom" />
+              <Bot className="h-5 w-5 text-secondary-custom" />
               Análise e Sugestões da RIA
             </DialogTitle>
           </DialogHeader>
@@ -1063,10 +1066,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             className="hidden"
           />
 
-          {client.documentos && client.documentos.length > 0 ? (
+          {client.documents && client.documents.length > 0 ? (
             <div className="space-y-4 py-4">
               <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                {client.documentos.map(doc => (
+                {client.documents.map(doc => (
                   <div key={doc.id} className="flex items-center justify-between p-2 border rounded-md">
                     <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate">
                       {doc.fileName}

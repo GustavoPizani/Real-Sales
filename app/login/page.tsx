@@ -97,9 +97,9 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* LADO DIREITO - FORMULÁRIO TRANSPARENTE */}
+        {/* LADO DIREITO - FORMULÁRIO GLASSMORPHISM */}
         <div className="flex-1 flex items-center justify-center px-6 lg:px-20 py-12">
-          <div className="w-full max-w-md space-y-10">
+          <div className="glass-card w-full max-w-md space-y-8 p-8 lg:p-10">
             
             <div className="text-left space-y-2">
               <h2 className="text-4xl font-bold text-white tracking-tight">Acessar conta</h2>

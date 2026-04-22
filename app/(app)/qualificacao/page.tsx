@@ -53,7 +53,7 @@ function AtribuicaoTab() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await response.json();
-    setLeads(data);
+    setLeads({ paraMim: data.paraMim || [], bolsaoPrioritario: data.bolsaoPrioritario || [], bolsaoGeral: data.bolsaoGeral || [] });
     setLoading(false);
   }, []);
 
@@ -120,12 +120,13 @@ function ConfiguracaoTab() {
     fetch('/api/qualificacao/configuracao', { headers: { 'Authorization': `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
-        if (data.error) throw new Error(data.error);
+        if (data.error) { console.error(data.error); setLoading(false); return; }
         setConfig(data.config);
         setUsers(data.users);
         setPermissions(data.permissions);
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {

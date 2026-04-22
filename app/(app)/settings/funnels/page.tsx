@@ -12,21 +12,19 @@ import { useToast } from "@/components/ui/use-toast";
 import { Plus, Trash2, Loader2, Edit } from "lucide-react";
 
 interface Funnel {
-    id: string; // Mantém 'id'
-    nome: string; // Alterado de 'name' para 'nome' para corresponder à API
+    id: string;
+    name: string;
     isPreSales: boolean;
     isDefaultEntry: boolean;
-    etapas: Stage[]; // Alterado de 'stages' para 'etapas' para corresponder à API
+    stages: Stage[];
 }
 
 interface Stage {
     id: string;
-    nome: string; // Alterado de 'name' para 'nome'
-    ordem: number; // Alterado de 'order' para 'ordem'
-    cor: string; // Alterado de 'color' para 'cor'
+    name: string;
+    order: number;
+    color: string;
     funnelId: string;
-    createdAt: Date;
-    updatedAt: Date;
 }
 
 export default function FunnelsSettingsPage() {
@@ -34,8 +32,7 @@ export default function FunnelsSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [isNewFunnelDialogOpen, setIsNewFunnelDialogOpen] = useState(false);
     const [newFunnelForm, setNewFunnelForm] = useState({ name: '', isDefaultEntry: false });
-    const [editingFunnelData, setEditingFunnelData] = useState<Partial<Funnel>>({}); // Usará 'nome'
-    // --- Estados para Edição ---
+    const [editingFunnelData, setEditingFunnelData] = useState<Partial<Funnel>>({});
     const [editingFunnel, setEditingFunnel] = useState<Funnel | null>(null);
     const [isEditFunnelDialogOpen, setIsEditFunnelDialogOpen] = useState(false);
     const [stagesToUpdate, setStagesToUpdate] = useState<Stage[]>([]);
@@ -44,12 +41,9 @@ export default function FunnelsSettingsPage() {
     const fetchFunnels = useCallback(async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('authToken');
-            const response = await fetch('/api/funnels', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch('/api/funnels');
             if (!response.ok) throw new Error("Falha ao carregar funis.");
-            const data = await response.json(); // A API agora retorna um array diretamente
+            const data = await response.json();
             setFunnels(data || []);
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Erro', description: error.message });
@@ -58,24 +52,20 @@ export default function FunnelsSettingsPage() {
         }
     }, [toast]);
 
-    useEffect(() => {
-        fetchFunnels();
-    }, [fetchFunnels]);
+    useEffect(() => { fetchFunnels(); }, [fetchFunnels]);
 
     const handleCreateFunnel = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('authToken');
-            // Mapeia de volta para os nomes esperados pela API de criação (assumindo 'name')
             const response = await fetch('/api/funnels', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                    name: newFunnelForm.name, // Envia 'name' para a API
-                    isDefaultEntry: newFunnelForm.isDefaultEntry
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newFunnelForm.name, isDefaultEntry: newFunnelForm.isDefaultEntry }),
             });
-            if (!response.ok) throw new Error('Falha ao criar funil.');
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'Falha ao criar funil.');
+            }
             toast({ title: 'Sucesso!', description: 'Novo funil criado.' });
             setIsNewFunnelDialogOpen(false);
             setNewFunnelForm({ name: '', isDefaultEntry: false });
@@ -86,13 +76,9 @@ export default function FunnelsSettingsPage() {
     };
 
     const handleDeleteFunnel = async (funnelId: string) => {
-        if (!window.confirm("Tem certeza que deseja apagar este funil e todas as suas etapas? Esta ação não pode ser desfeita.")) return;
+        if (!window.confirm("Tem certeza que deseja apagar este funil e todas as suas etapas?")) return;
         try {
-            const token = localStorage.getItem('authToken');
-            const response = await fetch(`/api/funnels/${funnelId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch(`/api/funnels/${funnelId}`, { method: 'DELETE' });
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Falha ao apagar o funil.');
@@ -106,61 +92,49 @@ export default function FunnelsSettingsPage() {
 
     const openEditDialog = (funnel: Funnel) => {
         setEditingFunnel(funnel);
-        // Inicializa com 'nome' e 'etapas' do funil recebido
-        setEditingFunnelData({ nome: funnel.nome, isPreSales: funnel.isPreSales, isDefaultEntry: funnel.isDefaultEntry });
-        setStagesToUpdate([...funnel.etapas]); // Cria uma cópia para edição
+        setEditingFunnelData({ name: funnel.name, isPreSales: funnel.isPreSales, isDefaultEntry: funnel.isDefaultEntry });
+        setStagesToUpdate([...funnel.stages]);
         setIsEditFunnelDialogOpen(true);
     };
 
-    const handleStageChange = (stageId: string, field: 'nome' | 'cor' | 'ordem', value: string | number) => {
-        setStagesToUpdate(prev =>
-            prev.map(stage => stage.id === stageId ? { ...stage, [field]: value } : stage)
-        );
+    const handleStageChange = (stageId: string, field: 'name' | 'color' | 'order', value: string | number) => {
+        setStagesToUpdate(prev => prev.map(s => s.id === stageId ? { ...s, [field]: value } : s));
     };
 
     const handleAddStage = () => {
-        // Cria nova etapa com nomes em português
         const newStage: Stage = {
             id: `new-${Date.now()}`,
-            nome: 'Nova Etapa',
-            cor: '#cccccc',
-            ordem: stagesToUpdate.length + 1,
-            // Estes campos podem não ser necessários para a UI, mas são parte da interface Stage
+            name: 'Nova Etapa',
+            color: '#cccccc',
+            order: stagesToUpdate.length + 1,
             funnelId: editingFunnel!.id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
         };
         setStagesToUpdate(prev => [...prev, newStage]);
     };
 
     const handleRemoveStage = (stageId: string) => {
-        setStagesToUpdate(prev => prev.filter(stage => stage.id !== stageId));
+        setStagesToUpdate(prev => prev.filter(s => s.id !== stageId));
     };
 
     const handleSaveChanges = async () => {
         if (!editingFunnel) return;
-
         try {
-            const token = localStorage.getItem('authToken');
             const response = await fetch(`/api/funnels/${editingFunnel.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // Mapeia de volta para os nomes esperados pela API de atualização (assumindo 'name' e 'stages')
-                    name: editingFunnelData.nome, // Envia 'name' para a API
+                    name: editingFunnelData.name,
                     isPreSales: editingFunnelData.isPreSales,
-                    stages: stagesToUpdate.map(s => ({
-                        id: s.id.startsWith('new-') ? undefined : s.id, // Não envia id para novas etapas
-                        name: s.nome, // Envia 'name' para a API
-                        color: s.cor, // Envia 'color' para a API
-                        order: s.ordem, // Envia 'order' para a API
-                        funnelId: s.funnelId // Mantém funnelId
+                    stages: stagesToUpdate.map((s, i) => ({
+                        id: s.id.startsWith('new-') ? undefined : s.id,
+                        name: s.name,
+                        color: s.color,
+                        order: i + 1,
+                        funnelId: s.funnelId,
                     })),
                 }),
             });
-
             if (!response.ok) throw new Error('Falha ao salvar as alterações.');
-
             toast({ title: 'Sucesso!', description: 'Funil atualizado.' });
             setIsEditFunnelDialogOpen(false);
             setEditingFunnel(null);
@@ -189,11 +163,11 @@ export default function FunnelsSettingsPage() {
                         <DialogHeader><DialogTitle>Criar Novo Funil</DialogTitle></DialogHeader>
                         <form onSubmit={handleCreateFunnel} className="space-y-4 pt-4">
                             <div>
-                                <Label htmlFor="funnelNome">Nome do Funil</Label>
-                                <Input id="funnelNome" value={newFunnelForm.name} onChange={(e) => setNewFunnelForm(p => ({ ...p, name: e.target.value }))} required />
+                                <Label htmlFor="funnelName">Nome do Funil</Label>
+                                <Input id="funnelName" value={newFunnelForm.name} onChange={e => setNewFunnelForm(p => ({ ...p, name: e.target.value }))} required />
                             </div>
                             <div className="flex items-center space-x-2">
-                                <Switch id="isDefaultEntry" checked={newFunnelForm.isDefaultEntry} onCheckedChange={(checked) => setNewFunnelForm(p => ({ ...p, isDefaultEntry: checked }))} />
+                                <Switch id="isDefaultEntry" checked={newFunnelForm.isDefaultEntry} onCheckedChange={checked => setNewFunnelForm(p => ({ ...p, isDefaultEntry: checked }))} />
                                 <Label htmlFor="isDefaultEntry">Funil de entrada padrão para novos leads</Label>
                             </div>
                             <DialogFooter>
@@ -205,14 +179,14 @@ export default function FunnelsSettingsPage() {
                 </Dialog>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"> {/* Ajustado para usar 'funil' e 'etapas' */}
-                {funnels.map(funnel => ( // 'funnel' agora tem 'nome' e 'etapas'
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {funnels.map(funnel => (
                     <Card key={funnel.id}>
                         <CardHeader>
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <CardTitle>{funnel.nome}</CardTitle> {/* Usando funnel.nome */}
-                                    {funnel.isDefaultEntry && <CardDescription className="text-primary-custom font-semibold">Funil de Entrada Padrão</CardDescription>}
+                                    <CardTitle>{funnel.name}</CardTitle>
+                                    {funnel.isDefaultEntry && <CardDescription className="text-secondary-custom font-semibold">Funil de Entrada Padrão</CardDescription>}
                                 </div>
                                 <div className="flex">
                                     <Button variant="ghost" size="icon" onClick={() => openEditDialog(funnel)}><Edit className="h-4 w-4" /></Button>
@@ -222,21 +196,19 @@ export default function FunnelsSettingsPage() {
                         </CardHeader>
                         <CardContent>
                             <h4 className="font-semibold mb-2 text-sm">Etapas:</h4>
-                            <div className="space-y-2"> {/* Usando funnel.etapas */}
-                                {funnel.etapas.map(stage => (
+                            <div className="space-y-2">
+                                {funnel.stages.map(stage => (
                                     <div key={stage.id} className="flex items-center gap-2 text-sm">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.cor }}></div> {/* Usando stage.cor */}
-                                        <span>{stage.nome}</span> {/* Usando stage.nome */}
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
+                                        <span>{stage.name}</span>
                                     </div>
                                 ))}
                             </div>
-                            {/* Aqui entraria a lógica para gerenciar o acesso de usuários */}
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
-            {/* Modal de Edição de Funil */}
             <Dialog open={isEditFunnelDialogOpen} onOpenChange={setIsEditFunnelDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader><DialogTitle>Editar Funil: {editingFunnel?.name}</DialogTitle></DialogHeader>
@@ -251,7 +223,7 @@ export default function FunnelsSettingsPage() {
                         </div>
                         <Separator />
                         <h3 className="font-semibold text-lg">Etapas</h3>
-                        {stagesToUpdate.map((stage) => (
+                        {stagesToUpdate.map(stage => (
                             <div key={stage.id} className="flex items-center gap-2 p-2 border rounded-lg">
                                 <Input value={stage.name} onChange={e => handleStageChange(stage.id, 'name', e.target.value)} placeholder="Nome da Etapa" />
                                 <Input type="color" value={stage.color} onChange={e => handleStageChange(stage.id, 'color', e.target.value)} className="w-12 h-10 p-1" />
@@ -269,7 +241,6 @@ export default function FunnelsSettingsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
         </div>
     );
 }

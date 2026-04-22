@@ -1,7 +1,26 @@
 // app/api/funnels/route.ts
 import { prisma } from '@/lib/prisma';
-import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
+import { NextResponse, NextRequest } from 'next/server';
 import { getUserFromToken } from '@/lib/auth';
+
+function mapFunnel(f: any) {
+  return {
+    id: f.id,
+    name: f.name,
+    isPreSales: f.isPreSales,
+    isDefaultEntry: f.isDefaultEntry,
+    stages: (f.stages || []).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      order: s.order,
+      color: s.color,
+      funnelId: s.funnelId,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    })),
+  };
+}
 
 export async function GET() {
   try {
@@ -9,30 +28,43 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const funnels = await prisma.funnel.findMany({
-      include: {
-        stages: { // Mudou de 'etapas' para 'stages' no Prisma
-          orderBy: { order: 'asc' }
-        }
-      },
-      orderBy: { createdAt: 'asc' }
+      include: { stages: { orderBy: { order: 'asc' } } },
+      orderBy: { name: 'asc' },
     });
 
-    // Mapeia os dados para o formato esperado pelo frontend, usando nomes de campo em inglês.
-    const formattedFunnels = funnels.map(f => ({
-      id: f.id,
-      name: f.name,
-      isPreSales: f.isPreSales,
-      isDefaultEntry: f.isDefaultEntry,
-      stages: f.stages.map(s => ({
-        id: s.id,
-        name: s.name,
-        order: s.order,
-        color: s.color
-      }))
-    }));
-
-    return NextResponse.json(formattedFunnels);
+    return NextResponse.json(funnels.map(mapFunnel));
   } catch (error) {
     return NextResponse.json({ error: 'Erro ao buscar funis' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getUserFromToken();
+    if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const body = await request.json();
+    const { name, isDefaultEntry = false } = body;
+
+    if (!name?.trim()) {
+      return NextResponse.json({ error: 'Nome do funil é obrigatório' }, { status: 400 });
+    }
+
+    const funnel = await prisma.funnel.create({
+      data: {
+        name: name.trim(),
+        isDefaultEntry,
+        isPreSales: false,
+      },
+      include: { stages: { orderBy: { order: 'asc' } } },
+    });
+
+    return NextResponse.json(mapFunnel(funnel), { status: 201 });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ error: 'Já existe um funil com esse nome. Escolha um nome diferente.' }, { status: 409 });
+    }
+    console.error('Erro ao criar funil:', error);
+    return NextResponse.json({ error: 'Erro ao criar funil' }, { status: 500 });
   }
 }

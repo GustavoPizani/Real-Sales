@@ -117,7 +117,7 @@ export default function ActiveOfferCallPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 p-4 sm:p-8">
+    <div className="flex flex-col h-screen bg-background p-4 sm:p-8">
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold">Ligação - Oferta Ativa</h1>
         <span className="font-mono text-lg">{currentIndex + 1} / {clients.length}</span>

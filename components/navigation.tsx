@@ -7,18 +7,17 @@ import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 // ADICIONADO: Megaphone na lista de imports abaixo
 import { 
-  Home, 
-  Building, 
-  Kanban, 
-  Settings, 
-  LogOut, 
-  CheckSquare, 
-  X, 
-  Phone, 
-  RotateCcw, 
-  Target, 
-  UserCheck, 
-  Megaphone 
+  Home,
+  Building,
+  Kanban,
+  Settings,
+  LogOut,
+  CheckSquare,
+  X,
+  Phone,
+  RotateCcw,
+  Target,
+  Megaphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -62,7 +61,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
       [Role.DIRECTOR]: 'Diretor',
       [Role.MANAGER]: 'Gerente',
       [Role.BROKER]: 'Corretor',
-      [Role.ADMIN]: 'Super Admin',
+      'ADMIN': 'Super Admin',
     };
     return labels[role] || role;
   };
@@ -83,8 +82,8 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
 
       <aside 
         className={cn(
-          "bg-black text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
-          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64", 
+          "sidebar-custom text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
+          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
           "lg:translate-x-0",
           "overflow-y-auto overflow-x-hidden",
           isDesktopExpanded ? "lg:w-64" : "lg:w-16"
@@ -122,7 +121,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                     className={cn(
                       "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 group relative border-l-4",
                       isActive
-                        ? "bg-secondary-custom text-primary-custom border-secondary-custom"
+                        ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
                         : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:shadow-lg hover:shadow-secondary-custom/20"
                     )}
                   >

@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     funnelId: funnelId,
                 };
 
-                if (stageData.id.startsWith('new-')) {
+                if (!stageData.id) {
                     // Cria nova etapa
                     await tx.funnelStage.create({ data });
                 } else {

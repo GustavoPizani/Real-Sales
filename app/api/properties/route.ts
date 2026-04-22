@@ -11,8 +11,7 @@ export const dynamic = 'force-dynamic';
 // GET: Busca todas as propriedades
 export async function GET(request: NextRequest) {
   try {
-    const token = cookies().get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
@@ -20,9 +19,9 @@ export async function GET(request: NextRequest) {
     const properties = await prisma.property.findMany({
       include: {
         images: {
-          take: 1, // Pega apenas a primeira imagem
+          take: 1,
           orderBy: {
-            createdAt: 'asc',
+            id: 'asc',
           },
         },
         propertyTypes: true,
