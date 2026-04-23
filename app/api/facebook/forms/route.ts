@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     )
     return NextResponse.json({ forms: data.data ?? [] })
   } catch (err: any) {
+    console.error('[FB_FORMS] pageId:', pageId, 'error:', err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
