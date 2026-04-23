@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
         update: {
           pageName: page.name,
           pageAccessToken: page.access_token,
+          userAccessToken: longLivedToken,
           isActive: true,
         },
         create: {
@@ -98,6 +99,7 @@ export async function GET(request: NextRequest) {
           pageId: page.id,
           pageName: page.name,
           pageAccessToken: page.access_token,
+          userAccessToken: longLivedToken,
         },
       })
     }

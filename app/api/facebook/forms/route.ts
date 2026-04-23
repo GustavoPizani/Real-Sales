@@ -27,15 +27,26 @@ export async function GET(request: NextRequest) {
   if (!connection)
     return NextResponse.json({ error: 'Página não conectada' }, { status: 404 })
 
-  try {
-    const data = await graphGet<{ data: FbForm[] }>(
-      `/${pageId}/leadgen_forms`,
-      connection.pageAccessToken,
-      { fields: 'id,name,status', limit: '100' }
-    )
-    return NextResponse.json({ forms: data.data ?? [] })
-  } catch (err: any) {
-    console.error('[FB_FORMS] pageId:', pageId, 'error:', err.message)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  // Try page access token first; fall back to user token for Business Manager pages
+  const tokensToTry = [
+    connection.pageAccessToken,
+    ...(connection.userAccessToken ? [connection.userAccessToken] : []),
+  ]
+
+  let lastError = ''
+  for (const token of tokensToTry) {
+    try {
+      const data = await graphGet<{ data: FbForm[] }>(
+        `/${pageId}/leadgen_forms`,
+        token,
+        { fields: 'id,name,status', limit: '100' }
+      )
+      return NextResponse.json({ forms: data.data ?? [] })
+    } catch (err: any) {
+      lastError = err.message
+      console.error('[FB_FORMS] pageId:', pageId, 'token attempt failed:', err.message)
+    }
   }
+
+  return NextResponse.json({ error: lastError }, { status: 500 })
 }
