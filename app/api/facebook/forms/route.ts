@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
   ]
 
   let lastError = ''
+  let tokenIndex = 0
   for (const token of tokensToTry) {
+    const label = tokenIndex === 0 ? 'page_token' : 'user_token'
+    tokenIndex++
     try {
       const data = await graphGet<{ data: FbForm[] }>(
         `/${pageId}/leadgen_forms`,
@@ -44,8 +47,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ forms: data.data ?? [] })
     } catch (err: any) {
       lastError = err.message
-      console.error('[FB_FORMS] pageId:', pageId, 'token attempt failed:', err.message)
+      console.error(`[FB_FORMS] pageId=${pageId} token=${label} error="${err.message}"`)
     }
+  }
+
+  // Debug: check what permissions the user token has
+  if (tokensToTry[1]) {
+    try {
+      const debug = await graphGet<any>('/me/permissions', tokensToTry[1])
+      console.error('[FB_FORMS] user token permissions:', JSON.stringify(debug?.data?.map((p: any) => `${p.permission}:${p.status}`)))
+    } catch {}
   }
 
   return NextResponse.json({ error: lastError }, { status: 500 })
