@@ -183,10 +183,19 @@ export default function IntegrationsPage() {
     const page = pages.find((p) => p.id === connectionId)
     if (!page) return
     setFormData((prev) => ({ ...prev, connectionId, pageId: page.pageId, formId: "", formName: "" }))
+    setForms([])
     setLoadingForms(true)
     try {
       const res = await fetch(`/api/facebook/forms?pageId=${page.pageId}`)
-      if (res.ok) { const d = await res.json(); setForms(d.forms ?? []) }
+      const d = await res.json()
+      if (res.ok) {
+        setForms(d.forms ?? [])
+        if ((d.forms ?? []).length === 0) {
+          toast({ title: "Nenhum formulário encontrado", description: "Esta página não tem formulários Lead Ads ativos no Facebook." })
+        }
+      } else {
+        toast({ variant: "destructive", title: "Erro ao buscar formulários", description: d.error ?? "Verifique as permissões da página." })
+      }
     } finally {
       setLoadingForms(false)
     }
