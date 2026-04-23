@@ -51,13 +51,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Debug: check what permissions the user token has
-  if (tokensToTry[1]) {
-    try {
-      const debug = await graphGet<any>('/me/permissions', tokensToTry[1])
-      console.error('[FB_FORMS] user token permissions:', JSON.stringify(debug?.data?.map((p: any) => `${p.permission}:${p.status}`)))
-    } catch {}
-  }
+  // Check what permissions the user token actually has (for debugging)
+  let grantedPermissions: string[] = []
+  const debugToken = tokensToTry[1] ?? tokensToTry[0]
+  try {
+    const debug = await graphGet<{ data: { permission: string; status: string }[] }>('/me/permissions', debugToken)
+    grantedPermissions = (debug?.data ?? [])
+      .filter((p) => p.status === 'granted')
+      .map((p) => p.permission)
+    console.error('[FB_FORMS] granted permissions:', grantedPermissions.join(','))
+  } catch {}
 
-  return NextResponse.json({ error: lastError }, { status: 500 })
+  const hasLeadsRetrieval = grantedPermissions.includes('leads_retrieval')
+  const errorMsg = hasLeadsRetrieval
+    ? lastError
+    : `Permissão 'leads_retrieval' não concedida. Permissões atuais: ${grantedPermissions.join(', ')}`
+
+  return NextResponse.json({ error: errorMsg }, { status: 500 })
 }
