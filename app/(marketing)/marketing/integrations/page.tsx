@@ -444,10 +444,10 @@ export default function IntegrationsPage() {
 
               <div className="space-y-1.5">
                 <Label>Empreendimento</Label>
-                <Select value={formData.propertyId} onValueChange={(v) => setFormData((p) => ({ ...p, propertyId: v }))}>
+                <Select value={formData.propertyId || "__none__"} onValueChange={(v) => setFormData((p) => ({ ...p, propertyId: v === "__none__" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
                     {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -455,10 +455,10 @@ export default function IntegrationsPage() {
 
               <div className="space-y-1.5">
                 <Label>Rodízio</Label>
-                <Select value={formData.roletaId} onValueChange={(v) => setFormData((p) => ({ ...p, roletaId: v }))}>
+                <Select value={formData.roletaId || "__none__"} onValueChange={(v) => setFormData((p) => ({ ...p, roletaId: v === "__none__" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
                     {roulettes.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -488,10 +488,10 @@ export default function IntegrationsPage() {
 
               <div className="space-y-1.5">
                 <Label>Corretor Padrão</Label>
-                <Select value={formData.defaultBrokerId} onValueChange={(v) => setFormData((p) => ({ ...p, defaultBrokerId: v }))}>
+                <Select value={formData.defaultBrokerId || "__none__"} onValueChange={(v) => setFormData((p) => ({ ...p, defaultBrokerId: v === "__none__" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Nenhum (usa rodízio)" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum (usa rodízio)</SelectItem>
+                    <SelectItem value="__none__">Nenhum (usa rodízio)</SelectItem>
                     {brokers.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
