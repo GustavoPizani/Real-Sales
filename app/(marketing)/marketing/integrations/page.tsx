@@ -133,7 +133,7 @@ export default function IntegrationsPage() {
       fetch("/api/users"),
       fetch("/api/facebook/mappings"),
     ])
-    if (fRes.ok) { const d = await fRes.json(); setFunnels(d.funnels ?? []) }
+    if (fRes.ok) { const d = await fRes.json(); setFunnels(Array.isArray(d) ? d : d.funnels ?? []) }
     if (pRes.ok) { const d = await pRes.json(); setProperties(Array.isArray(d) ? d : d.properties ?? []) }
     if (rRes.ok) { const d = await rRes.json(); setRoulettes(Array.isArray(d) ? d : d.roulettes ?? []) }
     if (uRes.ok) { const d = await uRes.json(); setBrokers(d.users ?? []) }
