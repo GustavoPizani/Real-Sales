@@ -1,4 +1,3 @@
-npm run dev
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { graphGet, extractLeadFields, type FbLead } from '@/lib/facebook-graph'
