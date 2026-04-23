@@ -59,6 +59,28 @@ interface Mapping {
   lastSyncedAt?: string | null
 }
 
+interface FormQuestion {
+  type: string
+  label: string
+  key: string
+}
+
+const CRM_TARGETS = [
+  { value: "fullName", label: "Nome Completo" },
+  { value: "email", label: "E-mail" },
+  { value: "phone", label: "Telefone" },
+  { value: "observations", label: "Observações" },
+  { value: "ignore", label: "Ignorar" },
+]
+
+const AUTO_DETECT: Record<string, string> = {
+  FULL_NAME: "fullName",
+  FIRST_NAME: "fullName",
+  EMAIL: "email",
+  PHONE: "phone",
+  PHONE_NUMBER: "phone",
+}
+
 const EMPTY_FORM = {
   connectionId: "",
   formId: "",
@@ -86,6 +108,7 @@ export default function IntegrationsPage() {
 
   const [loadingPages, setLoadingPages] = useState(false)
   const [loadingForms, setLoadingForms] = useState(false)
+  const [loadingFields, setLoadingFields] = useState(false)
   const [savingMapping, setSavingMapping] = useState(false)
   const [syncingId, setSyncingId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -94,6 +117,8 @@ export default function IntegrationsPage() {
   const [verifyToken, setVerifyToken] = useState("")
   const [copiedUrl, setCopiedUrl] = useState(false)
   const [copiedToken, setCopiedToken] = useState(false)
+  const [formQuestions, setFormQuestions] = useState<FormQuestion[]>([])
+  const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({})
 
   const [formData, setFormData] = useState(EMPTY_FORM)
 
@@ -201,9 +226,27 @@ export default function IntegrationsPage() {
     }
   }
 
-  const handleFormSelect = (formId: string) => {
+  const handleFormSelect = async (formId: string) => {
     const form = forms.find((f) => f.id === formId)
     setFormData((prev) => ({ ...prev, formId, formName: form?.name ?? "" }))
+    setFormQuestions([])
+    setFieldMappings({})
+    if (!formId || !formData.pageId) return
+    setLoadingFields(true)
+    try {
+      const res = await fetch(`/api/facebook/form-fields?formId=${formId}&pageId=${formData.pageId}`)
+      const d = await res.json()
+      if (res.ok && d.questions?.length > 0) {
+        setFormQuestions(d.questions)
+        const autoMap: Record<string, string> = {}
+        for (const q of d.questions) {
+          autoMap[q.key] = AUTO_DETECT[q.type] ?? "observations"
+        }
+        setFieldMappings(autoMap)
+      }
+    } finally {
+      setLoadingFields(false)
+    }
   }
 
   const handleSave = async () => {
@@ -216,7 +259,7 @@ export default function IntegrationsPage() {
       const res = await fetch("/api/facebook/mappings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, fieldMappings }),
       })
       if (!res.ok) throw new Error("Falha ao salvar")
       const { mapping, syncPending } = await res.json()
@@ -447,6 +490,47 @@ export default function IntegrationsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Field Mapping */}
+            {(loadingFields || formQuestions.length > 0) && (
+              <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Mapeamento de Campos
+                </p>
+                {loadingFields ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Carregando campos do formulário...
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {formQuestions.map((q) => (
+                      <div key={q.key} className="flex items-center gap-2">
+                        <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={q.label}>
+                          {q.label}
+                        </span>
+                        <Select
+                          value={fieldMappings[q.key] ?? "observations"}
+                          onValueChange={(v) => setFieldMappings((prev) => ({ ...prev, [q.key]: v }))}
+                        >
+                          <SelectTrigger className="w-40 h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CRM_TARGETS.map((t) => (
+                              <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Campos marcados como "Observações" serão exibidos na ficha do lead no CRM.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="border-t border-border pt-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Roteamento CRM</p>

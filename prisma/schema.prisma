@@ -126,7 +126,8 @@ model Client {
   fullName       String
   email          String?  @unique
   phone          String?
-  facebookLeadId String?  @unique @map("facebook_lead_id")
+  facebookLeadId  String?  @unique @map("facebook_lead_id")
+  formResponses   Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   accountId      String?
@@ -516,6 +517,7 @@ model FacebookFormMapping {
   praca           String?
   defaultBrokerId String?
   defaultBroker   User?              @relation("FbDefaultBroker", fields: [defaultBrokerId], references: [id], onDelete: SetNull)
+  fieldMappings   Json?
   isActive        Boolean            @default(true)
   lastSyncedAt    DateTime?
   leadCount       Int                @default(0)

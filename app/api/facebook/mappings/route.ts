@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     agencia,
     praca,
     defaultBrokerId,
+    fieldMappings,
     syncLeads,
   } = body
 
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
       agencia: agencia || null,
       praca: praca || null,
       defaultBrokerId: defaultBrokerId || null,
+      fieldMappings: fieldMappings ?? undefined,
       isActive: true,
     },
     create: {
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest) {
       agencia: agencia || null,
       praca: praca || null,
       defaultBrokerId: defaultBrokerId || null,
+      fieldMappings: fieldMappings ?? undefined,
     },
   })
 

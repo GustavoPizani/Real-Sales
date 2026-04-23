@@ -82,27 +82,62 @@ async function ingestLead(lead: FbLead, mapping: any) {
     return
   }
 
-  const { fullName, email, phone } = extractLeadFields(lead)
+  // Build field values map from lead data
+  const fieldValues: Record<string, string> = {}
+  for (const f of lead.field_data ?? []) {
+    fieldValues[f.name] = f.values[0] ?? ''
+  }
+
+  // Apply custom field mappings if configured
+  const customMappings: Record<string, string> = (mapping.fieldMappings as any) ?? {}
+  let fullName = ''
+  let email: string | null = null
+  let phone: string | null = null
+  const observationParts: string[] = []
+
+  for (const [fbKey, value] of Object.entries(fieldValues)) {
+    const target = customMappings[fbKey]
+    if (target === 'fullName') fullName = value
+    else if (target === 'email') email = value
+    else if (target === 'phone') phone = value
+    else if (target === 'ignore') continue
+    else {
+      // 'observations' or unmapped — collect as observation
+      const label = fbKey.replace(/_/g, ' ')
+      observationParts.push(`${label}: ${value}`)
+    }
+  }
+
+  // Fall back to auto-detection if custom mappings not set or name is empty
+  if (!fullName) {
+    const auto = extractLeadFields(lead)
+    fullName = auto.fullName
+    if (!email) email = auto.email
+    if (!phone) phone = auto.phone
+  }
+
+  // Build formResponses: all fields with labels
+  const formResponses: Record<string, string> = {}
+  for (const [key, value] of Object.entries(fieldValues)) {
+    formResponses[key] = value
+  }
 
   // Email dedup
   if (email) {
     const byEmail = await prisma.client.findUnique({ where: { email } })
     if (byEmail) {
-      // Update existing client's facebookLeadId if missing
       if (!byEmail.facebookLeadId) {
         await prisma.client.update({
           where: { id: byEmail.id },
-          data: { facebookLeadId: lead.id },
+          data: { facebookLeadId: lead.id, formResponses },
         })
       }
-      console.log(
-        `[FB_WEBHOOK] Matched existing client by email for lead ${lead.id}`
-      )
+      console.log(`[FB_WEBHOOK] Matched existing client by email for lead ${lead.id}`)
       return
     }
   }
 
-  // Roulette assignment: pick broker from roulette if configured
+  // Roulette assignment
   let brokerId = mapping.defaultBrokerId
   if (!brokerId && mapping.roletaId) {
     const rouletteUser = await prisma.leadRouletteUser.findFirst({
@@ -114,9 +149,7 @@ async function ingestLead(lead: FbLead, mapping: any) {
   }
 
   if (!brokerId) {
-    console.error(
-      `[FB_WEBHOOK] No broker available for mapping ${mapping.id}`
-    )
+    console.error(`[FB_WEBHOOK] No broker available for mapping ${mapping.id}`)
     return
   }
 
@@ -126,6 +159,7 @@ async function ingestLead(lead: FbLead, mapping: any) {
       email: email ?? undefined,
       phone: phone ?? undefined,
       facebookLeadId: lead.id,
+      formResponses,
       brokerId,
       createdById: brokerId,
       funnelId: mapping.funnelId!,
@@ -134,14 +168,15 @@ async function ingestLead(lead: FbLead, mapping: any) {
     },
   })
 
-  // Add note with raw lead data
-  await prisma.note.create({
-    data: {
-      content: `Lead recebido via Facebook Lead Ads.\nFormulário: ${mapping.formName}\nDados brutos: ${JSON.stringify(lead.field_data, null, 2)}`,
-      authorId: brokerId,
-      clientId: client.id,
-    },
-  })
+  if (observationParts.length > 0) {
+    await prisma.note.create({
+      data: {
+        content: `📋 Observações do formulário "${mapping.formName}":\n\n${observationParts.join('\n')}`,
+        authorId: brokerId,
+        clientId: client.id,
+      },
+    })
+  }
 
   await prisma.facebookFormMapping.update({
     where: { id: mapping.id },

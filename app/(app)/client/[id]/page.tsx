@@ -800,6 +800,27 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </CardContent>
           </Card>
 
+          {/* Card de Observações do Formulário Facebook */}
+          {client.formResponses && Object.keys(client.formResponses as Record<string, string>).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <span>📋</span> Respostas do Formulário
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {Object.entries(client.formResponses as Record<string, string>).map(([key, value]) => (
+                    <div key={key} className="grid grid-cols-2 gap-2 text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                      <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                      <span className="font-medium text-foreground">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Card de Histórico e Atividades */}
           <Card>
             <CardHeader className="flex flex-row justify-between items-center">
