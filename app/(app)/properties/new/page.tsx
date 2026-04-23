@@ -14,12 +14,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Save, Plus, Trash2, Upload, X, Loader2, ClipboardPaste } from "lucide-react";
-import { type TipologiaImovel, PropertyStatus, type ImagemPlanta } from "@prisma/client";
+import { PropertyStatus } from "@prisma/client";
 
-type TypologyWithFiles = Partial<TipologiaImovel> & {
+type Typology = {
+  name: string;
+  valor: number;
+  area: number;
+  dormitorios: number;
+  suites: number;
+  vagas: number;
   plantaFile?: File;
   plantaPreview?: string;
 };
+
+type TypologyWithFiles = Partial<Typology>;
 
 // Componente principal
 export default function NewPropertyPage() {
@@ -36,7 +44,7 @@ function NewPropertyForm() {
     const [title, setTitle] = useState("");
     const [type, setType] = useState("Apartamento");
     const [address, setAddress] = useState("");
-    const [status, setStatus] = useState<PropertyStatus>("LANCAMENTO");
+    const [status, setStatus] = useState<PropertyStatus>(PropertyStatus.LANCAMENTO);
     const [typologies, setTypologies] = useState<TypologyWithFiles[]>([]);
     const [features, setFeatures] = useState<string[]>([]);
     const [images, setImages] = useState<File[]>([]);
@@ -117,10 +125,48 @@ function NewPropertyForm() {
     };
 
     const handleSave = async () => {
-        // ... (Sua função de salvar existente) ...
+        if (!title.trim()) {
+            toast({ variant: "destructive", title: "Campo obrigatório", description: "O título do imóvel é obrigatório." });
+            return;
+        }
+        setSaving(true);
+        try {
+            // 1. Fazer upload de todas as imagens selecionadas
+            const imageUrls: string[] = [];
+            for (const image of images) {
+                const formData = new FormData();
+                formData.append('file', image);
+                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+                if (!uploadRes.ok) {
+                    const err = await uploadRes.json();
+                    throw new Error(err.error || 'Falha ao fazer upload de imagem.');
+                }
+                const { url } = await uploadRes.json();
+                imageUrls.push(url);
+            }
+
+            // 2. Criar o imóvel com todas as tipologias e URLs de imagens
+            const response = await fetch('/api/properties', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, type, address, status, features, typologies, imageUrls }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Falha ao criar o imóvel.');
+            }
+
+            toast({ title: "Sucesso!", description: "Imóvel cadastrado com sucesso." });
+            router.push('/properties');
+        } catch (error: any) {
+            toast({ variant: "destructive", title: "Erro ao salvar", description: error.message });
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handleTypologyChange = (index: number, field: keyof TipologiaImovel, value: string | number) => {
+    const handleTypologyChange = (index: number, field: keyof Typology, value: string | number) => {
         const newTypologies = [...typologies];
         (newTypologies[index] as any)[field] = value;
         setTypologies(newTypologies);
@@ -238,7 +284,11 @@ function NewPropertyForm() {
                                 <Select onValueChange={(value: PropertyStatus) => setStatus(value)} defaultValue={status}>
                                     <SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger>
                                     <SelectContent>
-                                        {Object.values(PropertyStatus).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                        {[
+  { value: PropertyStatus.LANCAMENTO, label: 'Lançamento' },
+  { value: PropertyStatus.EM_OBRAS, label: 'Em Obras' },
+  { value: PropertyStatus.PRONTO, label: 'Pronto' },
+].map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>

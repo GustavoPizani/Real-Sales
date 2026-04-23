@@ -22,7 +22,7 @@ export async function GET(
       },
     });
 
-    if (!property || property.status === 'Vendido') {
+    if (!property) {
       return NextResponse.json({ error: 'Imóvel não encontrado ou indisponível' }, { status: 404 });
     }
 
@@ -30,12 +30,12 @@ export async function GET(
     const publicPropertyData = {
       id: property.id,
       title: property.title,
-      features: property.features, // ✅ Enviando 'features'
-      endereco: property.address,
-      tipo: property.type,
+      features: property.features,
+      address: property.address,
+      type: property.type,
       status: property.status,
       images: property.images,
-      propertyTypes: property.typelogias,
+      propertyTypes: property.propertyTypes,
       createdAt: property.createdAt.toISOString(),
     };
 

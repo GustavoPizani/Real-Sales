@@ -48,7 +48,7 @@ async function main() {
       title: 'Residencial Eden',
       address: 'Rua das Flores, 123',
       price: 450000,
-      status: PropertyStatus.AVAILABLE,
+      status: PropertyStatus.LANCAMENTO,
       areaSqMeters: 75,
       bedrooms: 3,
       bathrooms: 2,

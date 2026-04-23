@@ -1,23 +1,25 @@
-import { GoogleGenerativeAIStream, StreamingTextResponse } from 'ai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { OpenAIStream, StreamingTextResponse } from 'ai';
+import OpenAI from 'openai';
 import { getUserFromToken } from '@/lib/auth';
-import { cookies } from 'next/headers';
 import { z } from 'zod';
 
-// Inicializa o cliente do Google Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Groq é compatível com o formato OpenAI — só muda a baseURL
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY || '',
+  baseURL: 'https://api.groq.com/openai/v1',
+});
 
 const noteSchema = z.object({
   content: z.string(),
-  createdBy: z.string(),
-  createdAt: z.string().datetime(),
-});
+  authorId: z.string().optional(),
+  createdAt: z.string().optional(),
+}).passthrough();
 
 const taskSchema = z.object({
   title: z.string(),
-  concluida: z.boolean(),
-  dateTime: z.string().datetime(),
-});
+  isCompleted: z.boolean().optional(),
+  dateTime: z.string().optional(),
+}).passthrough();
 
 const riaSystemPrompt = `Atue como 'RIA - Real-Sales Inteligência Artificial', uma assistente de CRM especialista em comunicação com clientes do mercado imobiliário. Seu único objetivo é analisar o histórico de um cliente e sugerir os próximos passos para o BROKER.
 Siga sempre esta estrutura de resposta:
@@ -43,10 +45,13 @@ Responda APENAS com a estrutura solicitada, começando por '[Análise Rápida]'.
 
 export async function POST(request: Request) {
   try {
-    const token = cookies().get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
     if (!user) {
       return new Response('Não autorizado', { status: 401 });
+    }
+
+    if (!process.env.GROQ_API_KEY) {
+      return new Response('GROQ_API_KEY não configurada.', { status: 500 });
     }
 
     const bodySchema = z.object({
@@ -58,29 +63,47 @@ export async function POST(request: Request) {
     const { notes, tasks, clientName } = bodySchema.parse(await request.json());
 
     let clientHistory = `Histórico do Cliente: ${clientName}\n\nAnotações Recentes:\n`;
-    notes?.forEach(note => {
-      clientHistory += `- "${note.content}" (Feita por ${note.createdBy} em ${new Date(note.createdAt).toLocaleDateString('pt-BR')})\n`;
-    });
+    if (notes && notes.length > 0) {
+      notes.forEach(note => {
+        const data = note.createdAt ? new Date(note.createdAt).toLocaleDateString('pt-BR') : 'data desconhecida';
+        clientHistory += `- "${note.content}" (em ${data})\n`;
+      });
+    } else {
+      clientHistory += '- Nenhuma anotação registrada.\n';
+    }
 
     clientHistory += '\nTarefas Relacionadas:\n';
-    tasks?.forEach(task => {
-      const status = task.concluida ? 'Concluída' : 'Pendente';
-      clientHistory += `- ${task.title} (Status: ${status}, Vencimento: ${new Date(task.dateTime).toLocaleString('pt-BR')})\n`;
+    if (tasks && tasks.length > 0) {
+      tasks.forEach(task => {
+        const status = task.isCompleted ? 'Concluída' : 'Pendente';
+        const vencimento = task.dateTime ? new Date(task.dateTime).toLocaleString('pt-BR') : 'sem data';
+        clientHistory += `- ${task.title} (Status: ${status}, Vencimento: ${vencimento})\n`;
+      });
+    } else {
+      clientHistory += '- Nenhuma tarefa registrada.\n';
+    }
+
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 2048,
+      messages: [
+        { role: 'system', content: riaSystemPrompt },
+        { role: 'user', content: clientHistory },
+      ],
     });
 
-    const fullPrompt = `${riaSystemPrompt}\n\n${clientHistory}`;
-
-    const geminiStream = await genAI
-        .getGenerativeModel({ model: 'gemini-1.5-flash' })
-        .generateContentStream(fullPrompt);
-
-    const stream = GoogleGenerativeAIStream(geminiStream);
+    const stream = OpenAIStream(response);
     return new StreamingTextResponse(stream);
 
   } catch (error) {
     console.error('[RIA_SUGGESTION_ERROR]', error);
     if (error instanceof z.ZodError) {
-      return new Response(JSON.stringify({ message: 'Dados de entrada inválidos.', issues: error.issues }), { status: 400 });
+      return new Response(
+        JSON.stringify({ message: 'Dados de entrada inválidos.', issues: error.issues }),
+        { status: 400 }
+      );
     }
     return new Response('Erro ao obter sugestão da IA.', { status: 500 });
   }

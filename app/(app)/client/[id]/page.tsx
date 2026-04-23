@@ -14,13 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Mail, Calendar, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
+  ArrowLeft, Mail, Calendar, Clock, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
 } from "lucide-react";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { useToast } from "@/components/ui/use-toast";
 import { useChat } from 'ai/react';
 import ReactMarkdown from 'react-markdown';
 import { format, addHours } from "date-fns";
-import { type Cliente, type Imovel, ClientOverallStatus, type Nota, type Tarefa, type Usuario, type DocumentoCliente, type Tag } from "@/lib/types";
+import { ptBR } from "date-fns/locale";
+import { type Client as Cliente, type Property as Imovel, ClientOverallStatus, type Note as Nota, type Task as Tarefa, type User as Usuario, type ClientDocument as DocumentoCliente, type Tag } from "@/lib/types";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -132,7 +134,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [editClientForm, setEditClientForm] = useState({ fullName: "", email: "", phone: "" });
   const [newPropertyId, setNewPropertyId] = useState("");
   const [transferToUserId, setTransferToUserId] = useState("");
-  const [visitDateTime, setVisitDateTime] = useState("");
+  const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
+  const [visitTime, setVisitTime] = useState("09:00");
   const [activeTab, setActiveTab] = useState("anotacoes");
 
   // --- Funções de Busca e Atualização de Dados ---
@@ -146,17 +149,14 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     if (!clientId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
-      const headers = { 'Authorization': `Bearer ${token}` };
-
       const [clientRes, funnelsRes, reasonsRes, propertiesRes, usersRes, tagsRes, roletasRes] = await Promise.all([
-        fetch(`/api/clients/${clientId}`, { headers }),
-        fetch('/api/funnels', { headers }), // Alterado para buscar funis completos
-        fetch('/api/lost-reasons', { headers }),
-        fetch('/api/properties', { headers }),
-        fetch('/api/users', { headers }),
-        fetch('/api/tags', { headers }),
-        fetch('/api/roletas?status=active', { headers }), // Busca roletas ativas
+        fetch(`/api/clients/${clientId}`),
+        fetch('/api/funnels'),
+        fetch('/api/lost-reasons'),
+        fetch('/api/properties'),
+        fetch('/api/users'),
+        fetch('/api/tags'),
+        fetch('/api/roletas?status=active'),
       ]);
 
       if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
@@ -434,23 +434,42 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleScheduleVisit = () => {
-    if (!visitDateTime || !client?.propertyOfInterest || !client.email) {
-      toast({ variant: "destructive", title: "Erro", description: "Data, imóvel de interesse e email do cliente são necessários." });
+    if (!visitDate || !visitTime || !client?.email) {
+      toast({ variant: "destructive", title: "Erro", description: "Data, hora e email do cliente são necessários." });
       return;
     }
-    const startDate = new Date(visitDateTime);
+    const [hours, minutes] = visitTime.split(':').map(Number);
+    const startDate = new Date(visitDate);
+    startDate.setHours(hours, minutes, 0, 0);
     const endDate = addHours(startDate, 1);
-    const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-    const title = `Visita ao empreendimento ${client.propertyOfInterest.title}`;
-    const location = client.propertyOfInterest.address;
-    const details = `Visita agendada com o cliente ${client.fullName} para conhecer o imóvel ${client.propertyOfInterest.title}. Lembretes adicionados para 30 minutos e 1 dia antes.`;
-    const url = ["https://www.google.com/calendar/render?action=TEMPLATE", `text=${encodeURIComponent(title)}`, `dates=${formatDate(startDate)}/${formatDate(endDate)}`, `details=${encodeURIComponent(details)}`, `location=${encodeURIComponent(location || '')}`, `add=${encodeURIComponent(client.email)}`, "reminders=30", "reminders=1440"].join("&");
-    window.open(url, "_blank");
+    const formatCalDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+    const title = client.propertyOfInterest
+      ? `Visita ao empreendimento ${client.propertyOfInterest.title}`
+      : `Visita com ${client.fullName}`;
+    const location = client.propertyOfInterest?.address || '';
+    const details = [
+      `Visita agendada com o cliente ${client.fullName}.`,
+      client.propertyOfInterest ? `Imóvel: ${client.propertyOfInterest.title}` : '',
+      `\nContacto do cliente:\n📧 ${client.email}`,
+      client.phone ? `📞 ${client.phone}` : '',
+    ].filter(Boolean).join('\n');
+    const params = [
+      "https://www.google.com/calendar/render?action=TEMPLATE",
+      `text=${encodeURIComponent(title)}`,
+      `dates=${formatCalDate(startDate)}/${formatCalDate(endDate)}`,
+      `details=${encodeURIComponent(details)}`,
+      location ? `location=${encodeURIComponent(location)}` : '',
+      `add=${encodeURIComponent(client.email)}`,
+      "crm=4",
+    ].filter(Boolean).join("&");
+    window.open(params, "_blank");
     setIsScheduleVisitOpen(false);
+    setVisitDate(undefined);
+    setVisitTime("09:00");
   };
 
   const handleMarkAsWon = async () => {
-    const success = await handleUpdateClient({ overallStatus: ClientOverallStatus.Ganho, currentFunnelStage: "Ganho", detalhesDeVenda: { sale_value: parseFloat(wonDetails.sale_value), sale_date: new Date(wonDetails.sale_date), } }, { successMessage: "Cliente marcado como 'Ganho'!" });
+    const success = await handleUpdateClient({ overallStatus: ClientOverallStatus.WON, currentFunnelStage: "Ganho", detalhesDeVenda: { sale_value: parseFloat(wonDetails.sale_value), sale_date: new Date(wonDetails.sale_date), } }, { successMessage: "Cliente marcado como 'Ganho'!" });
     if (success) setIsWonDialogOpen(false);
   };
 
@@ -462,7 +481,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     const noteContent = `Cliente marcado como perdido.\nMotivo: ${lostDetails.reason}\nFeedback: ${lostDetails.feedback}`;
 
     // Primeiro, atualiza o status do cliente
-    const updateSuccess = await handleUpdateClient({ overallStatus: ClientOverallStatus.Perdido, currentFunnelStage: "Perdido" }, { successMessage: "Cliente marcado como 'Perdido'." });
+    const updateSuccess = await handleUpdateClient({ overallStatus: ClientOverallStatus.LOST, currentFunnelStage: "Perdido" }, { successMessage: "Cliente marcado como 'Perdido'." });
 
     // Se o status foi atualizado, adiciona a anotação com os detalhes
     if (updateSuccess) {
@@ -604,8 +623,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   // --- Funções Auxiliares ---
 
   const getStatusProps = (status: string): { className?: string; style?: React.CSSProperties } => {
-    if (status === ClientOverallStatus.Ganho) return { className: "bg-emerald-100 text-emerald-800" };
-    if (status === ClientOverallStatus.Perdido) return { className: "bg-red-100 text-red-800" };
+    if (status === ClientOverallStatus.WON) return { className: "bg-emerald-100 text-emerald-800" };
+    if (status === ClientOverallStatus.LOST) return { className: "bg-red-100 text-red-800" };
     const stage = stagesForCurrentFunnel.find(s => s.name === status);
     if (stage?.color) return { style: { color: stage.color, backgroundColor: `${stage.color}1A` } };
     return { className: "bg-gray-100 text-gray-800" };
@@ -642,6 +661,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       </div>
     );
   }
+
+  const rawPhone = client.phone?.replace(/\D/g, '') ?? '';
+  const waPhone = rawPhone.startsWith('55') && rawPhone.length >= 12 ? rawPhone : `55${rawPhone}`;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -709,7 +731,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                     <Separator />
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
-                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.phone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
+                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
                     <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
                       <Bot className="h-4 w-4 mr-2 text-secondary-custom" />
@@ -739,11 +761,25 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                 {/* O DialogContent para os documentos será adicionado no final do JSX */}
               </Dialog>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><Label>Nome Completo</Label><p className="font-medium">{client.fullName}</p></div>
-              <div><Label>Telefone</Label><p className="font-medium">{client.phone || "N/A"}</p></div>
-              <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
-              <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Nome Completo</p>
+                  <p className="font-semibold text-foreground">{client.fullName}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Telefone</p>
+                  <p className="font-semibold text-foreground">{client.phone || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Email</p>
+                  <p className="font-semibold text-foreground break-all">{client.email || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Data de Cadastro</p>
+                  <p className="font-semibold text-foreground">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -943,7 +979,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               )}
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
-              <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/55${client.phone?.replace(/\D/g, '')}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
+              <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
             </CardContent>
           </Card>
@@ -995,7 +1031,59 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       </DialogContent></Dialog>
       <Dialog open={isEditClientDialogOpen} onOpenChange={setIsEditClientDialogOpen}><DialogContent><DialogHeader><DialogTitle>Editar Cliente</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label>Nome Completo</Label><Input value={editClientForm.fullName} onChange={e => setEditClientForm({ ...editClientForm, fullName: e.target.value })} /><Label>Email</Label><Input type="email" value={editClientForm.email} onChange={e => setEditClientForm({ ...editClientForm, email: e.target.value })} /><Label>Telefone</Label><Input value={editClientForm.phone} onChange={e => setEditClientForm({ ...editClientForm, phone: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsEditClientDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditClientSubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={isEditPropertyDialogOpen} onOpenChange={setIsEditPropertyDialogOpen}><DialogContent><DialogHeader><DialogTitle>{client.propertyOfInterest ? 'Editar' : 'Inserir'} Imóvel de Interesse</DialogTitle></DialogHeader><div className="py-4"><Label>Selecione o novo imóvel</Label><Select value={newPropertyId} onValueChange={setNewPropertyId}><SelectTrigger><SelectValue placeholder="Selecione um imóvel..." /></SelectTrigger><SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsEditPropertyDialogOpen(false)}>Cancelar</Button><Button onClick={handleEditPropertySubmit}>Salvar</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={isScheduleVisitOpen} onOpenChange={setIsScheduleVisitOpen}><DialogContent><DialogHeader><DialogTitle>Agendar Visita</DialogTitle></DialogHeader><div className="py-4"><Label>Data e Hora da Visita</Label><Input type="datetime-local" value={visitDateTime} onChange={e => setVisitDateTime(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button><Button onClick={handleScheduleVisit}>Gerar Link</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isScheduleVisitOpen} onOpenChange={(open) => { setIsScheduleVisitOpen(open); if (!open) { setVisitDate(undefined); setVisitTime("09:00"); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agendar Visita</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-5">
+            <div className="space-y-2">
+              <Label>Data da Visita</Label>
+              <CalendarPicker
+                mode="single"
+                selected={visitDate}
+                onSelect={setVisitDate}
+                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                locale={ptBR}
+                className="rounded-md border mx-auto"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="visit-time">Horário da Visita</Label>
+              <div className="relative max-w-[9rem]">
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <Input
+                  type="time"
+                  id="visit-time"
+                  min="07:00"
+                  max="20:00"
+                  value={visitTime}
+                  onChange={(e) => setVisitTime(e.target.value)}
+                  className="pr-9"
+                />
+              </div>
+            </div>
+            {visitDate && (
+              <p className="text-sm text-muted-foreground">
+                Visita agendada para{" "}
+                <span className="font-medium text-foreground">
+                  {format(visitDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </span>{" "}
+                às <span className="font-medium text-foreground">{visitTime}</span>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsScheduleVisitOpen(false)}>Cancelar</Button>
+            <Button onClick={handleScheduleVisit} disabled={!visitDate || !visitTime}>
+              <Calendar className="h-4 w-4 mr-2" />
+              Gerar Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}><DialogContent><DialogHeader><DialogTitle>Transferir Lead</DialogTitle></DialogHeader><div className="py-4"><Label htmlFor="transfer_user">Transferir para:</Label><Select value={transferToUserId} onValueChange={setTransferToUserId}><SelectTrigger><SelectValue placeholder="Selecione um BROKER..." /></SelectTrigger><SelectContent>{users.filter(u => u.id !== client.brokerId).map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.role})</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button><Button onClick={handleTransferLead} disabled={!transferToUserId}>Transferir</Button></DialogFooter></DialogContent></Dialog>
 

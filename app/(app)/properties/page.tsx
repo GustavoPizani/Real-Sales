@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, Filter, Edit, MapPin, DollarSign, Home, Loader2 } from "lucide-react";
-import { type Imovel, PropertyStatus, type TipologiaImovel } from "@/lib/types"; // CORREÇÃO: Importado PropertyStatus
+import { type Property, PropertyStatus, type PropertyType } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
 
 const PropertiesEmptyState = dynamic(() =>
@@ -22,7 +22,7 @@ const PropertiesEmptyState = dynamic(() =>
 export default function PropertiesPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [properties, setProperties] = useState<Imovel[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -62,20 +62,29 @@ export default function PropertiesPage() {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const getStatusBadge = (status: PropertyStatus) => {
-    const variants: Record<PropertyStatus, "default" | "secondary" | "destructive"> = {
-      [PropertyStatus.AVAILABLE]: "default",
-      [PropertyStatus.Reservado]: "secondary",
-      [PropertyStatus.SOLD]: "destructive",
-    };
-    return <Badge variant={variants[status] || "default"}>{status}</Badge>;
+  const STATUS_LABEL: Record<PropertyStatus, string> = {
+    [PropertyStatus.LANCAMENTO]: 'Lançamento',
+    [PropertyStatus.EM_OBRAS]: 'Em Obras',
+    [PropertyStatus.PRONTO]: 'Pronto',
   };
 
-  const getPriceRange = (typologies: TipologiaImovel[] | undefined) => {
+  const STATUS_VARIANT: Record<PropertyStatus, "default" | "secondary" | "destructive"> = {
+    [PropertyStatus.LANCAMENTO]: "default",
+    [PropertyStatus.EM_OBRAS]: "secondary",
+    [PropertyStatus.PRONTO]: "secondary",
+  };
+
+  const getStatusBadge = (status: PropertyStatus) => (
+    <Badge variant={STATUS_VARIANT[status] ?? "default"}>
+      {STATUS_LABEL[status] ?? status}
+    </Badge>
+  );
+
+  const getPriceRange = (typologies: PropertyType[] | undefined) => {
     if (!typologies || typologies.length === 0) {
       return "N/A";
     }
-    const prices = typologies.map(t => t.valor).filter(v => v > 0);
+    const prices = typologies.map(t => t.value).filter(v => v > 0);
     if (prices.length === 0) return "N/A";
     const minPrice = Math.min(...prices);
     return `A partir de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(minPrice)}`;
@@ -127,9 +136,9 @@ export default function PropertiesPage() {
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value={PropertyStatus.AVAILABLE}>Disponível</SelectItem>
-                <SelectItem value={PropertyStatus.Reservado}>Reservado</SelectItem>
-                <SelectItem value={PropertyStatus.SOLD}>Vendido</SelectItem>
+                <SelectItem value={PropertyStatus.LANCAMENTO}>Lançamento</SelectItem>
+                <SelectItem value={PropertyStatus.EM_OBRAS}>Em Obras</SelectItem>
+                <SelectItem value={PropertyStatus.PRONTO}>Pronto</SelectItem>
               </SelectContent>
             </Select>
              <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -161,7 +170,7 @@ export default function PropertiesPage() {
             </TableHeader>
             <TableBody>
               {filteredProperties.map((property) => (
-                <TableRow key={property.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/properties/${property.id}/view`)}>
+                <TableRow key={property.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/properties/${property.id}/view`)}>
                   <TableCell>
                     <img
                       src={property.images?.[0]?.url || '/placeholder.svg'}
@@ -171,8 +180,8 @@ export default function PropertiesPage() {
                   </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{property.title}</p>
-                      <p className="text-sm text-gray-600 flex items-center gap-1">
+                      <p className="font-medium text-foreground">{property.title}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
                         {property.address || 'Endereço não informado'}
                       </p>
@@ -187,8 +196,8 @@ export default function PropertiesPage() {
                   <TableCell>{getStatusBadge(property.status)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <DollarSign className="h-4 w-4 text-gray-400" />
-                      {getPriceRange(property.typelogias)}
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      {getPriceRange(property.propertyTypes)}
                     </div>
                   </TableCell>
                   <TableCell>

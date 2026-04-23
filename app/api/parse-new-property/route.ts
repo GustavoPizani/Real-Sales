@@ -1,43 +1,34 @@
 // app/api/parse-new-property/route.ts
 
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const SYSTEM_PROMPT = `Você é um assistente especialista em extrair dados de blocos de texto sobre imóveis.
+Retorne APENAS um objeto JSON válido, sem markdown, sem explicações, sem \`\`\`.
 
-function buildParsePrompt(textContent: string): string {
-    return `
-      Você é um assistente especialista em extrair dados de blocos de texto sobre imóveis. Sua tarefa é analisar o texto abaixo e convertê-lo em um objeto JSON estruturado.
-
-      **Regras de Extração:**
-      1.  **title**: A primeira linha do texto, contendo o name do empreendimento.
-      2.  **address**: A segunda linha do texto, contendo o endereço.
-      3.  **features**: Encontre a lista de itens sob o título "Características condominiais". Extraia cada item e retorne como um array de strings. Se a seção não existir, retorne um array vazio [].
-      4.  **typologies**: Encontre a seção "Tipologias disponíveis". Para cada tipologia (ex: "Garden", "Apartamento"), extraia seu name e os dados da tabela: valor (apenas números), área (m²), dormitórios, suítes e vagas.
-
-      **Estrutura do JSON de Saída (Obrigatório):**
-      Retorne APENAS o objeto JSON, sem nenhum texto ou formatação adicional. O campo "description" NÃO deve ser incluído.
-      {
-        "title": "string",
-        "address": "string",
-        "features": ["item1", "item2", ...],
-        "typologies": [
-          {
-            "name": "string",
-            "valor": "number | null",
-            "area": "number | null",
-            "dormitorios": "number | null",
-            "suites": "number | null",
-            "vagas": "number | null"
-          }
-        ]
-      }
-
-      **Texto para Análise:**
-      ${textContent}
-    `;
+Estrutura obrigatória:
+{
+  "title": "nome do empreendimento",
+  "address": "endereço completo",
+  "features": ["característica 1", "característica 2"],
+  "typologies": [
+    {
+      "name": "nome da tipologia",
+      "valor": número_ou_null,
+      "area": número_ou_null,
+      "dormitorios": número_ou_null,
+      "suites": número_ou_null,
+      "vagas": número_ou_null
+    }
+  ]
 }
+
+Regras:
+- Retorne SOMENTE o JSON puro, sem nada antes ou depois
+- Campos numéricos ausentes: use null
+- "features": itens listados como características/diferenciais do condomínio
+- "typologies": tipos de unidade (Garden, Apartamento, Studio, etc.)
+- "valor": apenas o número sem R$ ou pontos de milhar`;
 
 export async function POST(req: Request) {
     try {
@@ -46,27 +37,44 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'O texto é obrigatório.' }, { status: 400 });
         }
 
-        const prompt = buildParsePrompt(text);
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
-
-        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
-        if (!jsonMatch || (!jsonMatch[1] && !jsonMatch[2])) {
-            throw new Error("A IA não conseguiu estruturar os dados do texto fornecido.");
+        const apiKey = process.env.GROQ_API_KEY;
+        if (!apiKey) {
+            return NextResponse.json(
+                { error: 'GROQ_API_KEY não configurada. Obtenha uma chave gratuita em console.groq.com' },
+                { status: 500 }
+            );
         }
-        
-        const jsonString = jsonMatch[1] || jsonMatch[2];
-        const parsedData = JSON.parse(jsonString);
 
-        // Garante que o campo description não seja enviado, mesmo que a IA o adicione por engano
-        if (parsedData.description) {
-            delete parsedData.description;
-        }
+        const groq = new Groq({ apiKey });
+
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: text },
+            ],
+            temperature: 0.1,
+            max_tokens: 2048,
+            response_format: { type: 'json_object' },
+        });
+
+        const responseText = completion.choices[0]?.message?.content ?? '';
+        const parsedData = JSON.parse(responseText);
+        delete parsedData.description;
 
         return NextResponse.json(parsedData);
 
     } catch (error: any) {
-        console.error('ERRO ao analisar o texto do imóvel com a IA:', error);
-        return NextResponse.json({ error: "A API de IA não conseguiu processar o texto.", details: error.message }, { status: 500 });
+        console.error('ERRO ao analisar o texto do imóvel:', error);
+        if (error instanceof SyntaxError) {
+            return NextResponse.json(
+                { error: 'A IA retornou um formato inválido. Tente novamente.' },
+                { status: 500 }
+            );
+        }
+        return NextResponse.json(
+            { error: 'Erro ao processar o texto.', details: error.message },
+            { status: 500 }
+        );
     }
 }

@@ -27,10 +27,9 @@ enum FunnelAccessLevel {
 }
 
 enum PropertyStatus {
-  AVAILABLE
-  RESERVED
-  SOLD
-  LAUNCH
+  LANCAMENTO
+  EM_OBRAS
+  PRONTO
 }
 
 enum ClientOverallStatus {
@@ -116,6 +115,8 @@ model User {
   // Lead Pool (O que causou o erro anterior)
   qualifiedLeadsForMe Client[]       @relation("QualifiedFor")
   allowedLeadPools    LeadPoolUser[]
+
+  facebookFormMappings FacebookFormMapping[] @relation("FbDefaultBroker")
 
   @@map("users")
 }
@@ -234,10 +235,11 @@ model FieldMapping {
 model Property {
   id                String          @id @default(uuid())
   title             String
+  type              String?
   features          String[]        @default([])
   address           String?
   price             Float?
-  status            PropertyStatus  @default(AVAILABLE)
+  status            PropertyStatus  @default(LANCAMENTO)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   interestedClients Client[]
@@ -249,15 +251,22 @@ model Property {
   updaterId String?
   updater   User?   @relation("UpdatedProperties", fields: [updaterId], references: [id])
 
+  facebookFormMappings FacebookFormMapping[]
+
   @@map("properties")
 }
 
 model PropertyType {
-  id         String   @id @default(uuid())
-  name       String
-  value      Float
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  name         String
+  value        Float    @default(0)
+  area         Float?
+  dormitorios  Int?
+  suites       Int?
+  vagas        Int?
+  floorPlanUrl String?
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_types")
 }
@@ -281,6 +290,8 @@ model Funnel {
   roulettes      LeadRoulette[]
   userAccess     UserFunnelAccess[]
 
+  facebookFormMappings FacebookFormMapping[]
+
   @@map("funnels")
 }
 
@@ -292,6 +303,8 @@ model FunnelStage {
   funnelId String
   funnel   Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   clients  Client[]
+
+  facebookFormMappings FacebookFormMapping[]
 
   @@unique([funnelId, name])
   @@map("funnel_stages")
@@ -463,4 +476,50 @@ model ClientDocument {
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("client_documents")
+}
+
+// =======================================================================
+// FACEBOOK LEAD ADS INTEGRATION
+// =======================================================================
+
+model FacebookConnection {
+  id              String                @id @default(uuid())
+  accountId       String
+  pageId          String
+  pageName        String
+  pageAccessToken String
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  formMappings    FacebookFormMapping[]
+
+  @@unique([accountId, pageId])
+  @@map("facebook_connections")
+}
+
+model FacebookFormMapping {
+  id              String             @id @default(uuid())
+  connectionId    String
+  connection      FacebookConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  formId          String             @unique
+  formName        String
+  pageId          String
+  propertyId      String?
+  property        Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  roletaId        String?
+  funnelId        String?
+  funnel          Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
+  funnelStageId   String?
+  funnelStage     FunnelStage?       @relation(fields: [funnelStageId], references: [id], onDelete: SetNull)
+  agencia         String?
+  praca           String?
+  defaultBrokerId String?
+  defaultBroker   User?              @relation("FbDefaultBroker", fields: [defaultBrokerId], references: [id], onDelete: SetNull)
+  isActive        Boolean            @default(true)
+  lastSyncedAt    DateTime?
+  leadCount       Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@map("facebook_form_mappings")
 }

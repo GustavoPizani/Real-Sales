@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getUserFromToken } from '@/lib/auth';
+import { ClientOverallStatus } from '@prisma/client';
 import { subDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const user = await getCurrentUser();
+    const user = await getUserFromToken();
 
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -15,18 +16,15 @@ export async function GET(): Promise<NextResponse> {
 
     const sevenDaysAgo = subDays(new Date(), 7);
 
-    // Encontra clientes atribuídos ao usuário logado (BROKER)
-    // cuja última atualização foi há mais de 7 dias.
     const overdueClients = await prisma.client.findMany({
       where: {
-        proprietarioId: user.id, // Filtra pelo usuário logado
+        brokerId: user.id,
         updatedAt: {
-          lt: sevenDaysAgo, // 'lt' significa "menor que" (less than)
+          lt: sevenDaysAgo,
         },
-        // Opcional: você pode querer excluir clientes com status finalizados
         overallStatus: {
-          notIn: ['Perdido', 'Ganho']
-        }
+          notIn: [ClientOverallStatus.WON, ClientOverallStatus.LOST],
+        },
       },
       select: {
         id: true,

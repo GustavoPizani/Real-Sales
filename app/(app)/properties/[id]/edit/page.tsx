@@ -14,12 +14,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ArrowLeft, ClipboardPaste, Loader2, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { type TipologiaImovel, type ImagemPlanta, PropertyStatus } from "@prisma/client";
+import { PropertyStatus } from "@prisma/client";
 
-type TypologyWithPlanta = Partial<TipologiaImovel> & {
+type TypologyWithPlanta = {
+  id?: string;
+  name?: string;
+  valor?: number;
+  area?: number;
+  dormitorios?: number;
+  suites?: number;
+  vagas?: number;
+  floorPlanUrl?: string;
   plantaFile?: File;
   plantaPreview?: string;
-  plantas?: ImagemPlanta[];
 };
 
 export default function EditPropertyPage() {
@@ -34,7 +41,7 @@ export default function EditPropertyPage() {
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
   const [type, setType] = useState("");
-  const [status, setStatus] = useState<PropertyStatus>(PropertyStatus.AVAILABLE);
+  const [status, setStatus] = useState<PropertyStatus>(PropertyStatus.LANCAMENTO);
   const [images, setImages] = useState<{ url: string }[]>([]);
   const [typologies, setTypologies] = useState<TypologyWithPlanta[]>([]);
   const [features, setFeatures] = useState<string[]>([]); // ✅ Adicionado
@@ -58,7 +65,7 @@ export default function EditPropertyPage() {
       setAddress(data.address || "");
       setType(data.type || "Empreendimento");
       setStatus(data.status);
-      setTypologies(data.typologies || []);
+      setTypologies((data.typologies || []).map((t: any) => ({ ...t, valor: t.valor ?? t.value ?? 0, floorPlanUrl: t.floorPlanUrl ?? null })));
       setImages(data.images || []);
       setFeatures(data.features || []); // ✅ Adicionado
     } catch (error: any) {
@@ -132,7 +139,6 @@ export default function EditPropertyPage() {
         suites: parseInt(t.suites, 10) || 0,
         vagas: parseInt(t.vagas, 10) || 0,
         id: `temp-${Date.now()}-${Math.random()}`,
-        plantas: [],
       };
     }).filter(Boolean);
     setTypologies(newTypologies as TypologyWithPlanta[]);
@@ -148,12 +154,10 @@ export default function EditPropertyPage() {
           if (typology.plantaFile) {
             const formData = new FormData();
             formData.append("file", typology.plantaFile);
-            const uploadResponse = await fetch("/api/upload", { method: "POST", body: formData });
+            const uploadResponse = await fetch("/api/Upload", { method: "POST", body: formData });
             if (!uploadResponse.ok) throw new Error(`Falha no upload da planta para ${typology.name}.`);
             const { url } = await uploadResponse.json();
-            const newPlanta = { url };
-            const existingPlantas = typology.plantas ? typology.plantas.map(p => ({ url: p.url })) : [];
-            return { ...typology, plantas: [...existingPlantas, newPlanta] };
+            return { ...typology, floorPlanUrl: url };
           }
           return typology;
         })
@@ -164,8 +168,8 @@ export default function EditPropertyPage() {
         address,
         type,
         status,
-        features, // ✅ Adicionado
-        typologies: typologiesWithPlantaUrls.map(({ id, imovelId, plantaFile, plantaPreview, ...rest }) => rest),
+        features,
+        typologies: typologiesWithPlantaUrls.map(({ plantaFile, plantaPreview, ...rest }) => rest),
         imageUrls: images.map(img => img.url),
       };
 
@@ -223,9 +227,9 @@ export default function EditPropertyPage() {
     }
   };
 
-  const addTypology = () => setTypologies(prev => [...prev, { id: `temp-${Date.now()}`, name: '', valor: 0, dormitorios: 0, suites: 0, vagas: 0, area: 0, plantas: [] }]);
+  const addTypology = () => setTypologies(prev => [...prev, { id: `temp-${Date.now()}`, name: '', valor: 0, dormitorios: 0, suites: 0, vagas: 0, area: 0, floorPlanUrl: undefined }]);
   const removeTypology = (id: string) => setTypologies(prev => prev.filter(t => t.id !== id));
-  const updateTypology = (id: string, field: keyof TipologiaImovel, value: any) => {
+  const updateTypology = (id: string, field: keyof TypologyWithPlanta, value: any) => {
     setTypologies(prev =>
       prev.map(t =>
         t.id === id ? { ...t, [field]: value } : t
@@ -342,7 +346,7 @@ export default function EditPropertyPage() {
                     <Input id={`planta-${index}`} type="file" accept="image/*" onChange={(e) => handlePlantaImageChange(index, e)} />
                     <div className="flex gap-2 mt-2">
                       {typology.plantaPreview && (<img src={typology.plantaPreview} alt={`Nova planta para ${typology.name}`} className="h-24 w-auto rounded-md border" />)}
-                      {typology.plantas?.map((planta, pIndex) => (<div key={pIndex} className="relative"><img src={planta.url} alt={`Planta ${pIndex + 1} para ${typology.name}`} className="h-24 w-auto rounded-md border" /></div>))}
+                      {!typology.plantaPreview && typology.floorPlanUrl && (<img src={typology.floorPlanUrl} alt={`Planta de ${typology.name}`} className="h-24 w-auto rounded-md border" />)}
                     </div>
                   </div>
                 </Card>
@@ -354,7 +358,7 @@ export default function EditPropertyPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader><CardTitle>Status</CardTitle></CardHeader>
-            <CardContent><Select value={status} onValueChange={(value: PropertyStatus) => setStatus(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value={PropertyStatus.AVAILABLE}>Disponível</SelectItem><SelectItem value={PropertyStatus.Reservado}>Reservado</SelectItem><SelectItem value={PropertyStatus.SOLD}>Vendido</SelectItem></SelectContent></Select></CardContent>
+            <CardContent><Select value={status} onValueChange={(value: PropertyStatus) => setStatus(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value={PropertyStatus.LANCAMENTO}>Lançamento</SelectItem><SelectItem value={PropertyStatus.EM_OBRAS}>Em Obras</SelectItem><SelectItem value={PropertyStatus.PRONTO}>Pronto</SelectItem></SelectContent></Select></CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Imagens</CardTitle></CardHeader>

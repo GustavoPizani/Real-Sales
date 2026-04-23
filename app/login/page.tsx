@@ -118,7 +118,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="pizanicorretor@gmail.com"
+                  placeholder="seu@email.com"
                   className="h-12 bg-white/[0.03] border-white/10 text-white placeholder:text-slate-600 focus:border-blue-500 focus:ring-blue-500/20 transition-all outline-none"
                   required
                 />

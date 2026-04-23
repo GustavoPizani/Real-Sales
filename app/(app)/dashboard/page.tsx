@@ -92,19 +92,12 @@ export default function DashboardPage() {
     if (!user) return;
     setIsDataLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        toast({ variant: "destructive", title: "Erro de Autenticação", description: "Token não encontrado. Por favor, faça login novamente." });
-        return;
-      }
-      const headers = { 'Authorization': `Bearer ${token}` };
-
       const [statsRes, overdueClientsRes, tasksRes, allClientsRes, brokersRes] = await Promise.all([
-        fetch(`/api/dashboard/stats`, { headers }),
-        fetch("/api/dashboard/overdue-clients", { headers }),
-        fetch("/api/tasks", { headers }),
-        fetch("/api/clients", { headers }),
-        fetch("/api/users", { headers }),
+        fetch(`/api/dashboard/stats`),
+        fetch("/api/dashboard/overdue-clients"),
+        fetch("/api/tasks"),
+        fetch("/api/clients"),
+        fetch("/api/users"),
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -150,10 +143,9 @@ export default function DashboardPage() {
     const brokerId = isManager ? clientForm.selectedbrokerId : user?.id;
 
     try {
-      const token = localStorage.getItem('authToken');
       const response = await fetch("/api/clients", {
         method: "POST",
-        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           fullName: clientForm.fullName,
           email: clientForm.email,
@@ -178,10 +170,9 @@ export default function DashboardPage() {
   const handlePropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('authToken');
       const response = await fetch("/api/properties", {
         method: "POST",
-        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...propertyForm, price: parseFloat(propertyForm.price) }),
       });
       if (!response.ok) throw new Error("Falha ao criar imóvel.");
@@ -198,10 +189,9 @@ export default function DashboardPage() {
     e.preventDefault()
 
     try {
-      const token = localStorage.getItem('authToken');
       const response = await fetch("/api/tasks", {
         method: "POST",
-        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           title: taskForm.title,
           description: taskForm.description,

@@ -15,6 +15,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.24",
     "@ai-sdk/react": "^2.0.31",
+    "@anthropic-ai/sdk": "^0.90.0",
     "@dnd-kit/core": "latest",
     "@dnd-kit/modifiers": "^7.0.0",
     "@dnd-kit/sortable": "latest",
@@ -60,6 +61,7 @@
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
+    "groq-sdk": "^1.1.2",
     "jsonwebtoken": "latest",
     "jszip": "^3.10.1",
     "lucide-react": "^0.454.0",

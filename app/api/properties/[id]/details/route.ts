@@ -20,9 +20,7 @@ export async function GET(
         images: {
           select: { id: true, url: true },
         },
-        propertyTypes: {
-          include: { floorPlans: true }, // Includes floor plan images
-        },
+        propertyTypes: true,
         creator: { select: { name: true } },
         updater: { select: { name: true } },
       },
@@ -44,11 +42,10 @@ export async function GET(
         id: t.id,
         name: t.name,
         value: t.value,
-        areaSqMeters: t.areaSqMeters,
-        bedrooms: t.bedrooms,
+        area: t.area,
+        dormitorios: t.dormitorios,
         suites: t.suites,
-        parkingSpaces: t.parkingSpaces,
-        floorPlans: t.floorPlans, // Ensures floor plans are included
+        vagas: t.vagas,
       })),
       creatorName: property.creator?.name || 'N/A',
       updaterName: property.updater?.name || 'N/A',

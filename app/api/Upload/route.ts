@@ -1,14 +1,14 @@
-// app/api/upload/route.ts (caminho corrigido)
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserFromToken } from '@/lib/auth'; // ✅ Importa a função de autenticação
-import { put } from '@vercel/blob'; // ✅ Importa a função 'put' do Vercel Blob
-import { cookies } from 'next/headers'; // ✅ Importa a função de cookies
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getUserFromToken } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
+
+const BUCKET_NAME = 'property-images';
 
 export async function POST(request: NextRequest) {
   try {
-    const token = cookies().get('authToken')?.value; // ✅ Busca o token dos cookies
-    const user = await getUserFromToken(token); // ✅ Valida o token
+    const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
@@ -20,17 +20,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
     }
 
-    // --- UPLOAD REAL PARA O VERCEL BLOB ---
-    const blob = await put(file.name, file, {
-      access: 'public', // Torna o arquivo publicamente acessível através do URL
-      addRandomSuffix: true, // Adiciona um sufixo aleatório para evitar sobreposições de name
+    const supabase = createAdminClient();
+
+    const { error: bucketError } = await supabase.storage.createBucket(BUCKET_NAME, {
+      public: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      fileSizeLimit: 10 * 1024 * 1024,
     });
 
-    // A função 'put' retorna um objeto com várias informações, incluindo o URL público do arquivo.
-    return NextResponse.json({ success: true, url: blob.url });
+    if (bucketError && !bucketError.message.includes('already exists')) {
+      console.warn('[UPLOAD] Aviso ao criar bucket:', bucketError.message);
+    }
 
-  } catch (error) {
-    console.error('Erro no upload para o Vercel Blob:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor durante o upload.' }, { status: 500 });
+    const fileExt = file.name.split('.').pop() ?? 'jpg';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('[UPLOAD] Erro ao fazer upload:', uploadError);
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    return NextResponse.json({ url: publicUrl });
+  } catch (error: any) {
+    console.error('[UPLOAD] Erro inesperado:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
