@@ -119,6 +119,9 @@ export default function IntegrationsPage() {
   const [copiedToken, setCopiedToken] = useState(false)
   const [formQuestions, setFormQuestions] = useState<FormQuestion[]>([])
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({})
+  const [isTokenDialogOpen, setIsTokenDialogOpen] = useState(false)
+  const [manualToken, setManualToken] = useState("")
+  const [savingToken, setSavingToken] = useState(false)
 
   const [formData, setFormData] = useState(EMPTY_FORM)
 
@@ -182,6 +185,28 @@ export default function IntegrationsPage() {
     navigator.clipboard.writeText(text)
     if (type === "url") { setCopiedUrl(true); setTimeout(() => setCopiedUrl(false), 2000) }
     else { setCopiedToken(true); setTimeout(() => setCopiedToken(false), 2000) }
+  }
+
+  const handleSaveManualToken = async () => {
+    if (!manualToken.trim()) return
+    setSavingToken(true)
+    try {
+      const res = await fetch("/api/facebook/update-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userAccessToken: manualToken.trim() }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        toast({ title: "Token salvo!", description: `${d.updated} conexão(ões) atualizadas. Agora selecione a página e o formulário.` })
+        setIsTokenDialogOpen(false)
+        setManualToken("")
+      } else {
+        toast({ variant: "destructive", title: "Erro ao salvar token", description: d.error })
+      }
+    } finally {
+      setSavingToken(false)
+    }
   }
 
   const handleConnectFacebook = () => {
@@ -319,17 +344,24 @@ export default function IntegrationsPage() {
                 <CardDescription>Capture leads diretamente dos seus formulários do Facebook</CardDescription>
               </div>
             </div>
-            <Button
-              onClick={handleConnectFacebook}
-              disabled={connectingFb}
-              variant={pages.length > 0 ? "outline" : "default"}
-              className={pages.length === 0 ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
-            >
-              {connectingFb
-                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                : <Facebook className="h-4 w-4 mr-2" />}
-              {pages.length > 0 ? "Reconectar" : "Conectar com Facebook"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {pages.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setIsTokenDialogOpen(true)}>
+                  Atualizar Token
+                </Button>
+              )}
+              <Button
+                onClick={handleConnectFacebook}
+                disabled={connectingFb}
+                variant={pages.length > 0 ? "outline" : "default"}
+                className={pages.length === 0 ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
+              >
+                {connectingFb
+                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  : <Facebook className="h-4 w-4 mr-2" />}
+                {pages.length > 0 ? "Reconectar" : "Conectar com Facebook"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         {pages.length > 0 && (
@@ -455,6 +487,37 @@ export default function IntegrationsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Manual Token Dialog */}
+      <Dialog open={isTokenDialogOpen} onOpenChange={setIsTokenDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Atualizar Token do Facebook</DialogTitle>
+            <DialogDescription>
+              Cole o token gerado no Graph API Explorer do Facebook Developer. Ele será salvo em todas as suas conexões.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>Token de Acesso</Label>
+            <textarea
+              className="w-full h-28 rounded-md border border-input bg-muted/30 px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="Cole o token aqui (começa com EAA...)"
+              value={manualToken}
+              onChange={(e) => setManualToken(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Gere em: developers.facebook.com/tools/explorer → selecione "Real Sales" → adicione permissão <code className="bg-muted px-1 rounded">leads_retrieval</code> → Generate Access Token
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTokenDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveManualToken} disabled={savingToken || !manualToken.trim()}>
+              {savingToken && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar Token
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New Mapping Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
