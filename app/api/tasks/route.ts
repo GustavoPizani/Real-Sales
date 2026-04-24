@@ -3,31 +3,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const token = cookies().get('authToken')?.value;
     const user = await getUserFromToken(token);
-    if (!user) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const tasks = await prisma.task.findMany({
-      where: { usuarioId: user.id },
+      where: { userId: user.id },
       include: {
-        cliente: {
-          select: {
-            id: true,
-            fullName: true,
-          },
-        },
+        client: { select: { id: true, fullName: true } },
       },
-      orderBy: {
-        dateTime: 'asc',
-      },
+      orderBy: { dateTime: 'asc' },
     });
 
     return NextResponse.json(tasks);
@@ -41,36 +31,31 @@ export async function POST(request: NextRequest) {
   try {
     const token = cookies().get('authToken')?.value;
     const user = await getUserFromToken(token);
-    if (!user) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const body = await request.json();
+
+    // Aceita tanto os nomes novos quanto os antigos para compatibilidade
+    const title: string = body.title;
+    const description: string | undefined = body.description;
+    const dateTime: string = body.dateTime ?? body.due_date;
+    const clientId: string = body.clientId ?? body.clienteId ?? body.client_id;
+
+    if (!title || !dateTime || !clientId) {
+      return NextResponse.json({ error: 'Título, data e cliente são obrigatórios.' }, { status: 400 });
     }
 
-    const { title, description, due_date, client_id } = await request.json();
-
-    if (!title || !due_date || !client_id) {
-      return NextResponse.json(
-        { error: 'Título, data e cliente são obrigatórios.' },
-        { status: 400 }
-      );
-    }
-
-    // Usar uma transação para garantir que ambas as operações (criar tarefa e atualizar cliente)
-    // sejam concluídas com sucesso ou revertidas juntas.
-    const [newTask] = await prisma.$transaction([
-      prisma.task.create({
-        data: {
-          title: title,
-          descricao: description,
-          dateTime: new Date(due_date),
-          clienteId: client_id,
-          usuarioId: user.id,
-        },
-      }),
-      prisma.client.update({
-        where: { id: client_id },
-        data: { updatedAt: new Date() },
-      }),
-    ]);
+    const newTask = await prisma.task.create({
+      data: {
+        title,
+        description: description ?? null,
+        dateTime: new Date(dateTime),
+        clientId,
+        userId: user.id,
+        type: body.type ?? 'OTHER',
+        priority: body.priority ?? 'MEDIUM',
+      },
+    });
 
     return NextResponse.json(newTask, { status: 201 });
   } catch (error) {

@@ -2,6 +2,7 @@
 import { AppLayout } from "@/components/app-layout";
 import { MobileHeaderProvider } from "@/contexts/mobile-header-context";
 import { Toaster } from "@/components/ui/toaster";
+import { PerfMonitor } from "@/components/perf-monitor";
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +10,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       <AppLayout>
         {children}
         <Toaster />
+        <PerfMonitor />
       </AppLayout>
     </MobileHeaderProvider>
   );
-} 
+}

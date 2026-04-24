@@ -603,7 +603,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dateTime: new Date(taskForm.dateTime), clienteId: clientId }),
+        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dateTime: new Date(taskForm.dateTime), clientId: clientId }),
       });
       if (!response.ok) throw new Error("Falha ao criar tarefa.");
       toast({ title: "Sucesso!", description: "Tarefa criada." });

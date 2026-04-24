@@ -379,14 +379,15 @@ model AttendanceRecord {
 model Task {
   id          String   @id @default(uuid())
   title       String
+  description String?
   dateTime    DateTime
   isCompleted Boolean  @default(false)
   clientId    String
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        TaskType
-  priority    Priority
+  type        TaskType @default(OTHER)
+  priority    Priority @default(MEDIUM)
 
   @@map("tasks")
 }
