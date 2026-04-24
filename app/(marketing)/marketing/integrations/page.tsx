@@ -529,7 +529,7 @@ export default function IntegrationsPage() {
 
       {/* New Mapping Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Novo Mapeamento de Formulário</DialogTitle>
             <DialogDescription>Vincule um formulário do Facebook às regras de roteamento do CRM.</DialogDescription>
@@ -580,7 +580,7 @@ export default function IntegrationsPage() {
                 >
                   <Command>
                     <CommandInput placeholder="Buscar formulário..." className="h-9" />
-                    <CommandList className="max-h-[220px]">
+                    <CommandList className="max-h-[220px] overflow-y-auto">
                       <CommandEmpty>Nenhum formulário encontrado.</CommandEmpty>
                       <CommandGroup>
                         {forms.map((f) => (
@@ -616,15 +616,15 @@ export default function IntegrationsPage() {
                 ) : (
                   <div className="space-y-2">
                     {formQuestions.map((q) => (
-                      <div key={q.key} className="flex items-center gap-2">
-                        <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={q.label}>
+                      <div key={q.key} className="flex items-start gap-3">
+                        <span className="text-xs text-foreground flex-1 min-w-0 pt-1.5 leading-snug">
                           {q.label}
                         </span>
                         <Select
                           value={fieldMappings[q.key] ?? "observations"}
                           onValueChange={(v) => setFieldMappings((prev) => ({ ...prev, [q.key]: v }))}
                         >
-                          <SelectTrigger className="w-40 h-7 text-xs">
+                          <SelectTrigger className="w-44 h-7 text-xs shrink-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
