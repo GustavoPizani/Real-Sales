@@ -171,7 +171,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
       setClient(clientData.client);
       setUsers(usersData.users || []);
-      setFunnels(funnelsData.funnels || []); // Armazena a lista de funis
+      setFunnels(Array.isArray(funnelsData) ? funnelsData : funnelsData.funnels ?? []);
       setLostReasons(reasonsData.reasons || []);
       setActiveRoletas(roletasData || []);
       setProperties(propertiesData || []);

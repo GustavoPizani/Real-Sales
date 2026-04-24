@@ -207,6 +207,48 @@
   }
 }
 
+/* ── Scrollbars globais – sutis, track = bg da página, thumb = tom mais claro ── */
+:root {
+  --sb-track: hsl(0 0% 96%);
+  --sb-thumb: hsl(0 0% 80%);
+  --sb-size: 6px;
+}
+
+.dark {
+  --sb-track: hsl(215 50% 7%);
+  --sb-thumb: hsl(215 28% 20%);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--sb-size);
+  height: var(--sb-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--sb-track);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(215 28% 30%);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: var(--sb-thumb) var(--sb-track);
+  }
+}
+
 /* Base (Mobile-First) Styles */
 .content-padding {
     padding-left: 1rem;
