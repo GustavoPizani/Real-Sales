@@ -13,7 +13,9 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ onMenuClick, actionButton }: MobileHeaderProps) {
   return (
-    <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-primary-custom h-16 flex items-center justify-between px-4">
+    <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-16 flex items-center justify-between px-4 sidebar-custom border-b border-white/10"
+      style={{ background: 'linear-gradient(135deg, var(--primary-custom) 0%, var(--tertiary-custom) 55%, var(--primary-custom) 100%)' }}
+    >
       <Link href="/dashboard" className="flex items-center gap-2">
         <div className="bg-secondary-custom rounded-lg w-8 h-8 flex items-center justify-center">
           <span className="text-md font-bold text-white tracking-widest">RS</span>
