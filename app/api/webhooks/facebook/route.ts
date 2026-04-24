@@ -160,6 +160,8 @@ async function ingestLead(lead: FbLead, mapping: any) {
       phone: phone ?? undefined,
       facebookLeadId: lead.id,
       formResponses,
+      campaignSource: `Facebook Lead Ads - ${mapping.formName}`,
+      createdAt: lead.created_time ? new Date(lead.created_time) : undefined,
       brokerId,
       createdById: brokerId,
       funnelId: mapping.funnelId!,

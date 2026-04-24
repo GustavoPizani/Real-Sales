@@ -81,6 +81,8 @@ const AUTO_DETECT: Record<string, string> = {
   EMAIL: "email",
   PHONE: "phone",
   PHONE_NUMBER: "phone",
+  WHATSAPP_NUMBER: "phone",
+  CUSTOM: "observations",
 }
 
 const EMPTY_FORM = {

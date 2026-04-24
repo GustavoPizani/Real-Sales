@@ -62,7 +62,33 @@ async function processLead(
   })
   if (existing) return 'skipped'
 
-  const { fullName, email, phone } = extractLeadFields(lead)
+  // Build field values map
+  const fieldValues: Record<string, string> = {}
+  for (const f of lead.field_data ?? []) {
+    fieldValues[f.name] = f.values[0] ?? ''
+  }
+
+  // Apply custom field mappings
+  const customMappings: Record<string, string> = (mapping.fieldMappings as any) ?? {}
+  let fullName = ''
+  let email: string | null = null
+  let phone: string | null = null
+
+  for (const [fbKey, value] of Object.entries(fieldValues)) {
+    const target = customMappings[fbKey]
+    if (target === 'fullName') fullName = value
+    else if (target === 'email') email = value
+    else if (target === 'phone') phone = value
+  }
+
+  if (!fullName) {
+    const auto = extractLeadFields(lead)
+    fullName = auto.fullName
+    if (!email) email = auto.email
+    if (!phone) phone = auto.phone
+  }
+
+  const formResponses: Record<string, string> = { ...fieldValues }
 
   // Check email dedup
   if (email) {
@@ -76,6 +102,9 @@ async function processLead(
       email: email ?? undefined,
       phone: phone ?? undefined,
       facebookLeadId: lead.id,
+      formResponses,
+      campaignSource: `Facebook Lead Ads - ${mapping.formName}`,
+      createdAt: lead.created_time ? new Date(lead.created_time) : undefined,
       brokerId,
       createdById: brokerId,
       funnelId: mapping.funnelId,

@@ -58,6 +58,6 @@ export function extractLeadFields(lead: FbLead) {
     fullName:
       get('full_name') ?? get('name') ?? get('first_name') ?? 'Lead Facebook',
     email: get('email'),
-    phone: get('phone_number') ?? get('phone'),
+    phone: get('phone_number') ?? get('phone') ?? get('whatsapp_number'),
   }
 }
