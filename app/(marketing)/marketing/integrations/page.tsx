@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Facebook, Plus, Trash2, RefreshCw, CheckCircle2, Zap, Copy, Check } from "lucide-react"
+import { Loader2, Facebook, Plus, Trash2, RefreshCw, CheckCircle2, Zap, Copy, Check, ChevronsUpDown } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface Page {
   id: string
@@ -122,6 +124,7 @@ export default function IntegrationsPage() {
   const [isTokenDialogOpen, setIsTokenDialogOpen] = useState(false)
   const [manualToken, setManualToken] = useState("")
   const [savingToken, setSavingToken] = useState(false)
+  const [formComboOpen, setFormComboOpen] = useState(false)
 
   const [formData, setFormData] = useState(EMPTY_FORM)
 
@@ -234,6 +237,9 @@ export default function IntegrationsPage() {
     if (!page) return
     setFormData((prev) => ({ ...prev, connectionId, pageId: page.pageId, formId: "", formName: "" }))
     setForms([])
+    setFormComboOpen(false)
+    setFormQuestions([])
+    setFieldMappings({})
     setLoadingForms(true)
     try {
       const res = await fetch(`/api/facebook/forms?pageId=${page.pageId}`)
@@ -432,7 +438,7 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Button variant="outline" size="sm" disabled={syncingId === m.id} onClick={() => handleSync(m.id)}>
+                    <Button variant="outline" size="sm" disabled={syncingId === m.id} onClick={() => handleSync(m.id)} title="Sincronizar leads históricos do Facebook">
                       {syncingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id)}>
@@ -542,20 +548,60 @@ export default function IntegrationsPage() {
 
             <div className="space-y-1.5">
               <Label>Formulário <span className="text-destructive">*</span></Label>
-              <Select value={formData.formId} onValueChange={handleFormSelect} disabled={!formData.connectionId || loadingForms}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingForms ? "Carregando..." : !formData.connectionId ? "Selecione uma página primeiro" : "Selecione um formulário"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {forms.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.name}{f.status !== "ACTIVE" && ` (${f.status})`}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={formComboOpen} onOpenChange={setFormComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={formComboOpen}
+                    className="w-full justify-between font-normal h-10 px-3"
+                    disabled={!formData.connectionId || loadingForms}
+                  >
+                    <span className="truncate text-left">
+                      {loadingForms
+                        ? "Carregando..."
+                        : !formData.connectionId
+                        ? "Selecione uma página primeiro"
+                        : formData.formId
+                        ? (forms.find((f) => f.id === formData.formId)?.name ?? "Selecione um formulário")
+                        : "Selecione um formulário"}
+                    </span>
+                    {loadingForms
+                      ? <Loader2 className="ml-2 h-4 w-4 animate-spin shrink-0" />
+                      : <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="p-0"
+                  style={{ width: "var(--radix-popover-trigger-width)" }}
+                  align="start"
+                >
+                  <Command>
+                    <CommandInput placeholder="Buscar formulário..." className="h-9" />
+                    <CommandList className="max-h-[220px]">
+                      <CommandEmpty>Nenhum formulário encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {forms.map((f) => (
+                          <CommandItem
+                            key={f.id}
+                            value={f.name}
+                            onSelect={() => {
+                              handleFormSelect(f.id)
+                              setFormComboOpen(false)
+                            }}
+                          >
+                            {f.name}{f.status !== "ACTIVE" && ` (${f.status})`}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Field Mapping */}
-            {(loadingFields || formQuestions.length > 0) && (
+            {formData.formId && (loadingFields || formQuestions.length > 0) && (
               <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/20">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Mapeamento de Campos
