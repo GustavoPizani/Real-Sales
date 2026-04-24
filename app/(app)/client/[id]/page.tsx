@@ -715,7 +715,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   className={[
                     'relative flex flex-1 min-w-[90px] h-11 items-center justify-center px-5 text-xs font-medium transition-colors select-none',
                     isActive
-                      ? 'bg-cyan-500 text-white'
+                      ? 'bg-[#023863] text-white'
                       : isPast
                       ? 'bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer'
                       : 'bg-muted/40 text-muted-foreground/50 hover:bg-muted/60 cursor-pointer',
@@ -730,7 +730,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       )}
 
       {/* Layout Principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
 
         {/* Coluna Esquerda (Principal) */}
         <div className="lg:col-span-2 space-y-6">
@@ -742,7 +742,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="actions">Ações Rápidas</TabsTrigger>
               </TabsList>
-              <TabsContent value="info" className="mt-4">
+              <TabsContent value="info" className="mt-4 space-y-3">
                 <Card>
                   <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><Label>Nome Completo</Label><p className="font-medium">{client.fullName}</p></div>
@@ -751,6 +751,26 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                     <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
                   </CardContent>
                 </Card>
+                {stagesForCurrentFunnel.length > 0 && client.overallStatus === ClientOverallStatus.ACTIVE && (
+                  <Card>
+                    <CardContent className="pt-4 pb-4">
+                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Etapa do Funil</Label>
+                      <Select
+                        value={client.funnelStageId ?? ""}
+                        onValueChange={(v) => handleUpdateClient({ funnelStageId: v }, { successMessage: "Etapa do funil alterada." })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione uma etapa..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stagesForCurrentFunnel.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
               <TabsContent value="actions" className="mt-4">
                 <Card>

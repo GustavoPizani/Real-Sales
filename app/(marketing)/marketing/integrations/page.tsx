@@ -333,7 +333,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Integrações</h1>
         <p className="text-muted-foreground">Conecte fontes de leads ao seu CRM</p>
@@ -342,9 +342,9 @@ export default function IntegrationsPage() {
       {/* Facebook Connection */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
                 <Facebook className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -352,7 +352,7 @@ export default function IntegrationsPage() {
                 <CardDescription>Capture leads diretamente dos seus formulários do Facebook</CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {pages.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setIsTokenDialogOpen(true)}>
                   Atualizar Token
@@ -390,13 +390,13 @@ export default function IntegrationsPage() {
       {/* Mappings */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <CardTitle>Mapeamentos de Formulários</CardTitle>
               <CardDescription>Vincule formulários do Facebook às regras de roteamento do CRM</CardDescription>
             </div>
             {pages.length > 0 && (
-              <Button onClick={() => setIsDialogOpen(true)}>
+              <Button onClick={() => setIsDialogOpen(true)} className="sm:flex-shrink-0">
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Mapeamento
               </Button>
@@ -413,8 +413,8 @@ export default function IntegrationsPage() {
           ) : (
             <div className="space-y-3">
               {mappings.map((m) => (
-                <div key={m.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-card">
-                  <div className="space-y-1 flex-1 min-w-0 mr-4">
+                <div key={m.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-border rounded-xl bg-card">
+                  <div className="space-y-1 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground truncate">{m.formName}</p>
                       <Badge variant={m.isActive ? "default" : "secondary"} className="text-xs">
@@ -439,12 +439,14 @@ export default function IntegrationsPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 sm:flex-shrink-0">
                     <Button variant="outline" size="sm" disabled={syncingId === m.id} onClick={() => handleSync(m.id)} title="Sincronizar leads históricos do Facebook">
                       {syncingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                      <span className="ml-1.5 text-xs sm:hidden">Sincronizar</span>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id)}>
                       <Trash2 className="h-3 w-3 text-destructive" />
+                      <span className="ml-1.5 text-xs sm:hidden text-destructive">Remover</span>
                     </Button>
                   </div>
                 </div>

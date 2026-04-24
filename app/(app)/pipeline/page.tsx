@@ -686,7 +686,7 @@ export default function PipelinePage() {
 
       {/* Layout Mobile: Abas */}
       <div className="block lg:hidden flex-1 flex flex-col overflow-hidden">
-        <Tabs defaultValue={funnelStages[0]?.name} className="flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue={funnelStages[0]?.id} className="flex-1 flex flex-col overflow-hidden">
           <div className="px-4 flex-shrink-0">
             <TabsList className="w-full overflow-x-auto justify-start">
               {funnelStages.map((stage) => (
