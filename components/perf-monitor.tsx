@@ -24,13 +24,19 @@ function patchFetch() {
 
   const original = window.fetch;
   window.fetch = async function (...args) {
-    const url = typeof args[0] === "string" ? args[0] : (args[0] as Request).url;
+    let url = "";
+    try {
+      const input = args[0];
+      if (typeof input === "string") url = input;
+      else if (input instanceof URL) url = input.href;
+      else if (input && typeof (input as any).url === "string") url = (input as any).url;
+    } catch { url = ""; }
+
     const isApi = url.includes("/api/");
     const t0 = performance.now();
-
     const res = await original.apply(this, args);
 
-    if (isApi) {
+    if (isApi && url) {
       const ms = Math.round(performance.now() - t0);
       const path = url.replace(window.location.origin, "");
       const [label, style] = speed(ms);
