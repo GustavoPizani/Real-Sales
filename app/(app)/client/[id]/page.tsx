@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Mail, Calendar, Clock, User, MessageCircle, Plus, CheckCircle, XCircle, ArrowUpDown, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
+  ArrowLeft, Mail, Calendar, Clock, User, MessageCircle, Plus, CheckCircle, XCircle, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
 } from "lucide-react";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { useToast } from "@/components/ui/use-toast";
@@ -692,6 +692,43 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         </div>
       </div>
 
+      {/* Barra de Progresso do Funil */}
+      {stagesForCurrentFunnel.length > 0 && client.overallStatus === ClientOverallStatus.ACTIVE && (
+        <div className="w-full overflow-x-auto rounded-xl border border-border bg-card">
+          <div className="flex min-w-max">
+            {stagesForCurrentFunnel.map((stage, idx) => {
+              const currentIdx = stagesForCurrentFunnel.findIndex(s => s.id === client.funnelStageId)
+              const isActive = idx === currentIdx
+              const isPast = idx < currentIdx
+              const isFirst = idx === 0
+              const isLast = idx === stagesForCurrentFunnel.length - 1
+              const clipPath = isFirst
+                ? 'polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%)'
+                : isLast
+                ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 14px 50%)'
+                : 'polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%)'
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => { if (!isActive) handleUpdateClient({ funnelStageId: stage.id }, { successMessage: `Movido para "${stage.name}".` }) }}
+                  style={{ clipPath, zIndex: idx + 1, marginLeft: idx > 0 ? '-12px' : '0' }}
+                  className={[
+                    'relative flex flex-1 min-w-[90px] h-11 items-center justify-center px-5 text-xs font-medium transition-colors select-none',
+                    isActive
+                      ? 'bg-cyan-500 text-white'
+                      : isPast
+                      ? 'bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer'
+                      : 'bg-muted/40 text-muted-foreground/50 hover:bg-muted/60 cursor-pointer',
+                  ].join(' ')}
+                >
+                  {stage.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Layout Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -738,7 +775,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                       {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
                     </Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -783,43 +819,33 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </CardContent>
           </Card>
 
-          {/* Card de Imóvel de Interesse (Movido para cá) */}
-          <Card>
-            <CardHeader><CardTitle>Imóvel de Interesse</CardTitle></CardHeader>
-            <CardContent>
-              {client.propertyOfInterest ? (
-                <>
-                  <h3 className="font-semibold">{client.propertyOfInterest.title}</h3>
-                  <p className="text-sm text-muted-foreground">{client.propertyOfInterest.address || "Endereço não disponível"}</p>
-                  <Button variant="outline" className="w-full mt-4" onClick={() => router.push(`/properties/${client.propertyOfInterestId}/view`)}>Ver Detalhes</Button>
-                  <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar Imóvel de Interesse</Button>
-                </>
-              ) : (
-                <Button variant="outline" className="w-full" onClick={() => setIsEditPropertyDialogOpen(true)}><Plus className="h-4 w-4 mr-2" />Inserir Imóvel de Interesse</Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card de Observações do Formulário Facebook */}
-          {client.formResponses && Object.keys(client.formResponses as Record<string, string>).length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <span>📋</span> Respostas do Formulário
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {Object.entries(client.formResponses as Record<string, string>).map(([key, value]) => (
-                    <div key={key} className="grid grid-cols-2 gap-2 text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                      <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
-                      <span className="font-medium text-foreground">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Card de Observações do Formulário Facebook (apenas campos extras) */}
+          {(() => {
+            const STANDARD = new Set(['full_name','email','phone_number','phone','whatsapp_number','first_name','last_name'])
+            const entries = client.formResponses
+              ? Object.entries(client.formResponses as Record<string, string>).filter(([k]) => !STANDARD.has(k.toLowerCase()))
+              : []
+            if (entries.length === 0) return null
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <span>📋</span> Respostas do Formulário
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {entries.map(([key, value]) => (
+                      <div key={key} className="grid grid-cols-2 gap-2 text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                        <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
+                        <span className="font-medium text-foreground">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })()}
 
           {/* Card de Histórico e Atividades */}
           <Card>
@@ -1001,9 +1027,33 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsFunnelDialogOpen(true)}><ArrowUpDown className="h-4 w-4 mr-2" />Alterar Etapa do Funil</Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
             </CardContent>
           </Card>
+
+          {/* Imóvel de Interesse (compacto) */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold">Imóvel de Interesse</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              {client.propertyOfInterest ? (
+                <>
+                  <p className="text-sm font-medium">{client.propertyOfInterest.title}</p>
+                  <p className="text-xs text-muted-foreground">{client.propertyOfInterest.address || "Endereço não disponível"}</p>
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="outline" size="sm" className="flex-1 text-xs h-8" onClick={() => router.push(`/properties/${client.propertyOfInterestId}/view`)}>Ver</Button>
+                    <Button variant="outline" size="sm" className="flex-1 text-xs h-8" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar</Button>
+                  </div>
+                </>
+              ) : (
+                <Button variant="outline" className="w-full h-8 text-xs" onClick={() => setIsEditPropertyDialogOpen(true)}>
+                  <Plus className="h-3 w-3 mr-1" />Inserir Imóvel
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
