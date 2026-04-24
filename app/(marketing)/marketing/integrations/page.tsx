@@ -580,7 +580,10 @@ export default function IntegrationsPage() {
                 >
                   <Command>
                     <CommandInput placeholder="Buscar formulário..." className="h-9" />
-                    <CommandList className="max-h-[220px] overflow-y-auto">
+                    <CommandList
+                      className="max-h-[220px] overflow-y-auto"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
                       <CommandEmpty>Nenhum formulário encontrado.</CommandEmpty>
                       <CommandGroup>
                         {forms.map((f) => (
