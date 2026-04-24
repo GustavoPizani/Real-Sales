@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { graphGet, extractLeadFields, type FbLead } from '@/lib/facebook-graph'
+import { notifyNewLead } from '@/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -184,6 +185,21 @@ async function ingestLead(lead: FbLead, mapping: any) {
     where: { id: mapping.id },
     data: { leadCount: { increment: 1 } },
   })
+
+  // Busca nome do corretor para a notificação
+  const broker = await prisma.user.findUnique({
+    where: { id: brokerId },
+    select: { name: true, accountId: true },
+  })
+
+  notifyNewLead({
+    clientId: client.id,
+    clientName: fullName,
+    brokerId,
+    brokerName: broker?.name ?? 'Corretor',
+    campaignSource: `Facebook Lead Ads - ${mapping.formName}`,
+    accountId: broker?.accountId,
+  }).catch(() => null)
 
   console.log(`[FB_WEBHOOK] Created client ${client.id} from lead ${lead.id}`)
 }

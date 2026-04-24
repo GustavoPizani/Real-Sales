@@ -96,6 +96,7 @@ model User {
   tasks              Task[]
   notes              Note[]
   pushSubscription   PushSubscription?
+  notifications      Notification[]
 
   // Property Relations
   createdProperties Property[] @relation("CreatedProperties")
@@ -411,12 +412,29 @@ model Tag {
 }
 
 model PushSubscription {
-  id       String @id @default(cuid())
-  endpoint String @unique
-  userId   String @unique
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String  @id @default(cuid())
+  endpoint String  @unique
+  p256dh   String?
+  auth     String?
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("push_subscriptions")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
 }
 
 model UserFunnelAccess {

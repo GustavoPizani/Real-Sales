@@ -36,7 +36,9 @@ export async function GET() {
       }))
     }));
 
-    return NextResponse.json(formattedRoletas);
+    return NextResponse.json(formattedRoletas, {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+    });
   } catch (error: any) {
     console.error('Erro na API de Roletas:', error.message);
     return NextResponse.json({ error: 'Erro ao buscar roletas' }, { status: 500 });

@@ -5,6 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
+import { NotificationBell } from './notification-bell';
 
 interface MobileHeaderProps {
   onMenuClick: () => void;
@@ -22,8 +23,9 @@ export function MobileHeader({ onMenuClick, actionButton }: MobileHeaderProps) {
         </div>
         <span className="text-lg font-bold text-white">Real Sales</span>
       </Link>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {actionButton}
+        <NotificationBell variant="header" />
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="text-white hover:bg-white/20 hover:text-white">
           <Menu className="h-6 w-6" />
           <span className="sr-only">Abrir menu</span>

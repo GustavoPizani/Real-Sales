@@ -32,7 +32,9 @@ export async function GET() {
       orderBy: { name: 'asc' },
     });
 
-    return NextResponse.json(funnels.map(mapFunnel));
+    return NextResponse.json(funnels.map(mapFunnel), {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+    });
   } catch (error) {
     return NextResponse.json({ error: 'Erro ao buscar funis' }, { status: 500 });
   }

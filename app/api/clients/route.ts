@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
 import { z } from 'zod';
+import { notifyNewLead } from "@/lib/notifications";
 
 export const dynamic = 'force-dynamic';
 
@@ -43,17 +44,26 @@ export async function GET(request: NextRequest) {
 
     const clients = await prisma.client.findMany({
       where,
-      include: {
-        broker: { select: { name: true, id: true } },
-        // ✅ Adicionado para incluir as tags na listagem de clientes
-        tags: {
-          select: { id: true, name: true, color: true },
-        },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+        funnelId: true,
+        funnelStageId: true,
+        overallStatus: true,
+        brokerId: true,
+        broker: { select: { id: true, name: true } },
+        tags: { select: { id: true, name: true, color: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
-    
-    return NextResponse.json({ clients });
+
+    return NextResponse.json({ clients }, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   } catch (error) {
     console.error("Erro ao buscar clientes:", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
@@ -93,7 +103,7 @@ export async function POST(request: NextRequest) {
         const newClient = await prisma.client.create({
             data: {
                 fullName,
-                email: email || null, // Garante que o email seja null se for uma string vazia
+                email: email || null,
                 phone,
                 funnelId,
                 funnelStageId,
@@ -102,6 +112,21 @@ export async function POST(request: NextRequest) {
                 accountId: user.accountId,
             }
         });
+
+        // Notifica corretor (e admins) se o lead foi atribuído a outra pessoa
+        if (brokerId !== user.id) {
+            const broker = await prisma.user.findUnique({
+                where: { id: brokerId },
+                select: { name: true },
+            });
+            notifyNewLead({
+                clientId: newClient.id,
+                clientName: fullName,
+                brokerId,
+                brokerName: broker?.name ?? 'Corretor',
+                accountId: user.accountId,
+            }).catch(() => null);
+        }
 
         return NextResponse.json(newClient, { status: 201 });
     } catch (error) {

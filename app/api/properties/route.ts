@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(properties);
+    return NextResponse.json(properties, {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' },
+    });
   } catch (error) {
     console.error('Erro ao buscar propriedades:', error);
     return NextResponse.json(

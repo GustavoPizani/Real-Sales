@@ -22,7 +22,9 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ users });
+    return NextResponse.json({ users }, {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+    });
   } catch (error) {
     console.error("Erro ao buscar utilizadores:", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });

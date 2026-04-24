@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Navigation } from "./navigation";
 import { MobileHeader } from "./mobile-header";
+import { NotificationBell } from "./notification-bell";
 import { usePathname } from "next/navigation";
 import { useMobileHeader } from "@/contexts/mobile-header-context";
 
@@ -48,6 +49,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       
       {/* Conteúdo Principal com espaçamento ajustado */}
       <div className="pt-16 lg:pt-0 lg:ml-16 transition-all duration-300">
+        {/* Barra superior desktop com sino de notificações */}
+        <div className="hidden lg:flex items-center justify-end px-6 py-2 border-b bg-card/50">
+          <NotificationBell variant="sidebar" />
+        </div>
         <main className="min-h-screen">
           <div>{children}</div>
         </main>
