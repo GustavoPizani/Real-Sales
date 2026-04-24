@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getUserFromToken } from '@/lib/auth'
 
 const SCOPES =
-  'pages_show_list,leads_retrieval,pages_manage_metadata,pages_read_engagement,business_management'
+  'pages_show_list,leads_retrieval,pages_manage_ads,pages_manage_metadata,pages_read_engagement,business_management'
 
 export async function GET(request: NextRequest) {
   const user = await getUserFromToken()
