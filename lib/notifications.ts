@@ -73,7 +73,53 @@ export async function notifyNewLead({
     }
   }
 
-  await Promise.allSettled(tasks)
+  const results = await Promise.allSettled(tasks)
+
+  // Envia push web para cada notificação criada com sucesso
+  const pushTasks: Promise<void>[] = []
+
+  // Push para o corretor
+  const brokerNotif = results[0]
+  if (brokerNotif.status === 'fulfilled') {
+    pushTasks.push(
+      sendWebPush(
+        brokerId,
+        '🔔 Novo lead recebido',
+        campaignSource
+          ? `${clientName} chegou via ${campaignSource}.`
+          : `${clientName} foi atribuído a você.`,
+        { clientId, clientName, campaignSource: campaignSource ?? undefined }
+      )
+    )
+  }
+
+  // Push para cada admin (resultados a partir do índice 1)
+  if (accountId) {
+    const admins = await prisma.user.findMany({
+      where: { accountId, role: { in: ['MARKETING_ADMIN', 'DIRECTOR'] } },
+      select: { id: true },
+    })
+    let adminIdx = 1
+    for (const admin of admins) {
+      if (admin.id === brokerId) continue
+      const notifResult = results[adminIdx]
+      if (notifResult?.status === 'fulfilled') {
+        pushTasks.push(
+          sendWebPush(
+            admin.id,
+            '📊 Novo lead distribuído',
+            campaignSource
+              ? `${clientName} · ${campaignSource} → ${brokerName}`
+              : `${clientName} atribuído a ${brokerName}.`,
+            { clientId, clientName, campaignSource: campaignSource ?? undefined, brokerName }
+          )
+        )
+      }
+      adminIdx++
+    }
+  }
+
+  await Promise.allSettled(pushTasks)
 }
 
 export async function sendWebPush(

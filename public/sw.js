@@ -1,4 +1,4 @@
-const CACHE_NAME = 'real-sales-v1';
+const CACHE_NAME = 'real-sales-v2';
 const STATIC_ASSETS = ['/', '/dashboard'];
 
 self.addEventListener('install', (event) => {
@@ -38,28 +38,52 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   if (!event.data) return;
+
   let payload;
   try { payload = event.data.json(); } catch { payload = { title: 'Real Sales', body: event.data.text() }; }
 
+  const data = payload.data ?? {};
+  const clientId = data.clientId;
+  const url = clientId ? `/client/${clientId}` : '/dashboard';
+
+  const options = {
+    body: payload.body ?? '',
+    icon: '/api/pwa/icon?size=192',
+    badge: '/api/pwa/icon?size=72',
+    data: { ...data, url },
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+    actions: clientId
+      ? [{ action: 'open', title: 'Ver lead' }]
+      : [],
+    tag: clientId ? `lead-${clientId}` : 'general',
+    renotify: true,
+  };
+
   event.waitUntil(
-    self.registration.showNotification(payload.title ?? 'Real Sales', {
-      body: payload.body ?? '',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      data: payload.data ?? {},
-      vibrate: [200, 100, 200],
-    })
+    self.registration.showNotification(payload.title ?? 'Real Sales', options)
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const clientId = event.notification.data?.clientId;
-  const url = clientId ? `/client/${clientId}` : '/dashboard';
+
+  const url = event.notification.data?.url ?? '/dashboard';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Se já tem uma janela aberta com essa URL, foca nela
       const existing = windowClients.find((c) => c.url.includes(url));
-      if (existing) return existing.focus();
+      if (existing) {
+        existing.focus();
+        return existing.navigate(url);
+      }
+      // Tenta focar qualquer janela do app e navegar
+      if (windowClients.length > 0) {
+        windowClients[0].focus();
+        return windowClients[0].navigate(url);
+      }
+      // Nenhuma janela aberta — abre uma nova
       return clients.openWindow(url);
     })
   );
