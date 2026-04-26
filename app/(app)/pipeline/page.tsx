@@ -216,6 +216,7 @@ export default function PipelinePage() {
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>(undefined);
   const [newClientForm, setNewClientForm] = useState({ fullName: "", phone: "", email: "", selectedbrokerId: "", selectedStageId: "" });
   const [newStageForm, setNewStageForm] = useState({ name: "", color: "#010f27" });
   const [editingStages, setEditingStages] = useState<FunnelStage[]>([]);
@@ -518,36 +519,88 @@ export default function PipelinePage() {
   if (loading) return <p className="p-6">Carregando pipeline...</p>;
 
   const DateFilter = ({ inModal = false }: { inModal?: boolean }) => {
+    const activeRange = inModal ? pendingDateRange : filters.dateRange;
     const label = filters.dateRange?.from
-      ? `${format(filters.dateRange.from, "dd/MM/yy")}${filters.dateRange.to ? ` - ${format(filters.dateRange.to, "dd/MM/yy")}` : ''}`
+      ? `${format(filters.dateRange.from, "dd/MM/yy")}${filters.dateRange.to ? ` → ${format(filters.dateRange.to, "dd/MM/yy")}` : ' → ...'}`
       : "Data de criação";
 
+    const presets = [
+      { key: 'today', label: 'Hoje' },
+      { key: 'week', label: 'Esta semana' },
+      { key: 'month', label: 'Este mês' },
+      { key: 'last_month', label: 'Mês passado' },
+    ] as const;
+
     if (inModal) {
+      const applyPreset = (preset: typeof presets[number]['key']) => {
+        const today = startOfToday();
+        let range: DateRange | undefined;
+        if (preset === 'today') range = { from: today, to: endOfToday() };
+        else if (preset === 'week') range = { from: startOfWeek(today), to: endOfWeek(today) };
+        else if (preset === 'month') range = { from: startOfMonth(today), to: endOfMonth(today) };
+        else range = { from: startOfMonth(subMonths(today, 1)), to: endOfMonth(subMonths(today, 1)) };
+        setPendingDateRange(range);
+      };
+
+      const rangeLabel = activeRange?.from
+        ? activeRange.to
+          ? `${format(activeRange.from, "dd/MM/yyyy")} → ${format(activeRange.to, "dd/MM/yyyy")}`
+          : `${format(activeRange.from, "dd/MM/yyyy")} → toque na data final`
+        : null;
+
       return (
-        <div className="w-full space-y-2">
-          <p className="text-sm font-medium">Data de criação</p>
-          <div className="flex gap-2 flex-wrap">
-            {(['today', 'week', 'month', 'last_month'] as const).map((p) => (
-              <Button key={p} variant="outline" size="sm" onClick={() => handleDatePreset(p)} className="flex-1 min-w-[80px]">
-                {{ today: 'Hoje', week: 'Esta semana', month: 'Este mês', last_month: 'Mês passado' }[p]}
+        <div className="w-full space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Data de criação</p>
+            {activeRange?.from && (
+              <button
+                onClick={() => setPendingDateRange(undefined)}
+                className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1"
+              >
+                <X className="h-3 w-3" /> Limpar
+              </button>
+            )}
+          </div>
+
+          {/* Atalhos */}
+          <div className="grid grid-cols-2 gap-2">
+            {presets.map(p => (
+              <Button
+                key={p.key}
+                variant={
+                  activeRange?.from && activeRange?.to &&
+                  format(activeRange.from, 'dd/MM') === format(startOfToday(), 'dd/MM') && p.key === 'today'
+                    ? 'default' : 'outline'
+                }
+                size="sm"
+                onClick={() => applyPreset(p.key)}
+                className="w-full text-xs"
+              >
+                {p.label}
               </Button>
             ))}
           </div>
-          <div className="overflow-x-auto">
-            <Calendar
-              mode="range"
-              selected={filters.dateRange}
-              onSelect={date => setFilters(f => ({ ...f, dateRange: date }))}
-              locale={ptBR}
-              className="rounded-md border w-full"
-              classNames={{ months: "flex flex-col", month: "w-full", table: "w-full", head_row: "flex justify-between", row: "flex justify-between mt-1", cell: "flex-1 text-center" }}
-            />
-          </div>
-          {filters.dateRange?.from && (
-            <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}>
-              <X className="h-3 w-3 mr-1" /> Limpar data
-            </Button>
+
+          {/* Indicador de seleção */}
+          {rangeLabel ? (
+            <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-center font-medium">
+              {rangeLabel}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-1">
+              Toque na data inicial, depois na final
+            </p>
           )}
+
+          {/* Calendário */}
+          <Calendar
+            mode="range"
+            selected={activeRange}
+            onSelect={setPendingDateRange}
+            locale={ptBR}
+            className="rounded-md border w-full mx-auto"
+            numberOfMonths={1}
+          />
         </div>
       );
     }
@@ -555,14 +608,21 @@ export default function PipelinePage() {
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="w-[240px] justify-start text-left font-normal">{label}</Button>
+          <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
+            {filters.dateRange?.from && <X className="h-3 w-3 mr-1 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setFilters(f => ({ ...f, dateRange: undefined })); }} />}
+            {label}
+          </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 flex" align="start">
           <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
-            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('today')}>Hoje</Button>
-            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('week')}>Esta semana</Button>
-            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('month')}>Este mês</Button>
-            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('last_month')}>Mês passado</Button>
+            {presets.map(p => (
+              <Button key={p.key} variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset(p.key)}>{p.label}</Button>
+            ))}
+            {filters.dateRange?.from && (
+              <Button variant="ghost" size="sm" className="justify-start text-destructive" onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}>
+                <X className="h-3 w-3 mr-1" /> Limpar
+              </Button>
+            )}
           </div>
           <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({ ...f, dateRange: date }))} locale={ptBR} />
         </PopoverContent>
@@ -786,7 +846,13 @@ export default function PipelinePage() {
       </Dialog>
 
       {/* Modal de Filtros para Mobile */}
-      <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+      <Dialog
+        open={isFilterDialogOpen}
+        onOpenChange={(open) => {
+          if (open) setPendingDateRange(filters.dateRange);
+          setIsFilterDialogOpen(open);
+        }}
+      >
         <DialogContent className="max-h-[90dvh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Filtros</DialogTitle>
@@ -795,7 +861,15 @@ export default function PipelinePage() {
             <FilterControls inModal={true} />
           </div>
           <DialogFooter className="flex-shrink-0 pt-2">
-            <Button onClick={() => setIsFilterDialogOpen(false)} className="w-full">Aplicar</Button>
+            <Button
+              onClick={() => {
+                setFilters(f => ({ ...f, dateRange: pendingDateRange }));
+                setIsFilterDialogOpen(false);
+              }}
+              className="w-full"
+            >
+              Aplicar filtros
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
