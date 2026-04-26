@@ -14,7 +14,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [error, setError] = useState('');
+
   const { login } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
@@ -22,39 +23,23 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
+    setError('');
+
     if (!email.trim() || !password.trim()) {
-      toast({
-        title: 'Erro',
-        description: 'Por favor, preencha todos os campos.',
-        variant: 'destructive',
-      });
+      setError('Preencha o e-mail e a senha.');
       setIsLoading(false);
       return;
     }
 
     try {
       const success = await login(email.trim(), password);
-      
       if (success) {
-        toast({
-          title: 'Bem-vindo!',
-          description: 'Login realizado com sucesso.',
-        });
         router.push('/dashboard');
       } else {
-        toast({
-          title: 'Erro no login',
-          description: 'E-mail ou senha incorretos.',
-          variant: 'destructive',
-        });
+        setError('E-mail ou senha incorretos. Verifique suas credenciais.');
       }
-    } catch (error) {
-      toast({
-        title: 'Erro inesperado',
-        description: 'Tente novamente em instantes.',
-        variant: 'destructive',
-      });
+    } catch {
+      setError('Erro inesperado. Tente novamente em instantes.');
     } finally {
       setIsLoading(false);
     }
@@ -145,6 +130,13 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+
+              {error && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                  <span className="shrink-0">⚠</span>
+                  {error}
+                </div>
+              )}
 
               <Button
                 type="submit"
