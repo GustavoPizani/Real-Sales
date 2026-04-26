@@ -315,11 +315,29 @@ export default function IntegrationsPage() {
     setSyncingId(mappingId)
     try {
       const res = await fetch(`/api/facebook/sync/${mappingId}`, { method: "POST" })
-      const { imported, skipped } = await res.json()
-      toast({ title: "Sincronização concluída", description: `${imported} leads importados, ${skipped} já existiam.` })
+      const data = await res.json()
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "Erro na sincronização",
+          description: data.error || `Código ${res.status}. O token do Facebook pode estar expirado.`,
+        })
+        return
+      }
+      const { imported, skipped } = data
+      toast({
+        title: imported > 0 ? `${imported} novos leads importados!` : "Sincronização concluída",
+        description: imported > 0
+          ? `${skipped} leads já existiam no CRM.`
+          : "Nenhum lead novo encontrado. Todos os ${skipped} leads já estão no CRM.",
+      })
       await fetchCrmData()
-    } catch {
-      toast({ variant: "destructive", title: "Erro na sincronização" })
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro na sincronização",
+        description: "Verifique se o token do Facebook ainda é válido.",
+      })
     } finally {
       setSyncingId(null)
     }

@@ -50,19 +50,8 @@ interface Tag {
   color: string;
 }
 
-// --- Componente do Card Arrastável ---
-function DraggableClientCard({ client }: { client: Cliente }) {
-  const router = useRouter();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stageId: client.funnelStageId } });
-  
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const onClientClick = () => router.push(`/client/${client.id}`);
-
+// --- Conteúdo compartilhado do card ---
+function ClientCardContent({ client, onClientClick, isDragging = false }: { client: Cliente; onClientClick: () => void; isDragging?: boolean }) {
   const openWhatsApp = (phone: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const cleanPhone = phone.replace(/\D/g, "");
@@ -74,40 +63,24 @@ function DraggableClientCard({ client }: { client: Cliente }) {
     .slice(0, 2)
     .map((n: string) => n[0])
     .join('')
-    .toUpperCase()
+    .toUpperCase();
 
   return (
     <div
-      ref={setNodeRef}
       style={{
-        ...style,
         background: 'hsl(var(--card))',
         border: '1px solid hsl(var(--border) / 0.5)',
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         borderRadius: '14px',
         overflow: 'hidden',
         marginBottom: '10px',
-        transition: 'box-shadow 0.2s, transform 0.2s',
         opacity: isDragging ? 0.5 : 1,
       }}
-      {...attributes}
-      {...listeners}
       onClick={onClientClick}
-      className="cursor-grab active:cursor-grabbing touch-none group"
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.45), 0 0 0 1px rgba(170,141,68,0.3)'
-        ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)'
-        ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-      }}
+      className="group cursor-pointer"
     >
-      {/* Topo colorido */}
       <div className="h-1 w-full bg-gradient-to-r from-secondary-custom via-secondary-custom/60 to-transparent" />
-
       <div className="p-3.5 space-y-3">
-        {/* Linha 1: Avatar + Nome + Data */}
         <div className="flex items-center gap-2.5">
           <div
             className="h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
@@ -122,7 +95,6 @@ function DraggableClientCard({ client }: { client: Cliente }) {
               {client.createdAt ? format(new Date(client.createdAt), "dd/MM/yy") : ''}
             </p>
           </div>
-          {/* Botão WhatsApp visível só no hover */}
           {client.phone && (
             <Button
               size="sm"
@@ -135,7 +107,6 @@ function DraggableClientCard({ client }: { client: Cliente }) {
           )}
         </div>
 
-        {/* Linha 2: Contatos */}
         {(client.phone || client.email) && (
           <div className="space-y-1.5 rounded-lg bg-muted/30 px-3 py-2">
             {client.phone && (
@@ -153,7 +124,6 @@ function DraggableClientCard({ client }: { client: Cliente }) {
           </div>
         )}
 
-        {/* Linha 3: Tags + Corretor */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1">
             {client.tags && client.tags.length > 0
@@ -183,6 +153,30 @@ function DraggableClientCard({ client }: { client: Cliente }) {
       </div>
     </div>
   );
+}
+
+// --- Card arrastável para desktop ---
+function DraggableClientCard({ client }: { client: Cliente }) {
+  const router = useRouter();
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stageId: client.funnelStageId } });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      className="cursor-grab active:cursor-grabbing touch-none"
+    >
+      <ClientCardContent client={client} onClientClick={() => router.push(`/client/${client.id}`)} isDragging={isDragging} />
+    </div>
+  );
+}
+
+// --- Card simples para mobile (sem DnD, permite scroll) ---
+function MobileClientCard({ client }: { client: Cliente }) {
+  const router = useRouter();
+  return <ClientCardContent client={client} onClientClick={() => router.push(`/client/${client.id}`)} />;
 }
 
 // --- Componente da Coluna do Funil ---
@@ -523,58 +517,106 @@ export default function PipelinePage() {
 
   if (loading) return <p className="p-6">Carregando pipeline...</p>;
 
-  const FilterControls = ({ inModal = false }: { inModal?: boolean }) => (
-    <div className={`flex flex-wrap items-center gap-2 ${inModal ? 'flex-col' : ''}`}>
-        <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por name, email, phone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
+  const DateFilter = ({ inModal = false }: { inModal?: boolean }) => {
+    const label = filters.dateRange?.from
+      ? `${format(filters.dateRange.from, "dd/MM/yy")}${filters.dateRange.to ? ` - ${format(filters.dateRange.to, "dd/MM/yy")}` : ''}`
+      : "Data de criação";
+
+    if (inModal) {
+      return (
+        <div className="w-full space-y-2">
+          <p className="text-sm font-medium">Data de criação</p>
+          <div className="flex gap-2 flex-wrap">
+            {(['today', 'week', 'month', 'last_month'] as const).map((p) => (
+              <Button key={p} variant="outline" size="sm" onClick={() => handleDatePreset(p)} className="flex-1 min-w-[80px]">
+                {{ today: 'Hoje', week: 'Esta semana', month: 'Este mês', last_month: 'Mês passado' }[p]}
+              </Button>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <Calendar
+              mode="range"
+              selected={filters.dateRange}
+              onSelect={date => setFilters(f => ({ ...f, dateRange: date }))}
+              locale={ptBR}
+              className="rounded-md border w-full"
+              classNames={{ months: "flex flex-col", month: "w-full", table: "w-full", head_row: "flex justify-between", row: "flex justify-between mt-1", cell: "flex-1 text-center" }}
+            />
+          </div>
+          {filters.dateRange?.from && (
+            <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}>
+              <X className="h-3 w-3 mr-1" /> Limpar data
+            </Button>
+          )}
         </div>
-        <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
-            <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
-            <SelectContent>
-                <SelectItem value="all">Todos os Status</SelectItem>
-                <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
-                <SelectItem value={ClientOverallStatus.Ganho}>Ganho</SelectItem>
-                <SelectItem value={ClientOverallStatus.Perdido}>Perdido</SelectItem>
-            </SelectContent>
+      );
+    }
+
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-[240px] justify-start text-left font-normal">{label}</Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0 flex" align="start">
+          <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
+            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('today')}>Hoje</Button>
+            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('week')}>Esta semana</Button>
+            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('month')}>Este mês</Button>
+            <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('last_month')}>Mês passado</Button>
+          </div>
+          <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({ ...f, dateRange: date }))} locale={ptBR} />
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const FilterControls = ({ inModal = false }: { inModal?: boolean }) => (
+    <div className={`flex ${inModal ? 'flex-col' : 'flex-wrap items-center'} gap-2`}>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
+      </div>
+      <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
+        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os Status</SelectItem>
+          <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
+          <SelectItem value={ClientOverallStatus.Ganho}>Ganho</SelectItem>
+          <SelectItem value={ClientOverallStatus.Perdido}>Perdido</SelectItem>
+        </SelectContent>
+      </Select>
+      <DateFilter inModal={inModal} />
+      {isRoleActive('MANAGER') && managers.length > 0 && (
+        <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
+          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as equipes</SelectItem>
+            {managers.map(m => <SelectItem key={m.id} value={m.id}>Equipe {m.name}</SelectItem>)}
+          </SelectContent>
         </Select>
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button variant="outline" className={`${inModal ? 'w-full' : 'w-[240px]'} justify-start text-left font-normal`}>{filters.dateRange?.from ? `${format(filters.dateRange.from, "dd/MM/yy")} - ${filters.dateRange.to ? format(filters.dateRange.to, "dd/MM/yy") : ''}` : "Data de criação"}</Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 flex" align="start">
-                <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
-                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('today')}>Hoje</Button>
-                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('week')}>Esta semana</Button>
-                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('month')}>Este mês</Button>
-                    <Button variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset('last_month')}>Mês passado</Button>
-                </div>
-                <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({...f, dateRange: date}))} locale={ptBR} />
-            </PopoverContent>
-        </Popover>
-        {isRoleActive('MANAGER') && managers.length > 0 && (
-          <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
-            <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as equipes</SelectItem>
-              {managers.map(m => <SelectItem key={m.id} value={m.id}>Equipe {m.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        {isRoleActive('BROKER') && (
-          <Select value={filters.brokerId} onValueChange={value => setFilters(f => ({ ...f, brokerId: value }))}>
-            <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os corretores</SelectItem>
-              {(filters.managerId !== 'all'
-                ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId)
-                : brokers.filter(b => b.role === 'BROKER')
-              ).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        <Select value={filters.tagId} onValueChange={value => setFilters(f => ({ ...f, tagId: value }))}><SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as etiquetas</SelectItem>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select>
-        <Button variant="ghost" onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.ACTIVE, dateRange: undefined, brokerId: 'all', managerId: 'all', tagId: 'all' })}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
+      )}
+      {isRoleActive('BROKER') && (
+        <Select value={filters.brokerId} onValueChange={value => setFilters(f => ({ ...f, brokerId: value }))}>
+          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os corretores</SelectItem>
+            {(filters.managerId !== 'all'
+              ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId)
+              : brokers.filter(b => b.role === 'BROKER')
+            ).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      <Select value={filters.tagId} onValueChange={value => setFilters(f => ({ ...f, tagId: value }))}>
+        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas as etiquetas</SelectItem>
+          {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Button variant="ghost" className={inModal ? 'w-full' : ''} onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.ACTIVE, dateRange: undefined, brokerId: 'all', managerId: 'all', tagId: 'all' })}>
+        <X className="h-4 w-4 mr-2" />Limpar filtros
+      </Button>
     </div>
   );
 
@@ -702,7 +744,7 @@ export default function PipelinePage() {
                 {filteredClients
                   .filter(c => c.funnelStageId === stage.id)
                   .map(client => (
-                    <DraggableClientCard key={client.id} client={client} />
+                    <MobileClientCard key={client.id} client={client} />
                   ))}
               </TabsContent>
             ))}
@@ -745,14 +787,16 @@ export default function PipelinePage() {
 
       {/* Modal de Filtros para Mobile */}
       <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-h-[90dvh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
-          <div className="pt-4">
+          <div className="flex-1 overflow-y-auto py-2 pr-1">
             <FilterControls inModal={true} />
           </div>
-          <DialogFooter><Button onClick={() => setIsFilterDialogOpen(false)} className="w-full">Aplicar</Button></DialogFooter>
+          <DialogFooter className="flex-shrink-0 pt-2">
+            <Button onClick={() => setIsFilterDialogOpen(false)} className="w-full">Aplicar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
