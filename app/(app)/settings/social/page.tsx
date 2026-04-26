@@ -113,6 +113,7 @@ export default function SocialSettingsPage() {
 
   const [loadingPages, setLoadingPages] = useState(false)
   const [loadingForms, setLoadingForms] = useState(false)
+  const [formsError, setFormsError] = useState('')
   const [savingMapping, setSavingMapping] = useState(false)
   const [syncingId, setSyncingId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -194,12 +195,26 @@ export default function SocialSettingsPage() {
       formName: "",
     }))
     setLoadingForms(true)
+    setFormsError('')
     try {
       const res = await fetch(`/api/facebook/forms?pageId=${page.pageId}`)
+      const d = await res.json()
       if (res.ok) {
-        const d = await res.json()
         setForms(d.forms ?? [])
+        if ((d.forms ?? []).length === 0) {
+          setFormsError('Nenhum formulário ativo encontrado nesta página.')
+        }
+      } else {
+        const msg: string = d.error ?? ''
+        const isExpired = msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid')
+        setFormsError(
+          isExpired
+            ? 'Token do Facebook expirado. Clique em "Reconectar" para renovar o acesso.'
+            : `Erro ao carregar formulários: ${msg || 'Reconecte sua conta Facebook.'}`
+        )
       }
+    } catch {
+      setFormsError('Erro de conexão. Verifique sua internet.')
     } finally {
       setLoadingForms(false)
     }
@@ -581,6 +596,9 @@ export default function SocialSettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {formsError && (
+                <p className="text-xs text-destructive mt-1">{formsError}</p>
+              )}
             </div>
 
             <div className="border-t border-border pt-4">
