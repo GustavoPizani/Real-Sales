@@ -6,12 +6,13 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutos — suficiente para todos os mapeamentos
 
 export async function GET(request: NextRequest) {
-  // Vercel Cron envia Authorization: Bearer <CRON_SECRET>
-  const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (cronSecret) {
+    const authHeader = request.headers.get('authorization')
+    const querySecret = request.nextUrl.searchParams.get('secret')
+    if (authHeader !== `Bearer ${cronSecret}` && querySecret !== cronSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   const startedAt = Date.now()
