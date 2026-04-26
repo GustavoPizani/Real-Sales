@@ -142,41 +142,57 @@ export async function ingestLead(
   return { status: 'created' }
 }
 
-/** Sincroniza um mapeamento buscando apenas leads mais novos que lastSyncedAt */
+/** Sincroniza um mapeamento buscando leads mais novos que lastSyncedAt.
+ *  Usa paginação cursor com early-stop (leads mais antigos que a janela) em vez de
+ *  server-side filtering, que não é suportado de forma confiável pelo FB Graph API. */
 export async function syncMapping(mapping: any): Promise<{ imported: number; skipped: number; errors: number }> {
-  const since = mapping.lastSyncedAt
-    ? Math.floor(new Date(mapping.lastSyncedAt).getTime() / 1000) - 3600 // 1h de overlap
-    : Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000)         // últimos 7 dias se nunca sincronizou
+  const sinceMs = mapping.lastSyncedAt
+    ? new Date(mapping.lastSyncedAt).getTime() - 3_600_000  // 1h overlap
+    : Date.now() - 7 * 24 * 60 * 60 * 1000                  // últimos 7 dias na 1ª sync
 
-  let cursor: string | undefined
+  let afterCursor: string | undefined
   let imported = 0
   let skipped = 0
   let errors = 0
-  let hasMore = true
 
-  while (hasMore) {
+  for (;;) {
     const queryParams: Record<string, string> = {
       fields: 'id,created_time,field_data',
       limit: '100',
-      filtering: JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: since }]),
     }
-    if (cursor) queryParams['after'] = cursor
+    if (afterCursor) queryParams['after'] = afterCursor
 
     const data = await graphGet<{
       data: FbLead[]
       paging?: { cursors?: { after?: string }; next?: string }
     }>(`/${mapping.formId}/leads`, mapping.connection.pageAccessToken, queryParams)
 
-    for (const lead of data.data ?? []) {
+    const leads = data.data ?? []
+    let stopPagination = false
+
+    for (const lead of leads) {
+      const leadMs = lead.created_time ? new Date(lead.created_time).getTime() : 0
+      // FB retorna leads do mais novo para o mais antigo; para quando saímos da janela
+      if (leadMs > 0 && leadMs < sinceMs) {
+        stopPagination = true
+        break
+      }
       const result = await ingestLead(lead, mapping)
       if (result.status === 'created') imported++
       else if (result.status === 'skipped') skipped++
       else errors++
     }
 
-    cursor = data.paging?.next ? data.paging?.cursors?.after : undefined
-    hasMore = !!cursor
+    const nextCursor = data.paging?.cursors?.after
+    if (stopPagination || !data.paging?.next || !nextCursor) break
+    afterCursor = nextCursor
   }
+
+  // Marca o momento da sync para que a próxima itere apenas leads novos
+  await prisma.facebookFormMapping.update({
+    where: { id: mapping.id },
+    data: { lastSyncedAt: new Date() },
+  })
 
   return { imported, skipped, errors }
 }

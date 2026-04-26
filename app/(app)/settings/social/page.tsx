@@ -263,10 +263,17 @@ export default function SocialSettingsPage() {
       const res = await fetch(`/api/facebook/sync/${mappingId}`, {
         method: "POST",
       })
-      const { imported, skipped } = await res.json()
+      const json = await res.json()
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Erro na sincronização", description: json.error || "Verifique o token do Facebook." })
+        return
+      }
+      const { imported, skipped, errors } = json
       toast({
         title: "Sincronização concluída",
-        description: `${imported} leads importados, ${skipped} já existiam.`,
+        description: errors
+          ? `${imported} importados, ${skipped} já existiam, ${errors} erros.`
+          : `${imported} leads importados, ${skipped} já existiam.`,
       })
       await fetchCrmData()
     } catch {
