@@ -116,6 +116,7 @@ export default function SocialSettingsPage() {
   const [formsError, setFormsError] = useState('')
   const [savingMapping, setSavingMapping] = useState(false)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  const [testingPush, setTestingPush] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   const [formData, setFormData] = useState(EMPTY_FORM)
@@ -295,6 +296,28 @@ export default function SocialSettingsPage() {
       toast({ variant: "destructive", title: "Erro na sincronização" })
     } finally {
       setSyncingId(null)
+    }
+  }
+
+  const handleTestPush = async () => {
+    setTestingPush(true)
+    try {
+      const res = await fetch('/api/notifications/test-push', { method: 'POST' })
+      const json = await res.json()
+      if (json.ok) {
+        toast({ title: '✅ Push enviado!', description: 'Verifique a notificação no seu dispositivo.' })
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Push não funcionou',
+          description: json.reason ?? 'Verifique as configurações.',
+        })
+        console.warn('[TEST_PUSH] diagnostics:', json.diagnostics)
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao testar push' })
+    } finally {
+      setTestingPush(false)
     }
   }
 
@@ -525,6 +548,18 @@ export default function SocialSettingsPage() {
             Assinar para o campo{" "}
             <code className="font-mono bg-muted px-1 rounded">leadgen</code>.
           </p>
+          <div className="pt-2 border-t border-border">
+            <p className="text-xs text-muted-foreground mb-2">Testar notificação push no dispositivo atual:</p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testingPush}
+              onClick={handleTestPush}
+            >
+              {testingPush ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+              Testar Push
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
