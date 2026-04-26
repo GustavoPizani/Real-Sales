@@ -1,4 +1,4 @@
-const GRAPH_API = 'https://graph.facebook.com/v19.0'
+const GRAPH_API = 'https://graph.facebook.com/v21.0'
 
 export async function graphGet<T = any>(
   path: string,
