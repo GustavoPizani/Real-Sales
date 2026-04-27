@@ -59,27 +59,18 @@ function AtribuicaoTab() {
 
   useEffect(() => {
     fetchLeads();
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => toast({ variant: "destructive", title: "Erro de Localização", description: "Não foi possível obter sua localização." })
-    );
-  }, [fetchLeads, toast]);
+  }, [fetchLeads]);
 
   const assignLead = async (leadId: string) => {
-    if (!userLocation) throw new Error("Localização do usuário não disponível.");
     const token = localStorage.getItem('authToken');
     const response = await fetch('/api/qualificacao/atribuicao', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        leadId,
-        userLatitude: userLocation.lat,
-        userLongitude: userLocation.lng,
-      }),
+      body: JSON.stringify({ leadId }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    fetchLeads(); // Re-fetch leads after assignment
+    fetchLeads();
   };
 
   if (loading) return <Loader2 className="mx-auto my-12 h-8 w-8 animate-spin" />;
@@ -89,21 +80,14 @@ function AtribuicaoTab() {
       <Card>
         <CardHeader><CardTitle>Para Mim</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {leads.paraMim.map(lead => <LeadCard key={lead.id} lead={lead} onAssign={assignLead} isAssignable={true} />)}
+          {leads.paraMim.length === 0
+            ? <p className="text-sm text-muted-foreground text-center py-4">Nenhum lead atribuído.</p>
+            : leads.paraMim.map(lead => <LeadCard key={lead.id} lead={lead} onAssign={assignLead} isAssignable={true} />)}
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader><CardTitle>Bolsão Prioritário</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {leads.bolsaoPrioritario.map(lead => <LeadCard key={lead.id} lead={lead} onAssign={assignLead} isAssignable={!!userLocation} />)}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><CardTitle>Bolsão Geral</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {leads.bolsaoGeral.map(lead => <LeadCard key={lead.id} lead={lead} onAssign={assignLead} isAssignable={!!userLocation} />)}
-        </CardContent>
-      </Card>
+      {/* Bolsão Prioritário e Geral pausados — código preservado abaixo */}
+      {/* <Card><CardHeader><CardTitle>Bolsão Prioritário</CardTitle></CardHeader><CardContent className="space-y-2">{leads.bolsaoPrioritario.map(lead => <LeadCard key={lead.id} lead={lead} onAssign={assignLead} isAssignable={!!userLocation} />)}</CardContent></Card> */}
+      {/* <Card><CardHeader><CardTitle>Bolsão Geral</CardTitle></CardHeader><CardContent className="space-y-2">{leads.bolsaoGeral.map(lead => <LeadCard key={lead.id} lead={lead} onAssign={assignLead} isAssignable={!!userLocation} />)}</CardContent></Card> */}
     </div>
   );
 }
@@ -205,12 +189,12 @@ export default function QualificacaoPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
       <h1 className="text-3xl font-bold">Qualificação de Leads</h1>
       <Tabs defaultValue="atribuicao" className="w-full">
-        <TabsList className={`grid w-full ${user?.role === 'MARKETING_ADMIN' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <TabsList className="grid w-full grid-cols-1">
           <TabsTrigger value="atribuicao"><UserCheck className="h-4 w-4 mr-2" /> Atribuição</TabsTrigger>
-          {user?.role === 'MARKETING_ADMIN' && <TabsTrigger value="configuracao"><Users className="h-4 w-4 mr-2" /> Configuração</TabsTrigger>}
+          {/* Configuração do Bolsão pausada — código preservado em ConfiguracaoTab */}
         </TabsList>
         <TabsContent value="atribuicao" className="mt-6"><AtribuicaoTab /></TabsContent>
-        {user?.role === 'MARKETING_ADMIN' && <TabsContent value="configuracao" className="mt-6"><ConfiguracaoTab /></TabsContent>}
+        {/* {user?.role === 'MARKETING_ADMIN' && <TabsContent value="configuracao" className="mt-6"><ConfiguracaoTab /></TabsContent>} */}
       </Tabs>
     </div>
   );

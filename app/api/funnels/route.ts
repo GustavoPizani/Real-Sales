@@ -8,7 +8,6 @@ function mapFunnel(f: any) {
   return {
     id: f.id,
     name: f.name,
-    isPreSales: f.isPreSales,
     isDefaultEntry: f.isDefaultEntry,
     stages: (f.stages || []).map((s: any) => ({
       id: s.id,
@@ -56,7 +55,6 @@ export async function POST(request: NextRequest) {
       data: {
         name: name.trim(),
         isDefaultEntry,
-        isPreSales: false,
       },
       include: { stages: { orderBy: { order: 'asc' } } },
     });

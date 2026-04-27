@@ -36,7 +36,6 @@ interface User extends BaseUser {
 interface Funnel {
     id: string;
     name: string;
-    isPreSales?: boolean;
 }
 
 interface Roleta {
@@ -1014,7 +1013,7 @@ export default function RoletaPage() {
     }, [roletas]);
 
     const usersForRoleta = useMemo(() => allUsers.filter(u => u.role === 'BROKER' || u.role === 'gerente'), [allUsers]);
-    const funnelsForRoleta = useMemo(() => funnels.filter(f => !f.isPreSales), [funnels]);
+    const funnelsForRoleta = funnels;
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
@@ -1028,12 +1027,12 @@ export default function RoletaPage() {
             {message && <Alert className="mb-4"><AlertDescription>{message}</AlertDescription></Alert>}
 
             <Tabs defaultValue="overview" className="w-full">
-                <TabsList className={`grid w-full ${user?.role === 'MARKETING_ADMIN' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    <TabsTrigger value="overview">Ordem de Atendimento</TabsTrigger>                    
+                <TabsList className={`grid w-full ${user?.role === 'MARKETING_ADMIN' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    <TabsTrigger value="overview">Ordem de Atendimento</TabsTrigger>
                     {user?.role === 'MARKETING_ADMIN' && (
                         <TabsTrigger value="manage">Gerenciar Roletas</TabsTrigger>
                     )}
-                    <TabsTrigger value="frequencia">Frequência</TabsTrigger>                    
+                    {/* Frequência pausada — código preservado em FrequenciaTabContent */}
                 </TabsList> 
 
                 <TabsContent value="overview" className="mt-6">
@@ -1147,9 +1146,10 @@ export default function RoletaPage() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="frequencia" className="mt-6">
+                {/* Frequência pausada — não remover código */}
+                {/* <TabsContent value="frequencia" className="mt-6">
                     {isClient && <FrequenciaTabContent />}
-                </TabsContent>
+                </TabsContent> */}
             </Tabs>
 
             {/* Modais */}

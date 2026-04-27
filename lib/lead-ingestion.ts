@@ -156,7 +156,7 @@ export async function ingestLead(
 
   const broker = await prisma.user.findUnique({
     where: { id: brokerId },
-    select: { name: true, accountId: true },
+    select: { name: true, accountId: true, slackMemberId: true },
   })
 
   notifyNewLead({
@@ -174,6 +174,7 @@ export async function ingestLead(
     phone,
     email,
     brokerName: broker?.name ?? 'Corretor',
+    brokerSlackMemberId: broker?.slackMemberId,
     campaignSource: campaign,
   })
 

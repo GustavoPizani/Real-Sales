@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Zap, SlidersHorizontal, LogOut, X, ArrowLeft } from "lucide-react"
+import { LayoutDashboard, Zap, SlidersHorizontal, Bell, LogOut, X, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -12,6 +12,7 @@ const marketingNav = [
   { name: "Dashboard", href: "/marketing", icon: LayoutDashboard, exact: true },
   { name: "Integrações", href: "/marketing/integrations", icon: Zap, exact: false },
   { name: "Config. Dashboard", href: "/marketing/settings", icon: SlidersHorizontal, exact: false },
+  { name: "Configuração Slack", href: "/marketing/slack", icon: Bell, exact: false },
 ]
 
 interface MarketingNavigationProps {

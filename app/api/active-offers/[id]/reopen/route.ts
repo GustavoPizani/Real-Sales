@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         // Encontra o funil principal e a primeira etapa
-        const mainFunnel = await prisma.funil.findFirst({ where: { isPreSales: false }, orderBy: { createdAt: 'asc' } });
+        const mainFunnel = await prisma.funnel.findFirst({ orderBy: { createdAt: 'asc' } });
         if (!mainFunnel) throw new Error("Nenhum funil de vendas principal encontrado.");
 
         const firstStage = await prisma.etapaFunil.findFirst({ where: { funilId: mainFunnel.id }, orderBy: { ordem: 'asc' } });

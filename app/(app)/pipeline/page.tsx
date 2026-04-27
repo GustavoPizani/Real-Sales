@@ -741,7 +741,7 @@ export default function PipelinePage() {
                             </div>
                           ) : null;
                         })()}
-                        {isRoleActive('BROKER') && user && ['MARKETING_ADMIN', 'diretor', 'gerente', 'pre_vendas'].includes(user.role as Role) && (
+                        {isRoleActive('BROKER') && user && ['MARKETING_ADMIN', 'DIRECTOR', 'MANAGER'].includes(user.role as Role) && (
                           <div>
                             <Label htmlFor="broker">Corretor Responsável</Label>
                             <Select

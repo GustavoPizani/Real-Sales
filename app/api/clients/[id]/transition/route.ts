@@ -21,8 +21,8 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
             return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
         }
 
-        // Lógica de permissão: Apenas usuários de pré-vendas ou admins podem mover
-        if (![Role.pre_vendas, Role.MARKETING_ADMIN, Role.DIRECTOR].includes(user.role)) {
+        // Apenas admins e diretores podem realizar transições
+        if (![Role.MARKETING_ADMIN, Role.DIRECTOR].includes(user.role)) {
             return NextResponse.json({ error: "Acesso negado para realizar esta transição." }, { status: 403 });
         }
 
@@ -47,10 +47,9 @@ export async function POST(request: NextRequest, { params }: { params: { clientI
         const nextIndex = (roleta.lastAssignedIndex + 1) % roleta.corretores.length;
         const nextCorretor = roleta.corretores[nextIndex].BROKER;
 
-        // Encontrar o funil de vendas principal (ou o primeiro que não seja de pré-vendas)
         const targetFunnel = await prisma.funnel.findFirst({
-            where: { isPreSales: false },
             include: { stages: { orderBy: { order: 'asc' }, take: 1 } },
+            orderBy: { createdAt: 'asc' },
         });
 
         if (!targetFunnel || targetFunnel.stages.length === 0) {

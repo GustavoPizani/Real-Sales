@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import CryptoJS from "crypto-js";
 
+
 const ENCRYPTION_KEY = "ads-intel-hub-2024";
 
 const API_KEYS = [

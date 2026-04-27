@@ -14,7 +14,6 @@ import { Plus, Trash2, Loader2, Edit } from "lucide-react";
 interface Funnel {
     id: string;
     name: string;
-    isPreSales: boolean;
     isDefaultEntry: boolean;
     stages: Stage[];
 }
@@ -92,7 +91,7 @@ export default function FunnelsSettingsPage() {
 
     const openEditDialog = (funnel: Funnel) => {
         setEditingFunnel(funnel);
-        setEditingFunnelData({ name: funnel.name, isPreSales: funnel.isPreSales, isDefaultEntry: funnel.isDefaultEntry });
+        setEditingFunnelData({ name: funnel.name, isDefaultEntry: funnel.isDefaultEntry });
         setStagesToUpdate([...funnel.stages]);
         setIsEditFunnelDialogOpen(true);
     };
@@ -124,7 +123,6 @@ export default function FunnelsSettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: editingFunnelData.name,
-                    isPreSales: editingFunnelData.isPreSales,
                     stages: stagesToUpdate.map((s, i) => ({
                         id: s.id.startsWith('new-') ? undefined : s.id,
                         name: s.name,
@@ -216,10 +214,6 @@ export default function FunnelsSettingsPage() {
                         <div className="space-y-2">
                             <Label htmlFor="editingFunnelName">Nome do Funil</Label>
                             <Input id="editingFunnelName" value={editingFunnelData.name || ''} onChange={e => setEditingFunnelData(prev => ({ ...prev, name: e.target.value }))} />
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <Switch id="isPreSales" checked={editingFunnelData.isPreSales} onCheckedChange={checked => setEditingFunnelData(prev => ({ ...prev, isPreSales: checked }))} />
-                            <Label htmlFor="isPreSales">Este é o funil de Pré-Vendas (define como entrada padrão)</Label>
                         </div>
                         <Separator />
                         <h3 className="font-semibold text-lg">Etapas</h3>

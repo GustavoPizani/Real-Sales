@@ -31,14 +31,6 @@ export async function GET(request: NextRequest) {
       where.brokerId = { in: [user.id, ...subordinateIds] };
     } else if (user.role === Role.BROKER) {
       where.brokerId = user.id;
-    } else if (user.role === Role.PRE_SALES) {
-        const preSalesFunnel = await prisma.funnel.findFirst({ where: { isPreSales: true }});
-        if (preSalesFunnel) {
-            where.funnelId = preSalesFunnel.id;
-        } else {
-            // Se não houver funil de pré-vendas, eles não veem ninguém.
-            where.id = '-1'; // Condição impossível
-        }
     }
     // Super Admins e outros cargos sem filtro específico veem todos os clientes DENTRO DO SEU TENANT.
 

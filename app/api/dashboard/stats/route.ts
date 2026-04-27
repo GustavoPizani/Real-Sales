@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       // Admin sees all. An empty userIdsForFilter array means no filter by brokerId will be applied.
     } else if (user.role === Role.DIRECTOR || user.role === Role.MANAGER) {
       userIdsForFilter = [user.id, ...(await getSubordinateIds(user.id))];
-    } else { // For BROKER, PRE_SALES, etc.
+    } else { // For BROKER and other roles
       userIdsForFilter = [user.id];
     }
 

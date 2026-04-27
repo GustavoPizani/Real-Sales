@@ -295,12 +295,11 @@ function TeamManagementTab() {
     };
 
     const getRoleIcon = (role: Role) => {
-        const icons: Record<Role, React.ReactNode> = {
+        const icons: Partial<Record<Role, React.ReactNode>> = {
             [Role.MARKETING_ADMIN]: <Shield className="h-4 w-4 text-red-600" />,
             [Role.DIRECTOR]: <Crown className="h-4 w-4 text-purple-600" />,
             [Role.MANAGER]: <Star className="h-4 w-4 text-blue-600" />,
             [Role.BROKER]: <UserIcon className="h-4 w-4 text-green-600" />,
-            [Role.PRE_SALES]: <Users className="h-4 w-4 text-orange-600" />,
         };
         return icons[role] || null;
     };

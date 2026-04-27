@@ -17,32 +17,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
         const funnelId = params.id;
         const body = await request.json();
-        const { name, isPreSales, isDefaultEntry, stages } = body;
+        const { name, isDefaultEntry, stages } = body;
 
         if (!name || !stages) {
             return NextResponse.json({ error: "Dados incompletos para atualização." }, { status: 400 });
         }
 
-        // Transação para garantir a consistência dos dados
         const updatedFunnel = await prisma.$transaction(async (tx) => {
-            // Se este funil está sendo marcado como Pré-Vendas (que também o torna o padrão),
-            // desmarca qualquer outro que possa ter essas flags.
-            if (isPreSales) {
-                await tx.funnel.updateMany({
-                    where: { id: { not: funnelId } },
-                    data: { isPreSales: false, isDefaultEntry: false },
-                });
-            }
-
             // 1. Atualiza os dados do funil principal
             const funnel = await tx.funnel.update({
                 where: { id: funnelId },
-                data: {
-                    name,
-                    isPreSales: isPreSales,
-                    // O funil de pré-vendas é sempre o de entrada padrão
-                    isDefaultEntry: isPreSales || isDefaultEntry,
-                },
+                data: { name, isDefaultEntry },
             });
 
             // 2. Pega os IDs das etapas existentes no banco
