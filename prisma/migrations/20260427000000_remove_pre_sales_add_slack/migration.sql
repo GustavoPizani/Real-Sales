@@ -2,9 +2,12 @@
 UPDATE "users" SET "role" = 'BROKER' WHERE "role" = 'PRE_SALES';
 
 -- Recriar o enum Role sem PRE_SALES
+-- É necessário remover o DEFAULT antes de trocar o tipo, senão o PostgreSQL rejeita
 ALTER TYPE "Role" RENAME TO "Role_old";
 CREATE TYPE "Role" AS ENUM ('MARKETING_ADMIN', 'DIRECTOR', 'MANAGER', 'BROKER');
+ALTER TABLE "users" ALTER COLUMN "role" DROP DEFAULT;
 ALTER TABLE "users" ALTER COLUMN "role" TYPE "Role" USING "role"::text::"Role";
+ALTER TABLE "users" ALTER COLUMN "role" SET DEFAULT 'BROKER'::"Role";
 DROP TYPE "Role_old";
 
 -- Remover coluna isPreSales do Funnel
