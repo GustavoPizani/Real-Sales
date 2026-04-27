@@ -7,6 +7,15 @@ export interface IngestResult {
   reason?: string
 }
 
+function formatDateBR(date: Date): string {
+  const d = date.getDate().toString().padStart(2, '0')
+  const mo = (date.getMonth() + 1).toString().padStart(2, '0')
+  const y = date.getFullYear()
+  const h = date.getHours().toString().padStart(2, '0')
+  const min = date.getMinutes().toString().padStart(2, '0')
+  return `${d}/${mo}/${y} às ${h}:${min}`
+}
+
 export async function ingestLead(
   lead: FbLead,
   mapping: any
@@ -28,18 +37,12 @@ export async function ingestLead(
   let fullName = ''
   let email: string | null = null
   let phone: string | null = null
-  const observationParts: string[] = []
 
   for (const [fbKey, value] of Object.entries(fieldValues)) {
     const target = customMappings[fbKey]
     if (target === 'fullName') fullName = value
     else if (target === 'email') email = value
     else if (target === 'phone') phone = value
-    else if (target === 'ignore') continue
-    else {
-      const label = fbKey.replace(/_/g, ' ')
-      observationParts.push(`${label}: ${value}`)
-    }
   }
 
   // Fallback para detecção automática de campos padrão do Facebook
@@ -51,8 +54,10 @@ export async function ingestLead(
   }
 
   const formResponses: Record<string, string> = { ...fieldValues }
+  const leadDate = lead.created_time ? new Date(lead.created_time) : new Date()
+  const campaign = `Facebook Lead Ads - ${mapping.formName}`
 
-  // Dedup por e-mail
+  // Dedup por e-mail — registra novo cadastro no histórico do cliente existente
   if (email) {
     const byEmail = await prisma.client.findUnique({ where: { email } })
     if (byEmail) {
@@ -62,7 +67,33 @@ export async function ingestLead(
           data: { facebookLeadId: lead.id, formResponses },
         })
       }
+      if (byEmail.brokerId) {
+        await prisma.note.create({
+          data: {
+            content: `🔄 Novo cadastro no formulário (e-mail já existente)\nCampanha: ${campaign}\nData: ${formatDateBR(leadDate)}`,
+            authorId: byEmail.brokerId,
+            clientId: byEmail.id,
+          },
+        }).catch(() => null)
+      }
       return { status: 'skipped', reason: 'duplicate_email' }
+    }
+  }
+
+  // Dedup por telefone — registra novo cadastro no histórico do cliente existente
+  if (phone) {
+    const byPhone = await prisma.client.findFirst({ where: { phone } })
+    if (byPhone) {
+      if (byPhone.brokerId) {
+        await prisma.note.create({
+          data: {
+            content: `🔄 Novo cadastro no formulário (telefone já existente)\nCampanha: ${campaign}\nData: ${formatDateBR(leadDate)}`,
+            authorId: byPhone.brokerId,
+            clientId: byPhone.id,
+          },
+        }).catch(() => null)
+      }
+      return { status: 'skipped', reason: 'duplicate_phone' }
     }
   }
 
@@ -70,7 +101,6 @@ export async function ingestLead(
   let brokerId: string | null = mapping.defaultBrokerId ?? null
 
   if (!brokerId && mapping.roletaId) {
-    // Busca o próximo usuário na roleta (round-robin por última atribuição)
     const rouletteUsers = await prisma.leadRouletteUser.findMany({
       where: { rouletteId: mapping.roletaId },
       include: { user: { select: { id: true, name: true } } },
@@ -99,8 +129,8 @@ export async function ingestLead(
       phone: phone ?? undefined,
       facebookLeadId: lead.id,
       formResponses,
-      campaignSource: `Facebook Lead Ads - ${mapping.formName}`,
-      createdAt: lead.created_time ? new Date(lead.created_time) : undefined,
+      campaignSource: campaign,
+      createdAt: leadDate,
       brokerId,
       createdById: brokerId,
       funnelId: mapping.funnelId!,
@@ -109,15 +139,14 @@ export async function ingestLead(
     },
   })
 
-  if (observationParts.length > 0) {
-    await prisma.note.create({
-      data: {
-        content: `📋 Observações do formulário "${mapping.formName}":\n\n${observationParts.join('\n')}`,
-        authorId: brokerId,
-        clientId: client.id,
-      },
-    })
-  }
+  // Log de origem no histórico (sempre criado para novos leads)
+  await prisma.note.create({
+    data: {
+      content: `📋 Cadastro via Facebook Lead Ads\nFormulário: ${mapping.formName}\nData: ${formatDateBR(leadDate)}`,
+      authorId: brokerId,
+      clientId: client.id,
+    },
+  })
 
   await prisma.facebookFormMapping.update({
     where: { id: mapping.id },
@@ -134,9 +163,9 @@ export async function ingestLead(
     clientName: fullName,
     brokerId,
     brokerName: broker?.name ?? 'Corretor',
-    campaignSource: `Facebook Lead Ads - ${mapping.formName}`,
+    campaignSource: campaign,
     accountId: broker?.accountId,
-  }).catch(() => null)
+  }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err))
 
   console.log(`[LEAD_INGEST] Cliente criado: ${client.id} (lead FB ${lead.id})`)
   return { status: 'created' }

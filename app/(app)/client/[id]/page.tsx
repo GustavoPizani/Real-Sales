@@ -914,7 +914,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                               </Button>
                             </CardHeader>
                             <CardContent className="p-4 pt-0">
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                                 {note.content}
                               </p>
                             </CardContent>

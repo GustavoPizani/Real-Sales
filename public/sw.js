@@ -1,4 +1,4 @@
-const CACHE_NAME = 'real-sales-v2';
+const CACHE_NAME = 'real-sales-v3';
 const STATIC_ASSETS = ['/', '/dashboard'];
 
 self.addEventListener('install', (event) => {
@@ -62,11 +62,20 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(
     self.registration.showNotification(payload.title ?? 'Real Sales', options)
+      .then(() => {
+        if ('setAppBadge' in navigator) {
+          return navigator.setAppBadge(1).catch(() => null)
+        }
+      })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
+  if ('clearAppBadge' in navigator) {
+    navigator.clearAppBadge().catch(() => null)
+  }
 
   const url = event.notification.data?.url ?? '/dashboard';
 
