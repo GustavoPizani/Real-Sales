@@ -1,5 +1,4 @@
 import { MarketingLayout } from "@/components/marketing-layout"
-import { Toaster } from "@/components/ui/toaster"
 
 export default function MarketingRouteGroupLayout({
   children,
@@ -9,7 +8,6 @@ export default function MarketingRouteGroupLayout({
   return (
     <MarketingLayout>
       {children}
-      <Toaster />
     </MarketingLayout>
   )
 }

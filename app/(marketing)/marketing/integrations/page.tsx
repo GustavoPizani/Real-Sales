@@ -359,12 +359,12 @@ export default function IntegrationsPage() {
       if (json.ok) {
         toast({ title: '✅ Push enviado!', description: 'Verifique a notificação no seu dispositivo.' })
       } else {
-        toast({
-          variant: 'destructive',
-          title: 'Push não funcionou',
-          description: json.reason ?? 'Verifique as configurações.',
-        })
-        console.warn('[TEST_PUSH] diagnostics:', json.diagnostics)
+        const reason = json.reason ?? 'Verifique as configurações.'
+        const d = json.diagnostics ?? {}
+        console.error(
+          `[TEST_PUSH] FALHOU\nMotivo: ${reason}\nvapidPublic: ${d.vapidPublicSet}\nvapidPrivate: ${d.vapidPrivateSet}\nvapidEmail: ${d.vapidEmailSet}\nsubscription salva: ${d.subscriptionSaved}\nendpoint: ${d.subscriptionEndpoint}`
+        )
+        toast({ variant: 'destructive', title: 'Push não funcionou', description: reason })
       }
     } catch {
       toast({ variant: 'destructive', title: 'Erro ao testar push' })
