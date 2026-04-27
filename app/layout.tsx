@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
+import { PushSubscriber } from "@/components/push-subscriber";
 import Script from "next/script";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           {children}
           <Toaster />
+          <PushSubscriber />
         </AuthProvider>
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {

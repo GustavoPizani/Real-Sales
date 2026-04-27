@@ -351,6 +351,47 @@ export default function IntegrationsPage() {
     await fetchCrmData()
   }
 
+  const handleActivatePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast({ variant: 'destructive', title: 'Não suportado', description: 'Este browser não suporta push notifications.' })
+      return
+    }
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') {
+        toast({ variant: 'destructive', title: 'Permissão negada', description: 'Permita notificações nas configurações do browser.' })
+        return
+      }
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidKey) {
+        toast({ variant: 'destructive', title: 'Configuração ausente', description: 'NEXT_PUBLIC_VAPID_PUBLIC_KEY não configurada.' })
+        return
+      }
+      const reg = await navigator.serviceWorker.ready
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) await existing.unsubscribe()
+
+      const padding = '='.repeat((4 - (vapidKey.length % 4)) % 4)
+      const base64 = (vapidKey + padding).replace(/-/g, '+').replace(/_/g, '/')
+      const rawData = window.atob(base64)
+      const applicationServerKey = Uint8Array.from([...rawData].map(c => c.charCodeAt(0)))
+
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })
+      const res = await fetch('/api/notifications/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub),
+      })
+      if (res.ok) {
+        toast({ title: '✅ Notificações ativadas!', description: 'Você receberá alertas de novos leads neste dispositivo.' })
+      } else {
+        toast({ variant: 'destructive', title: 'Erro ao salvar assinatura', description: 'Tente novamente.' })
+      }
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: err.message })
+    }
+  }
+
   const handleTestPush = async () => {
     setTestingPush(true)
     try {
@@ -537,12 +578,23 @@ export default function IntegrationsPage() {
             </p>
           </div>
 
-          <div className="pt-2 border-t border-border flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Testar notificação push no dispositivo atual:</p>
-            <Button variant="outline" size="sm" disabled={testingPush} onClick={handleTestPush}>
-              {testingPush && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-              Testar Push
-            </Button>
+          <div className="pt-2 border-t border-border space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Notificações push</p>
+                <p className="text-xs text-muted-foreground">Receba alertas de novos leads neste dispositivo</p>
+              </div>
+              <Button variant="default" size="sm" onClick={handleActivatePush}>
+                Ativar Notificações
+              </Button>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Testar se o push está funcionando:</p>
+              <Button variant="outline" size="sm" disabled={testingPush} onClick={handleTestPush}>
+                {testingPush && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                Testar Push
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
