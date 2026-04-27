@@ -397,15 +397,26 @@ export default function IntegrationsPage() {
     try {
       const res = await fetch('/api/notifications/test-push', { method: 'POST' })
       const json = await res.json()
+      const devices: { device: string; status: string; error?: string; statusCode?: number }[] = json.devices ?? []
+      devices.forEach(d => {
+        if (d.status === 'sent') {
+          console.log(`[PUSH] ✅ ${d.device}: enviado`)
+        } else {
+          console.error(`[PUSH] ❌ ${d.device}: FALHOU — ${d.error} (HTTP ${d.statusCode ?? '?'})`)
+        }
+      })
       if (json.ok) {
-        toast({ title: '✅ Push enviado!', description: 'Verifique a notificação no seu dispositivo.' })
+        toast({ title: '✅ Push enviado!', description: `${devices.length} dispositivo(s) notificado(s).` })
+      } else if (json.reason) {
+        console.error('[PUSH] Motivo:', json.reason)
+        toast({ variant: 'destructive', title: 'Push não funcionou', description: json.reason })
       } else {
-        const reason = json.reason ?? 'Verifique as configurações.'
-        const d = json.diagnostics ?? {}
-        console.error(
-          `[TEST_PUSH] FALHOU\nMotivo: ${reason}\nvapidPublic: ${d.vapidPublicSet}\nvapidPrivate: ${d.vapidPrivateSet}\nvapidEmail: ${d.vapidEmailSet}\nsubscription salva: ${d.subscriptionSaved}\nendpoint: ${d.subscriptionEndpoint}`
-        )
-        toast({ variant: 'destructive', title: 'Push não funcionou', description: reason })
+        const failed = devices.filter(d => d.status !== 'sent')
+        toast({
+          variant: 'destructive',
+          title: 'Push parcialmente falhou',
+          description: failed.map(d => `${d.device}: ${d.error}`).join(' | '),
+        })
       }
     } catch {
       toast({ variant: 'destructive', title: 'Erro ao testar push' })
