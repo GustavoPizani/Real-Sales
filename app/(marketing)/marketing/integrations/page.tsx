@@ -127,6 +127,7 @@ export default function IntegrationsPage() {
   const [manualToken, setManualToken] = useState("")
   const [savingToken, setSavingToken] = useState(false)
   const [formComboOpen, setFormComboOpen] = useState(false)
+  const [testingPush, setTestingPush] = useState(false)
 
   const [formData, setFormData] = useState(EMPTY_FORM)
 
@@ -350,6 +351,28 @@ export default function IntegrationsPage() {
     await fetchCrmData()
   }
 
+  const handleTestPush = async () => {
+    setTestingPush(true)
+    try {
+      const res = await fetch('/api/notifications/test-push', { method: 'POST' })
+      const json = await res.json()
+      if (json.ok) {
+        toast({ title: '✅ Push enviado!', description: 'Verifique a notificação no seu dispositivo.' })
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Push não funcionou',
+          description: json.reason ?? 'Verifique as configurações.',
+        })
+        console.warn('[TEST_PUSH] diagnostics:', json.diagnostics)
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao testar push' })
+    } finally {
+      setTestingPush(false)
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <div>
@@ -512,6 +535,14 @@ export default function IntegrationsPage() {
             <p className="text-xs text-muted-foreground">
               Salvo permanentemente no servidor via <code className="font-mono bg-muted px-1 rounded">FACEBOOK_WEBHOOK_VERIFY_TOKEN</code>.
             </p>
+          </div>
+
+          <div className="pt-2 border-t border-border flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Testar notificação push no dispositivo atual:</p>
+            <Button variant="outline" size="sm" disabled={testingPush} onClick={handleTestPush}>
+              {testingPush && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Testar Push
+            </Button>
           </div>
         </CardContent>
       </Card>
