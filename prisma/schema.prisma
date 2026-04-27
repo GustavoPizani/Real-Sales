@@ -95,7 +95,7 @@ model User {
   clientsCreatedByMe Client[]          @relation("ClientCreatedBy")
   tasks              Task[]
   notes              Note[]
-  pushSubscription   PushSubscription?
+  pushSubscriptions  PushSubscription[]
   notifications      Notification[]
 
   // Property Relations
@@ -417,7 +417,7 @@ model PushSubscription {
   endpoint String  @unique
   p256dh   String?
   auth     String?
-  userId   String  @unique
+  userId   String
   user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("push_subscriptions")

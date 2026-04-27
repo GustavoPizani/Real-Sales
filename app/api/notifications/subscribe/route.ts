@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
     const subscription = await request.json();
 
     await prisma.pushSubscription.upsert({
-      where: { userId: user.id },
+      where: { endpoint: subscription.endpoint },
       update: {
-        endpoint: subscription.endpoint,
+        userId: user.id,
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
       },

@@ -134,19 +134,29 @@ export async function sendWebPush(
 
   if (!vapidPublic || !vapidPrivate || !vapidEmail) return
 
-  const sub = await prisma.pushSubscription.findUnique({
-    where: { userId },
-  })
-  if (!sub?.p256dh || !sub?.auth) return
+  const subs = await prisma.pushSubscription.findMany({ where: { userId } })
+  if (subs.length === 0) return
 
-  try {
-    const webpush = await import('web-push')
-    webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
-    await webpush.sendNotification(
-      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      JSON.stringify({ title, body, data })
-    )
-  } catch (err) {
-    console.error('[PUSH] Failed to send push notification:', err)
-  }
+  const webpush = await import('web-push')
+  webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
+  const payload = JSON.stringify({ title, body, data })
+
+  await Promise.allSettled(
+    subs.map(async (sub) => {
+      if (!sub.p256dh || !sub.auth) return
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload
+        )
+      } catch (err: any) {
+        // Remove assinaturas expiradas/inválidas (410 Gone ou 404)
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => null)
+        } else {
+          console.error('[PUSH] Failed:', err.message)
+        }
+      }
+    })
+  )
 }

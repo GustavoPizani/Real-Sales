@@ -13,14 +13,14 @@ export async function POST() {
   const vapidPrivate = process.env.VAPID_PRIVATE_KEY
   const vapidEmail = process.env.VAPID_EMAIL
 
-  const sub = await prisma.pushSubscription.findUnique({ where: { userId: user.id } })
+  const subs = await prisma.pushSubscription.findMany({ where: { userId: user.id } })
 
   const diagnostics = {
     vapidPublicSet: !!vapidPublic,
     vapidPrivateSet: !!vapidPrivate,
     vapidEmailSet: !!vapidEmail,
-    subscriptionSaved: !!sub,
-    subscriptionEndpoint: sub?.endpoint?.slice(0, 50) + '...' ?? null,
+    subscriptionCount: subs.length,
+    endpoints: subs.map(s => s.endpoint.slice(0, 50) + '...'),
   }
 
   if (!vapidPublic || !vapidPrivate || !vapidEmail) {
@@ -31,10 +31,10 @@ export async function POST() {
     })
   }
 
-  if (!sub) {
+  if (subs.length === 0) {
     return NextResponse.json({
       ok: false,
-      reason: 'Nenhuma assinatura push salva para este usuário. O browser não concedeu permissão ou PushSubscriber não rodou.',
+      reason: 'Nenhuma assinatura push salva. Clique em "Ativar Notificações" neste dispositivo.',
       diagnostics,
     })
   }
