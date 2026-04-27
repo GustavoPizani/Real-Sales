@@ -1,5 +1,16 @@
-const CACHE_NAME = 'real-sales-v3';
+const CACHE_NAME = 'real-sales-v4';
 const STATIC_ASSETS = ['/', '/dashboard'];
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = atob(base64)
+  const output = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    output[i] = rawData.charCodeAt(i)
+  }
+  return output
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -69,6 +80,34 @@ self.addEventListener('push', (event) => {
       })
   );
 });
+
+// Quando o OS rotaciona o token de push (comum no iOS), reinscreve automaticamente
+// sem precisar abrir o app — evita o gap onde o servidor tem assinatura inválida
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const { publicKey } = await fetch('/api/notifications/vapid-public').then(r => r.json())
+        if (!publicKey) return
+
+        const newSub = event.newSubscription
+          ?? await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          })
+
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(newSub),
+        })
+      } catch (err) {
+        console.error('[SW] pushsubscriptionchange falhou:', err)
+      }
+    })()
+  )
+})
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

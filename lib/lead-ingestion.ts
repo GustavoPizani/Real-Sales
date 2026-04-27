@@ -1,6 +1,7 @@
 import { prisma } from './prisma'
 import { graphGet, extractLeadFields, type FbLead } from './facebook-graph'
 import { notifyNewLead } from './notifications'
+import { sendSlackLeadNotification } from './slack'
 
 export interface IngestResult {
   status: 'created' | 'skipped' | 'error'
@@ -166,6 +167,15 @@ export async function ingestLead(
     campaignSource: campaign,
     accountId: broker?.accountId,
   }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err))
+
+  sendSlackLeadNotification({
+    clientId: client.id,
+    clientName: fullName,
+    phone,
+    email,
+    brokerName: broker?.name ?? 'Corretor',
+    campaignSource: campaign,
+  })
 
   console.log(`[LEAD_INGEST] Cliente criado: ${client.id} (lead FB ${lead.id})`)
   return { status: 'created' }

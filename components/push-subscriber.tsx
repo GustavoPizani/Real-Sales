@@ -61,6 +61,12 @@ export function PushSubscriber() {
 
   useEffect(() => {
     if (!user) return;
+
+    // Limpa o badge do ícone do PWA ao abrir o app
+    if ('clearAppBadge' in navigator) {
+      navigator.clearAppBadge().catch(() => null);
+    }
+
     // Pequeno delay para não competir com o carregamento inicial da página
     const id = setTimeout(() => trySubscribe(user.id), 3000);
     return () => clearTimeout(id);
