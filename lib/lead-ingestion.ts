@@ -159,24 +159,25 @@ export async function ingestLead(
     select: { name: true, accountId: true, slackMemberId: true },
   })
 
-  notifyNewLead({
-    clientId: client.id,
-    clientName: fullName,
-    brokerId,
-    brokerName: broker?.name ?? 'Corretor',
-    campaignSource: campaign,
-    accountId: broker?.accountId,
-  }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err))
-
-  sendSlackLeadNotification({
-    clientId: client.id,
-    clientName: fullName,
-    phone,
-    email,
-    brokerName: broker?.name ?? 'Corretor',
-    brokerSlackMemberId: broker?.slackMemberId,
-    campaignSource: campaign,
-  })
+  await Promise.allSettled([
+    notifyNewLead({
+      clientId: client.id,
+      clientName: fullName,
+      brokerId,
+      brokerName: broker?.name ?? 'Corretor',
+      campaignSource: campaign,
+      accountId: broker?.accountId,
+    }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err)),
+    sendSlackLeadNotification({
+      clientId: client.id,
+      clientName: fullName,
+      phone,
+      email,
+      brokerName: broker?.name ?? 'Corretor',
+      brokerSlackMemberId: broker?.slackMemberId,
+      campaignSource: campaign,
+    }),
+  ])
 
   console.log(`[LEAD_INGEST] Cliente criado: ${client.id} (lead FB ${lead.id})`)
   return { status: 'created' }

@@ -67,7 +67,12 @@ export async function sendSlackLeadNotification({
 }) {
   const webhookUrl = process.env.SLACK_LEAD_WEBHOOK_URL
   const botToken = process.env.SLACK_BOT_TOKEN
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://real-sales.vercel.app'
+  const appUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined) ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
+    'https://real-sales.vercel.app'
 
   const blocks = buildBlocks({ clientId, clientName, phone, email, brokerName, campaignSource, appUrl })
 

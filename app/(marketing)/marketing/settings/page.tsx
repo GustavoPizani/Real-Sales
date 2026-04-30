@@ -75,10 +75,17 @@ export default function MarketingSettingsPage() {
     setSaving(key);
     try {
       const encrypted = encrypt(value);
-      const { error } = await supabase.from("api_settings").upsert(
-        { user_id: userId, setting_key: key, encrypted_value: encrypted },
-        { onConflict: "user_id,setting_key" }
-      );
+      const { data: existing } = await supabase
+        .from("api_settings")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("setting_key", key)
+        .maybeSingle();
+
+      const { error } = existing
+        ? await supabase.from("api_settings").update({ encrypted_value: encrypted }).eq("user_id", userId).eq("setting_key", key)
+        : await supabase.from("api_settings").insert({ user_id: userId, setting_key: key, encrypted_value: encrypted });
+
       if (error) throw error;
       toast({ title: "Sucesso", description: "Chave salva." });
     } catch (err: any) {
@@ -108,10 +115,17 @@ export default function MarketingSettingsPage() {
     setSaving("META_AD_ACCOUNT_IDS");
     try {
       const enc = encrypt(valid.join(","));
-      const { error } = await supabase.from("api_settings").upsert(
-        { user_id: userId, setting_key: "META_AD_ACCOUNT_IDS", encrypted_value: enc },
-        { onConflict: "user_id,setting_key" }
-      );
+      const { data: existing } = await supabase
+        .from("api_settings")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("setting_key", "META_AD_ACCOUNT_IDS")
+        .maybeSingle();
+
+      const { error } = existing
+        ? await supabase.from("api_settings").update({ encrypted_value: enc }).eq("user_id", userId).eq("setting_key", "META_AD_ACCOUNT_IDS")
+        : await supabase.from("api_settings").insert({ user_id: userId, setting_key: "META_AD_ACCOUNT_IDS", encrypted_value: enc });
+
       if (error) throw error;
       setSettings((p) => ({ ...p, META_AD_ACCOUNT_IDS: valid.join(",") }));
       toast({ title: "Sucesso", description: "Contas salvas." });

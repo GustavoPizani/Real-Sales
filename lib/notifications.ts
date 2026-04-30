@@ -132,10 +132,16 @@ export async function sendWebPush(
   const vapidPrivate = process.env.VAPID_PRIVATE_KEY
   const vapidEmail = process.env.VAPID_EMAIL
 
-  if (!vapidPublic || !vapidPrivate || !vapidEmail) return
+  if (!vapidPublic || !vapidPrivate || !vapidEmail) {
+    console.error('[PUSH] Chaves VAPID não configuradas (VAPID_PRIVATE_KEY / VAPID_EMAIL ausentes)')
+    return
+  }
 
   const subs = await prisma.pushSubscription.findMany({ where: { userId } })
-  if (subs.length === 0) return
+  if (subs.length === 0) {
+    console.warn('[PUSH] Nenhuma assinatura encontrada para userId:', userId)
+    return
+  }
 
   const webpush = await import('web-push')
   webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)

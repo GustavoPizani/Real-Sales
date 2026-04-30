@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/prisma'
 import { graphGet, type FbLead } from '@/lib/facebook-graph'
 import { ingestLead } from '@/lib/lead-ingestion'
@@ -25,9 +26,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
 
-  // Responde 200 imediatamente (Facebook exige resposta em < 20s)
-  processWebhookPayload(body).catch(err =>
-    console.error('[FB_WEBHOOK_PROCESS_ERROR]', err)
+  // waitUntil garante que a Vercel mantém a função viva até o processamento terminar
+  // mesmo após retornar o 200 (Facebook exige resposta em < 20s)
+  waitUntil(
+    processWebhookPayload(body).catch(err =>
+      console.error('[FB_WEBHOOK_PROCESS_ERROR]', err)
+    )
   )
 
   return new Response('EVENT_RECEIVED', { status: 200 })
