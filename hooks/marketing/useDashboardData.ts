@@ -28,22 +28,46 @@ export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number)
     return isNaN(num) ? 0 : num;
   };
 
+  const decrypt = (ciphertext: string) => {
+    try { return CryptoJS.AES.decrypt(ciphertext, ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8) }
+    catch { return '' }
+  }
+
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // --- ADICIONADO: Disparar Sincronização Real com a Meta ---
+      // Sincroniza com a Meta API quando acionado manualmente
       if (refreshTrigger > 0) {
         console.log("🔄 Sincronizando com a API da Meta...");
-        // 1. Busca métricas novas (Gastos, cliques, etc)
-        await supabase.functions.invoke('meta-insights');
-        
-        // 2. Processa a API de Conversões (Envia Leads/Vendas pendentes)
-        await supabase.functions.invoke('facebook-capi');
-        
-        console.log("✅ Sincronização Meta finalizada.");
+
+        const { data: settingsData } = await supabase
+          .from('api_settings')
+          .select('setting_key, encrypted_value')
+          .eq('user_id', user.id)
+
+        const keys: Record<string, string> = {}
+        settingsData?.forEach(s => {
+          const val = decrypt(s.encrypted_value)
+          if (val) keys[s.setting_key] = val
+        })
+
+        const accessToken = keys['META_ACCESS_TOKEN']
+        const adAccountIds = keys['META_AD_ACCOUNT_IDS']?.split(',').filter(Boolean) ?? []
+        const since = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+        const until = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+
+        if (accessToken && adAccountIds.length > 0) {
+          await supabase.functions.invoke('meta-insights', {
+            body: { adAccountIds, accessToken, since, until }
+          })
+          console.log("✅ Sincronização Meta finalizada.")
+        } else {
+          console.warn("[SYNC] META_ACCESS_TOKEN ou META_AD_ACCOUNT_IDS não configurados.")
+          toast({ variant: "destructive", title: "Chaves Meta não configuradas", description: "Configure META_ACCESS_TOKEN e as Contas de Anúncio em Configurações." })
+        }
       }
 
       // Busca os dados do banco após sincronizar
@@ -78,11 +102,10 @@ export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number)
 
       setRawMetrics(metrics || []);
 
-      // 4. CRM DATA
-      let crmQuery = supabase.from("crm_leads").select("*").eq("user_id", user.id);
-      if (dateRange?.from) crmQuery = crmQuery.gte("created_at", format(dateRange.from, "yyyy-MM-dd"));
-      if (dateRange?.to) crmQuery = crmQuery.lte("created_at", format(dateRange.to, "yyyy-MM-dd") + " 23:59:59");
-      const { data: crmData } = await crmQuery;
+      // CRM leads — contagem via API do sistema
+      const crmRes = await fetch(`/api/dashboard/stats`).catch(() => null)
+      const crmStats = crmRes?.ok ? await crmRes.json().catch(() => null) : null
+      const crmLeadsCount = crmStats?.totalClients ?? 0
 
       // 5. PROCESSAMENTO: Agrupar por Campanha, incluindo account_name
       const campaignGroups: Record<string, any> = {};
@@ -155,7 +178,7 @@ export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number)
           cpl: totalLeads > 0 ? totalSpend / totalLeads : 0, 
           ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0, 
           cpc: totalClicks > 0 ? totalSpend / totalClicks : 0, 
-          crm_leads: crmData?.length || 0, 
+          crm_leads: crmLeadsCount,
           sales: 0, 
           revenue: 0 
       });
@@ -166,7 +189,7 @@ export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number)
     } finally {
       setIsLoading(false);
     }
-  }, [dateRange, toast]);
+  }, [dateRange, toast, refreshTrigger]);
 
   useEffect(() => { fetchDashboardData(); }, [fetchDashboardData, refreshTrigger]);
 
