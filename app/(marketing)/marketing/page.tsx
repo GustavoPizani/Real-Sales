@@ -12,7 +12,7 @@ import { FileText, Filter, RefreshCw } from "lucide-react";
 import { PDFReportTemplate } from "@/components/marketing/PDFReportTemplate";
 import { DatePickerWithRange } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 import { DateRange } from "react-day-picker";
 
 export default function MarketingPage() {
@@ -50,8 +50,10 @@ export default function MarketingPage() {
       pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
     }
 
-    const date = new Date().toISOString().split("T")[0];
-    pdf.save(`Relatorio_Marketing_${date}.pdf`);
+    const conta = selectedAccount === "all" ? "Todas_as_Contas" : selectedAccount.replace(/\s+/g, "_");
+    const de = dateRange?.from ? format(dateRange.from, "dd-MM-yyyy") : "inicio";
+    const ate = dateRange?.to ? format(dateRange.to, "dd-MM-yyyy") : "fim";
+    pdf.save(`Relatorio_${conta}_${de}_ate_${ate}.pdf`);
   };
 
   const availableAccounts = useMemo(() => {
