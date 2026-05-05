@@ -576,12 +576,35 @@
 
 /* Print styles */
 @media print {
-  .no-print {
-    display: none !important;
+  /* Oculta toda a UI do sistema */
+  body > *:not(#__NEXT_DATA__) { display: none !important; }
+
+  /* Mostra apenas o container do relatório */
+  #pdf-report-container {
+    display: block !important;
+    position: static !important;
+    z-index: auto !important;
+    width: 100% !important;
+    background: white !important;
   }
 
-  .print-only {
+  /* Cada página do relatório quebra corretamente */
+  .report-page {
     display: block !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .report-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
   }
 }
 
