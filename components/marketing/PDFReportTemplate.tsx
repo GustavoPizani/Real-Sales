@@ -75,13 +75,14 @@ const ReportPage = ({ title, subTitle, metrics, dateRange, isLast }: any) => {
       className="report-page bg-white text-slate-900"
       style={{
         width: "210mm",
-        minHeight: "297mm",
-        padding: "24px 28px",
+        height: "297mm",
+        padding: "14mm 16mm",
         display: "flex",
         flexDirection: "column",
         pageBreakAfter: isLast ? "auto" : "always",
         breakAfter: isLast ? "auto" : "page",
         boxSizing: "border-box",
+        overflow: "hidden",
       }}
     >
       {/* Header */}

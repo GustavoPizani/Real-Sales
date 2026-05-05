@@ -590,6 +590,13 @@
     left: 0 !important;
     z-index: 9999 !important;
     width: 210mm !important;
+    background: white !important;
+  }
+
+  .report-page {
+    width: 210mm !important;
+    height: 297mm !important;
+    overflow: hidden !important;
   }
 
   /* Quebra de página entre cada relatório */
