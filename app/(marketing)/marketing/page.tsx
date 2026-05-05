@@ -8,7 +8,7 @@ import { CreativeView } from "@/components/marketing/CreativeView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDashboardData } from "@/hooks/marketing/useDashboardData";
 import { Button } from "@/components/ui/button";
-import { FileText, Filter } from "lucide-react";
+import { FileText, Filter, RefreshCw } from "lucide-react";
 import { PDFReportTemplate } from "@/components/marketing/PDFReportTemplate";
 import { DatePickerWithRange } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,8 +22,9 @@ export default function MarketingPage() {
   });
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [selectedCampaign, setSelectedCampaign] = useState<string>("all");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const { data: campaignData, dailyData, creatives, isLoading } = useDashboardData(dateRange);
+  const { data: campaignData, dailyMetrics: dailyData, creatives, isLoading } = useDashboardData(dateRange, refreshTrigger);
 
   const handleExportPDF = () => {
     window.print();
@@ -102,6 +103,16 @@ export default function MarketingPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            <Button
+              onClick={() => setRefreshTrigger(t => t + 1)}
+              variant="outline"
+              disabled={isLoading}
+              className="border-secondary-custom text-secondary-custom hover:bg-secondary-custom hover:text-primary-custom transition-all"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading && refreshTrigger > 0 ? 'animate-spin' : ''}`} />
+              Sincronizar
+            </Button>
 
             <Button
               onClick={handleExportPDF}
