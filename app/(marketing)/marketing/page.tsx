@@ -26,8 +26,32 @@ export default function MarketingPage() {
 
   const { data: campaignData, dailyMetrics: dailyData, creatives, isLoading } = useDashboardData(dateRange, refreshTrigger);
 
-  const handleExportPDF = () => {
-    window.print();
+  const handleExportPDF = async () => {
+    const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+      import("jspdf"),
+      import("html2canvas"),
+    ]);
+
+    const uniqueCampaignNames = Array.from(new Set(filteredCampaigns.map((d: any) => d.campaign_name))).filter(Boolean);
+    const totalPages = 1 + uniqueCampaignNames.length;
+
+    const pdf = new jsPDF("p", "mm", "a4");
+
+    for (let i = 1; i <= totalPages; i++) {
+      const element = document.getElementById(`report-page-${i}`);
+      if (!element) continue;
+
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      if (i > 1) pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
+    }
+
+    const date = new Date().toISOString().split("T")[0];
+    pdf.save(`Relatorio_Marketing_${date}.pdf`);
   };
 
   const availableAccounts = useMemo(() => {

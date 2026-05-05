@@ -184,7 +184,9 @@ export const PDFReportTemplate = ({ data, dateRange }: PDFReportTemplateProps) =
   return (
     <div id="pdf-report-container" className="fixed top-0 left-0 -z-50">
       {pages.map((page, i) => (
-        <ReportPage key={i} {...page} dateRange={dateRange} isLast={i === pages.length - 1} />
+        <div key={i} id={`report-page-${i + 1}`}>
+          <ReportPage {...page} dateRange={dateRange} isLast={i === pages.length - 1} />
+        </div>
       ))}
     </div>
   );
