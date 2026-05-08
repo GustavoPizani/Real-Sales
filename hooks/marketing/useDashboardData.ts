@@ -70,6 +70,19 @@ export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number)
         }
       }
 
+      // Rotação local: se o filtro está em ≤ 90 dias, apaga dados mais antigos que 90 dias
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const filterSince = dateRange?.from ?? ninetyDaysAgo;
+      if (filterSince >= ninetyDaysAgo) {
+        const cutoff = ninetyDaysAgo.toISOString().split('T')[0];
+        await supabase
+          .from('campaign_metrics')
+          .delete()
+          .eq('user_id', user.id)
+          .lt('date', cutoff);
+      }
+
       // Busca os dados do banco após sincronizar
       const { data: metricsData, error: metricsError } = await supabase
         .from('campaign_metrics')

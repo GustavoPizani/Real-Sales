@@ -219,6 +219,14 @@
   --sb-thumb: hsl(215 28% 20%);
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--sb-thumb) var(--sb-track);

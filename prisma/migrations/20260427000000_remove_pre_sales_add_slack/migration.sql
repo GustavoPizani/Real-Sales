@@ -8,6 +8,8 @@ CREATE TYPE "Role" AS ENUM ('MARKETING_ADMIN', 'DIRECTOR', 'MANAGER', 'BROKER');
 ALTER TABLE "users" ALTER COLUMN "role" DROP DEFAULT;
 ALTER TABLE "users" ALTER COLUMN "role" TYPE "Role" USING "role"::text::"Role";
 ALTER TABLE "users" ALTER COLUMN "role" SET DEFAULT 'BROKER'::"Role";
+-- Migrar role_settings.roleName de Role_old para TEXT antes de dropar o tipo antigo
+ALTER TABLE "role_settings" ALTER COLUMN "roleName" TYPE TEXT;
 DROP TYPE "Role_old";
 
 -- Remover coluna isPreSales do Funnel

@@ -112,9 +112,8 @@ model User {
   createdOffers ActiveOffer[]       @relation("CreatedOffers")
   assignedCalls ActiveOfferClient[] @relation("AssignedCalls")
 
-  // Lead Pool (O que causou o erro anterior)
-  qualifiedLeadsForMe Client[]       @relation("QualifiedFor")
-  allowedLeadPools    LeadPoolUser[]
+  // Lead Pool
+  qualifiedLeadsForMe Client[] @relation("QualifiedFor")
 
   facebookFormMappings FacebookFormMapping[] @relation("FbDefaultBroker")
 
@@ -173,25 +172,6 @@ model Client {
 // MARKETING MODELS (REAL ROI HUB - UNIFICAÇÃO)
 // =======================================================================
 
-model AdMetric {
-  id              String    @id @default(uuid())
-  ad_id           String
-  ad_name         String?
-  clicks          Int?
-  conversions     Int?
-  cost_per_result Float?
-  date_start      DateTime? @db.Date
-  date_stop       DateTime? @db.Date
-  device          String?
-  impressions     Int?
-  spend           Float?
-  thumbnail_url   String?
-  user_id         String
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-
-  @@map("ad_metrics")
-}
 
 model ApiSetting {
   id              String   @id @default(uuid())
@@ -334,24 +314,6 @@ model LeadRouletteUser {
   @@map("roulette_users")
 }
 
-model LeadPoolUser {
-  leadPoolId String
-  leadPool   LeadPool @relation(fields: [leadPoolId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([leadPoolId, userId])
-  @@map("lead_pool_users")
-}
-
-model LeadPool {
-  id       String         @id @default(cuid())
-  name     String         @unique
-  isActive Boolean        @default(true)
-  users    LeadPoolUser[]
-
-  @@map("lead_pools")
-}
 
 model AttendanceConfig {
   id           String             @id @default(cuid())

@@ -682,10 +682,30 @@ export default function PipelinePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="p-4 border-b bg-card flex-shrink-0">
-        <div className="flex items-center justify-between">
+      <header className="border-b bg-card flex-shrink-0">
+        {/* Mobile header */}
+        <div className="flex items-center gap-2 px-4 py-3 lg:hidden">
+          <Select value={selectedFunnelId || ''} onValueChange={setSelectedFunnelId}>
+            <SelectTrigger className="flex-1 h-9 text-sm">
+              <SelectValue placeholder="Selecione um funil..." />
+            </SelectTrigger>
+            <SelectContent>
+              {funnels.map(funnel => <SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {user?.role === 'MARKETING_ADMIN' && (
+            <Link href="/settings/funnels">
+              <Button variant="outline" size="icon" className="h-9 w-9 flex-shrink-0">
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+        </div>
+
+        {/* Desktop header */}
+        <div className="hidden lg:flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold text-foreground hidden sm:block">Pipeline de Vendas</h1>
+                <h1 className="text-xl font-bold text-foreground">Pipeline de Vendas</h1>
                 <Select value={selectedFunnelId || ''} onValueChange={setSelectedFunnelId}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Selecione um funil..." />
@@ -694,7 +714,6 @@ export default function PipelinePage() {
                     {funnels.map(funnel => <SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-
                 {user?.role === 'MARKETING_ADMIN' && (
                   <Link href="/settings/funnels">
                       <Button variant="outline" size="sm">
@@ -704,7 +723,7 @@ export default function PipelinePage() {
                   </Link>
                 )}
             </div>
-            <div className="hidden lg:block">
+            <div>
               <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
                   <DialogTrigger asChild>
                       <Button><Plus className="h-4 w-4 mr-2" /> Novo Cliente</Button>
@@ -789,32 +808,79 @@ export default function PipelinePage() {
       {/* Layout Mobile: Abas */}
       <div className="block lg:hidden flex-1 flex flex-col overflow-hidden">
         <Tabs defaultValue={funnelStages[0]?.id} className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-4 flex-shrink-0">
-            <TabsList className="w-full overflow-x-auto justify-start">
-              {funnelStages.map((stage) => (
-                <TabsTrigger key={stage.id} value={stage.id}>
-                  {stage.name} ({filteredClients.filter(c => c.funnelStageId === stage.id).length})
-                </TabsTrigger>
-              ))}
+          {/* Stage tabs — scroll horizontal sem barra visível */}
+          <div
+            className="no-scrollbar flex-shrink-0 bg-card border-b border-border overflow-x-auto"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            <TabsList className="flex w-max bg-transparent rounded-none border-none shadow-none h-auto px-3 py-2 gap-1.5">
+              {funnelStages.map((stage) => {
+                const count = filteredClients.filter(c => c.funnelStageId === stage.id).length;
+                return (
+                  <TabsTrigger
+                    key={stage.id}
+                    value={stage.id}
+                    className="flex-shrink-0 whitespace-nowrap rounded-full h-auto px-3.5 py-1.5 text-xs font-medium
+                      border border-border/60 bg-card text-muted-foreground shadow-none
+                      data-[state=active]:bg-secondary-custom data-[state=active]:text-primary-custom
+                      data-[state=active]:border-secondary-custom data-[state=active]:shadow-sm
+                      transition-all duration-200 gap-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
+                    {stage.name}
+                    <span className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 rounded-full bg-black/10 dark:bg-white/15 text-[9px] font-bold tabular-nums">
+                      {count}
+                    </span>
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {funnelStages.map((stage) => (
-              <TabsContent key={stage.id} value={stage.id} className="p-4 space-y-2">
-                {filteredClients
-                  .filter(c => c.funnelStageId === stage.id)
-                  .map(client => (
-                    <MobileClientCard key={client.id} client={client} />
-                  ))}
-              </TabsContent>
-            ))}
+
+          {/* Conteúdo de cada aba */}
+          <div className="flex-1 overflow-hidden">
+            {funnelStages.map((stage) => {
+              const stageClients = filteredClients.filter(c => c.funnelStageId === stage.id);
+              return (
+                <TabsContent
+                  key={stage.id}
+                  value={stage.id}
+                  className="h-full mt-0 data-[state=inactive]:hidden"
+                >
+                  <div className="h-full overflow-y-auto p-3 space-y-2 pb-24">
+                    {stageClients.length > 0
+                      ? stageClients.map(client => (
+                          <MobileClientCard key={client.id} client={client} />
+                        ))
+                      : (
+                        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                          <div
+                            className="w-12 h-12 rounded-full flex items-center justify-center mb-3 opacity-40"
+                            style={{ backgroundColor: stage.color + '30' }}
+                          >
+                            <User className="h-5 w-5" style={{ color: stage.color }} />
+                          </div>
+                          <p className="text-sm font-medium">Nenhum cliente</p>
+                          <p className="text-xs mt-0.5 text-muted-foreground/60">Nesta etapa do funil</p>
+                        </div>
+                      )
+                    }
+                  </div>
+                </TabsContent>
+              );
+            })}
           </div>
         </Tabs>
       </div>
 
       {/* FAB para Novo Cliente em Mobile */}
       <div className="lg:hidden fixed bottom-6 right-6 z-50">
-        <Button size="icon" className="h-14 w-14 rounded-full bg-primary-custom text-white shadow-lg hover:bg-primary-custom/90" onClick={() => setIsClientDialogOpen(true)}>
+        <Button
+          size="icon"
+          className="h-14 w-14 rounded-full shadow-xl"
+          style={{ background: 'var(--secondary-custom)', color: 'var(--primary-custom)' }}
+          onClick={() => setIsClientDialogOpen(true)}
+        >
           <Plus className="h-6 w-6" />
           <span className="sr-only">Novo Cliente</span>
         </Button>
