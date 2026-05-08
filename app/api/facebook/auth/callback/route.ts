@@ -84,8 +84,11 @@ export async function GET(request: NextRequest) {
       return true
     })
 
+    const activePageIds = new Set<string>()
+
     for (const page of uniquePages) {
       if (!page.access_token) continue
+      activePageIds.add(page.id)
       await prisma.facebookConnection.upsert({
         where: { accountId_pageId: { accountId, pageId: page.id } },
         update: {
@@ -101,6 +104,19 @@ export async function GET(request: NextRequest) {
           pageAccessToken: page.access_token,
           userAccessToken: longLivedToken,
         },
+      })
+    }
+
+    // Deactivate connections for pages no longer returned by Facebook
+    // (lost admin access, page removed from Business Manager, etc.)
+    if (activePageIds.size > 0) {
+      await prisma.facebookConnection.updateMany({
+        where: {
+          accountId,
+          pageId: { notIn: Array.from(activePageIds) },
+          isActive: true,
+        },
+        data: { isActive: false },
       })
     }
 
