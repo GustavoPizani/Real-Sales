@@ -569,28 +569,38 @@ function SecurityTab() {
   );
 }
 
+const REMINDER_OPTIONS = [
+  { value: '0', label: 'No horário exato' },
+  { value: '5', label: '5 minutos antes' },
+  { value: '10', label: '10 minutos antes' },
+  { value: '15', label: '15 minutos antes' },
+  { value: '30', label: '30 minutos antes' },
+  { value: '60', label: '1 hora antes' },
+  { value: '120', label: '2 horas antes' },
+  { value: '1440', label: '1 dia antes' },
+];
+
 function NotificationsTab() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [isSupported, setIsSupported] = useState(false);
+  const [reminderMinutes, setReminderMinutes] = useState('30');
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
 
-  // 1. Verifica se o navegador suporta notificações push e service workers
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       setIsSupported(true);
     }
   }, []);
 
-  // 2. Registra o Service Worker e verifica o status da inscrição atual
   useEffect(() => {
     if (!isSupported) return;
-
     const registerServiceWorker = async () => {
       try {
         const swRegistration = await navigator.serviceWorker.register('/sw.js');
         const existingSubscription = await swRegistration.pushManager.getSubscription();
-        
         if (existingSubscription) {
           setIsSubscribed(true);
           setSubscription(existingSubscription);
@@ -599,11 +609,22 @@ function NotificationsTab() {
         console.error('Falha ao registrar Service Worker:', error);
       }
     };
-
     registerServiceWorker();
   }, [isSupported]);
 
-  // 3. Função para ligar/desligar as notificações
+  // Carrega preferência salva do usuário
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`/api/users/${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.taskReminderMinutes !== undefined) {
+          setReminderMinutes(String(data.taskReminderMinutes));
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
   const handleToggleNotifications = async (enabled: boolean) => {
     if (!isSupported || !navigator.serviceWorker.ready) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Notificações push não são suportadas neste navegador.' });
@@ -613,7 +634,6 @@ function NotificationsTab() {
     const swRegistration = await navigator.serviceWorker.ready;
 
     if (enabled) {
-      // Lógica para INSCREVER
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         toast({ variant: 'destructive', title: 'Permissão Negada', description: 'Você precisa permitir as notificações no seu navegador.' });
@@ -623,7 +643,7 @@ function NotificationsTab() {
       try {
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         if (!vapidPublicKey) throw new Error('Chave VAPID pública não encontrada.');
-        
+
         const newSubscription = await swRegistration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: vapidPublicKey,
@@ -641,10 +661,9 @@ function NotificationsTab() {
       } catch (error) {
         console.error('Falha ao se inscrever:', error);
         toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível se inscrever para notificações.' });
-        setIsSubscribed(false); // Reverte o estado do switch em caso de erro
+        setIsSubscribed(false);
       }
     } else if (subscription) {
-      // Lógica para CANCELAR INSCRIÇÃO
       try {
         await subscription.unsubscribe();
         await fetch('/api/notifications/subscribe', { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
@@ -654,29 +673,82 @@ function NotificationsTab() {
       } catch (error) {
         console.error('Falha ao cancelar inscrição:', error);
         toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível remover a inscrição.' });
-        setIsSubscribed(true); // Reverte o estado do switch em caso de erro
+        setIsSubscribed(true);
       }
     }
   };
 
+  const handleSaveReminder = async () => {
+    if (!user?.id) return;
+    setIsSavingReminder(true);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+        body: JSON.stringify({ taskReminderMinutes: Number(reminderMinutes) }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: 'Salvo!', description: 'Lembrete de tarefas atualizado.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar a preferência.' });
+    } finally {
+      setIsSavingReminder(false);
+    }
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Notificações</CardTitle>
-        <CardDescription>Gerencie como você recebe notificações.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="push-notifications" className="font-medium">Notificações Push</Label>
-          <Switch
-            id="push-notifications"
-            checked={isSubscribed}
-            onCheckedChange={handleToggleNotifications}
-            disabled={!isSupported}
-          />
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Notificações Push</CardTitle>
+          <CardDescription>Receba alertas no PWA e no navegador mesmo com o app fechado.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="push-notifications" className="font-medium">
+              {isSubscribed ? 'Notificações ativadas' : 'Notificações desativadas'}
+            </Label>
+            <Switch
+              id="push-notifications"
+              checked={isSubscribed}
+              onCheckedChange={handleToggleNotifications}
+              disabled={!isSupported}
+            />
+          </div>
+          {!isSupported && (
+            <p className="text-xs text-muted-foreground mt-2">Seu navegador não suporta notificações push.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lembrete de Tarefas</CardTitle>
+          <CardDescription>Com quanto tempo de antecedência você quer ser notificado antes de uma tarefa vencer.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Select value={reminderMinutes} onValueChange={setReminderMinutes}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REMINDER_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handleSaveReminder} disabled={isSavingReminder}>
+              {isSavingReminder ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Salvar
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            O lembrete chega via push notification. Certifique-se de que as notificações push estão ativadas acima.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

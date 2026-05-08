@@ -59,8 +59,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: payload.body ?? '',
-    icon: '/api/pwa/icon?size=192',
-    badge: '/api/pwa/icon?size=72',
+    icon: '/api/pwa/icon-png?size=192',
+    badge: '/api/pwa/icon-png?size=72',
     data: { ...data, url },
     vibrate: [200, 100, 200],
     requireInteraction: true,

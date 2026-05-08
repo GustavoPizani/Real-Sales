@@ -839,11 +839,25 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </CardContent>
           </Card>
 
-          {/* Card de Observações do Formulário Facebook (apenas campos extras) */}
+          {/* Card de Observações do Formulário Facebook (apenas campos extras com valor real) */}
           {(() => {
-            const STANDARD = new Set(['full_name','email','phone_number','phone','whatsapp_number','first_name','last_name'])
+            const STANDARD = new Set([
+              'full_name','email','phone_number','phone','whatsapp_number',
+              'first_name','last_name','name',
+              // Campos de metadados internos do Facebook
+              'inbox_url','platform','partner_name','page_id','page_name',
+              'form_id','leadgen_id','campaign_id','campaign_name',
+              'adgroup_id','adgroup_name','ad_id','ad_name','created_time','is_organic',
+            ])
             const entries = client.formResponses
-              ? Object.entries(client.formResponses as Record<string, string>).filter(([k]) => !STANDARD.has(k.toLowerCase()))
+              ? Object.entries(client.formResponses as Record<string, string>).filter(([k, v]) => {
+                  const key = k.toLowerCase().replace(/\s+/g, '_')
+                  if (STANDARD.has(key)) return false
+                  if (!v || String(v).trim() === '') return false
+                  // Excluir valores que são URLs do Facebook (metadados internos)
+                  if (String(v).startsWith('https://business.facebook.com')) return false
+                  return true
+                })
               : []
             if (entries.length === 0) return null
             return (

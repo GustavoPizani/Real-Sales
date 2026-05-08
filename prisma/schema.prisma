@@ -117,7 +117,8 @@ model User {
 
   facebookFormMappings FacebookFormMapping[] @relation("FbDefaultBroker")
 
-  slackMemberId String? @map("slack_member_id")
+  slackMemberId        String? @map("slack_member_id")
+  taskReminderMinutes  Int     @default(30)
 
   @@map("users")
 }
@@ -339,17 +340,18 @@ model AttendanceRecord {
 }
 
 model Task {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  dateTime    DateTime
-  isCompleted Boolean  @default(false)
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        TaskType @default(OTHER)
-  priority    Priority @default(MEDIUM)
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  dateTime        DateTime
+  isCompleted     Boolean   @default(false)
+  reminderSentAt  DateTime?
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            TaskType  @default(OTHER)
+  priority        Priority  @default(MEDIUM)
 
   @@map("tasks")
 }

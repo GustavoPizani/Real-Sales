@@ -32,8 +32,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className="dark" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" href="/api/pwa/icon-png?size=192" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/api/pwa/icon-png?size=152" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/api/pwa/icon-png?size=180" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={inter.className}>
         <AuthProvider>

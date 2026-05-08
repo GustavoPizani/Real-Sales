@@ -21,6 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         email: true,
         role: true,
         supervisorId: true,
+        taskReminderMinutes: true,
       },
     });
 
@@ -46,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
         const body = await request.json();
         // Note: `password` update logic is removed as it will be handled by Supabase Auth.
-        const { name, email, role, supervisorId } = body;
+        const { name, email, role, supervisorId, taskReminderMinutes } = body;
 
         const isAdmin = currentUser.role === Role.MARKETING_ADMIN;
         const isEditingSelf = currentUser.id === params.id;
@@ -57,10 +58,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
         const dataToUpdate: Prisma.UserUpdateInput = {};
 
-        // A user can edit their own name and email
+        // A user can edit their own name, email and notification preferences
         if (isEditingSelf) {
             if (name) dataToUpdate.name = name;
-            if (email) dataToUpdate.email = email; // Allowing self-email update
+            if (email) dataToUpdate.email = email;
+            if (taskReminderMinutes !== undefined) {
+                const mins = Number(taskReminderMinutes);
+                if (!isNaN(mins) && mins >= 0) dataToUpdate.taskReminderMinutes = mins;
+            }
         }
 
         // Admins can update other users' data, role, and supervisor.
