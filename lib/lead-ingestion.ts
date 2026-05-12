@@ -184,12 +184,13 @@ export async function ingestLead(
 }
 
 /** Sincroniza um mapeamento buscando leads mais novos que lastSyncedAt.
- *  Usa paginação cursor com early-stop (leads mais antigos que a janela) em vez de
- *  server-side filtering, que não é suportado de forma confiável pelo FB Graph API. */
-export async function syncMapping(mapping: any): Promise<{ imported: number; skipped: number; errors: number }> {
-  const sinceMs = mapping.lastSyncedAt
-    ? new Date(mapping.lastSyncedAt).getTime() - 3_600_000  // 1h overlap
-    : Date.now() - 7 * 24 * 60 * 60 * 1000                  // últimos 7 dias na 1ª sync
+ *  fullSync=true ignora a janela de tempo e busca todos os leads históricos do formulário. */
+export async function syncMapping(mapping: any, fullSync = false): Promise<{ imported: number; skipped: number; errors: number }> {
+  const sinceMs = fullSync
+    ? 0
+    : mapping.lastSyncedAt
+      ? new Date(mapping.lastSyncedAt).getTime() - 3_600_000
+      : Date.now() - 7 * 24 * 60 * 60 * 1000
 
   let afterCursor: string | undefined
   let imported = 0

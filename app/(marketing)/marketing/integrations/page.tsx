@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Facebook, Plus, Trash2, RefreshCw, CheckCircle2, Zap, Copy, Check, ChevronsUpDown } from "lucide-react"
+import { Loader2, Facebook, Plus, Trash2, RefreshCw, CheckCircle2, Zap, Copy, Check, ChevronsUpDown, DatabaseZap } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -115,6 +115,7 @@ export default function IntegrationsPage() {
   const [loadingFields, setLoadingFields] = useState(false)
   const [savingMapping, setSavingMapping] = useState(false)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  const [fullSyncingId, setFullSyncingId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [connectingFb, setConnectingFb] = useState(false)
   const [webhookUrl, setWebhookUrl] = useState("")
@@ -344,6 +345,33 @@ export default function IntegrationsPage() {
     }
   }
 
+  const handleFullSync = async (mappingId: string, formName: string) => {
+    if (!confirm(`Sync completo de "${formName}"?\n\nIsso vai buscar TODOS os leads históricos do formulário. Pode demorar alguns minutos.`)) return
+    setFullSyncingId(mappingId)
+    try {
+      const res = await fetch(`/api/facebook/sync/${mappingId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullSync: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Erro no sync completo", description: data.error || `Código ${res.status}.` })
+        return
+      }
+      const { imported, skipped } = data
+      toast({
+        title: imported > 0 ? `${imported} leads importados!` : "Sync completo concluído",
+        description: `${skipped} leads já existiam no CRM.`,
+      })
+      await fetchCrmData()
+    } catch {
+      toast({ variant: "destructive", title: "Erro no sync completo", description: "Verifique se o token do Facebook ainda é válido." })
+    } finally {
+      setFullSyncingId(null)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm("Remover este mapeamento?")) return
     await fetch(`/api/facebook/mappings/${id}`, { method: "DELETE" })
@@ -533,9 +561,13 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 sm:flex-shrink-0">
-                    <Button variant="outline" size="sm" disabled={syncingId === m.id} onClick={() => handleSync(m.id)} title="Sincronizar leads históricos do Facebook">
+                    <Button variant="outline" size="sm" disabled={syncingId === m.id || fullSyncingId === m.id} onClick={() => handleSync(m.id)} title="Sincronizar leads recentes">
                       {syncingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                       <span className="ml-1.5 text-xs sm:hidden">Sincronizar</span>
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={syncingId === m.id || fullSyncingId === m.id} onClick={() => handleFullSync(m.id, m.formName)} title="Sync completo — busca todos os leads históricos">
+                      {fullSyncingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <DatabaseZap className="h-3 w-3" />}
+                      <span className="ml-1.5 text-xs sm:hidden">Sync Completo</span>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id)}>
                       <Trash2 className="h-3 w-3 text-destructive" />

@@ -4,7 +4,7 @@ import { getUserFromToken } from '@/lib/auth'
 import { syncMapping } from '@/lib/lead-ingestion'
 
 export async function POST(
-  _: NextRequest,
+  request: NextRequest,
   { params }: { params: { mappingId: string } }
 ) {
   const user = await getUserFromToken()
@@ -17,8 +17,14 @@ export async function POST(
 
   if (!mapping) return NextResponse.json({ error: 'Mapeamento não encontrado' }, { status: 404 })
 
+  let fullSync = false
   try {
-    const { imported, skipped, errors } = await syncMapping(mapping)
+    const body = await request.json()
+    fullSync = body?.fullSync === true
+  } catch {}
+
+  try {
+    const { imported, skipped, errors } = await syncMapping(mapping, fullSync)
     return NextResponse.json({ imported, skipped, errors })
   } catch (err: any) {
     console.error('[SYNC_MANUAL] Erro:', err.message)
