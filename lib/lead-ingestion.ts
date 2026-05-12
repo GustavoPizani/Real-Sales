@@ -112,7 +112,7 @@ export async function ingestLead(
     if (activeUser) {
       brokerId = activeUser.userId
       await prisma.leadRouletteUser.update({
-        where: { id: activeUser.id },
+        where: { rouletteId_userId: { rouletteId: activeUser.rouletteId, userId: activeUser.userId } },
         data: { lastAssignedAt: new Date() },
       })
     }

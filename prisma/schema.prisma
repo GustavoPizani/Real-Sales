@@ -306,10 +306,11 @@ model LeadRoulette {
 }
 
 model LeadRouletteUser {
-  rouletteId String
-  roulette   LeadRoulette @relation(fields: [rouletteId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rouletteId      String
+  roulette        LeadRoulette @relation(fields: [rouletteId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastAssignedAt  DateTime?
 
   @@id([rouletteId, userId])
   @@map("roulette_users")
