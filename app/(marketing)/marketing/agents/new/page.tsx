@@ -1,0 +1,192 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Save } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/use-toast";
+
+type DestinationData = {
+  funnels: { id: string; name: string; stages: { id: string; name: string }[] }[];
+  roulettes: { id: string; name: string }[];
+};
+
+export default function NewAgentPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [destinations, setDestinations] = useState<DestinationData | null>(null);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    model: "llama3-70b-8192",
+    temperature: 0.3,
+    isDefault: false,
+    initiationStrategy: "",
+    qualificationBoundary: "",
+    targetFunnelStage: "",
+    systemPrompt: "Você é um SDR altamente persuasivo e focado em qualificar leads.",
+  });
+
+  useEffect(() => {
+    fetch("/api/agents/destinations")
+      .then((res) => res.json())
+      .then((data) => setDestinations(data))
+      .catch((err) => console.error("Error fetching destinations:", err));
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) throw new Error("Erro ao criar agente");
+      
+      toast({ title: "Agente criado com sucesso!" });
+      router.push("/marketing/agents");
+      router.refresh();
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <div className="flex items-center space-x-4">
+          <Link href="/marketing/agents">
+            <Button variant="outline" size="icon" className="bg-transparent hover:text-primary hover:border-primary">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <h2 className="text-3xl font-bold tracking-tight text-primary">Novo Agente</h2>
+        </div>
+        <Button type="submit" disabled={loading} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Save className="mr-2 h-4 w-4" /> Salvar Agente
+        </Button>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="transition-colors hover:border-primary/50">
+          <CardHeader>
+            <CardTitle className="text-primary">Identidade da Persona</CardTitle>
+            <CardDescription>Configurações básicas do modelo e comportamento.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nome do Agente</Label>
+              <Input required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="focus-visible:ring-primary" />
+            </div>
+            <div className="space-y-2">
+              <Label>Modelo Groq</Label>
+              <Select value={formData.model} onValueChange={(v) => setFormData({ ...formData, model: v })}>
+                <SelectTrigger className="focus:ring-primary">
+                  <SelectValue placeholder="Selecione um modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="llama3-70b-8192">Llama 3 70B (Recomendado)</SelectItem>
+                  <SelectItem value="llama3-8b-8192">Llama 3 8B (Rápido)</SelectItem>
+                  <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
+                  <SelectItem value="gemma2-9b-it">Gemma 2 9B</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Temperatura ({formData.temperature})</Label>
+              <Input type="number" min="0" max="1" step="0.1" value={formData.temperature} onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) })} className="focus-visible:ring-primary" />
+            </div>
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch checked={formData.isDefault} onCheckedChange={(v) => setFormData({ ...formData, isDefault: v })} id="is-default" />
+              <Label htmlFor="is-default">Definir como agente padrão</Label>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="transition-colors hover:border-primary/50">
+          <CardHeader>
+            <CardTitle className="text-primary">Destino no CRM</CardTitle>
+            <CardDescription>Para onde enviar o lead após qualificação.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Estágio do Funil / Roleta Alvo</Label>
+              <Select value={formData.targetFunnelStage} onValueChange={(v) => setFormData({ ...formData, targetFunnelStage: v })}>
+                <SelectTrigger className="focus:ring-primary">
+                  <SelectValue placeholder="Selecione o destino do lead" />
+                </SelectTrigger>
+                <SelectContent>
+                  {destinations?.funnels?.map((funnel) => (
+                    <SelectGroup key={funnel.id}>
+                      <SelectLabel className="bg-muted">{funnel.name}</SelectLabel>
+                      {funnel.stages.map((stage) => (
+                        <SelectItem key={`stage:${stage.id}`} value={`stage:${stage.id}`}>
+                          {stage.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                  {destinations?.roulettes && destinations.roulettes.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel className="bg-muted">Roletas de Corretores</SelectLabel>
+                      {destinations.roulettes.map((roulette) => (
+                        <SelectItem key={`roulette:${roulette.id}`} value={`roulette:${roulette.id}`}>
+                          {roulette.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Destino final para onde o lead qualificado será movido.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Prompt do Sistema</Label>
+              <Textarea rows={6} value={formData.systemPrompt} onChange={(e) => setFormData({ ...formData, systemPrompt: e.target.value })} className="focus-visible:ring-primary" />
+              <p className="text-xs text-muted-foreground">Instruções primárias da persona.</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="transition-colors hover:border-primary/50">
+          <CardHeader>
+            <CardTitle className="text-primary">Estratégia de Abordagem</CardTitle>
+            <CardDescription>Como iniciar a conversa (Outbound/Inbound).</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Diretrizes de Abordagem</Label>
+              <Textarea rows={6} value={formData.initiationStrategy} onChange={(e) => setFormData({ ...formData, initiationStrategy: e.target.value })} className="focus-visible:ring-primary" placeholder="Descreva como puxar assunto ou responder ao primeiro contato..." />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="transition-colors hover:border-primary/50">
+          <CardHeader>
+            <CardTitle className="text-primary">Teto da Automação</CardTitle>
+            <CardDescription>Barreira de qualificação (Até onde ir).</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Limite de Atuação</Label>
+              <Textarea rows={6} value={formData.qualificationBoundary} onChange={(e) => setFormData({ ...formData, qualificationBoundary: e.target.value })} className="focus-visible:ring-primary" placeholder="Mapeie aqui o que você quer coletar. Ex: Nome, orçamento e bairro. Pare assim que coletar." />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </form>
+  );
+}

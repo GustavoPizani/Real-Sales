@@ -9,9 +9,415 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// =======================================================================
-// ENUMS (CRM + MARKETING)
-// =======================================================================
+model User {
+  id                   String                @id
+  name                 String
+  email                String                @unique
+  accountId            String?
+  role                 Role                  @default(BROKER)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  supervisorId         String?
+  slackMemberId        String?               @map("slack_member_id")
+  taskReminderMinutes  Int                   @default(30)
+  assignedCalls        ActiveOfferClient[]   @relation("AssignedCalls")
+  createdOffers        ActiveOffer[]         @relation("CreatedOffers")
+  attendanceRecords    AttendanceRecord[]
+  clientsAsBroker      Client[]              @relation("ClientBroker")
+  clientsCreatedByMe   Client[]              @relation("ClientCreatedBy")
+  qualifiedLeadsForMe  Client[]              @relation("QualifiedFor")
+  facebookFormMappings FacebookFormMapping[] @relation("FbDefaultBroker")
+  notes                Note[]
+  notifications        Notification[]
+  createdProperties    Property[]            @relation("CreatedProperties")
+  updatedProperties    Property[]            @relation("UpdatedProperties")
+  pushSubscriptions    PushSubscription[]
+  rouletteAssignments  LeadRouletteUser[]
+  tasks                Task[]
+  funnelAccess         UserFunnelAccess[]
+  supervisor           User?                 @relation("Hierarchy", fields: [supervisorId], references: [id])
+  subordinates         User[]                @relation("Hierarchy")
+
+  @@map("users")
+}
+
+model Client {
+  id                   String              @id @default(uuid())
+  fullName             String
+  email                String?             @unique
+  phone                String?
+  facebookLeadId       String?             @unique @map("facebook_lead_id")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  accountId            String?
+  createdById          String
+  brokerId             String
+  propertyOfInterestId String?
+  overallStatus        ClientOverallStatus @default(ACTIVE)
+  funnelId             String
+  funnelStageId        String
+  qualificationStatus  QualificationStatus @default(WAITING)
+  qualifiedForId       String?
+  enteredLeadPoolAt    DateTime?
+  formResponses        Json?
+  campaignSource       String?
+  activeOfferClients   ActiveOfferClient[]
+  documents            ClientDocument[]
+  saleDetails          ClientWonDetails?
+  broker               User                @relation("ClientBroker", fields: [brokerId], references: [id])
+  createdBy            User                @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  funnel               Funnel              @relation(fields: [funnelId], references: [id])
+  funnelStage          FunnelStage         @relation(fields: [funnelStageId], references: [id])
+  propertyOfInterest   Property?           @relation(fields: [propertyOfInterestId], references: [id])
+  qualifiedFor         User?               @relation("QualifiedFor", fields: [qualifiedForId], references: [id])
+  notes                Note[]
+  tasks                Task[]
+  tags                 Tag[]               @relation("ClientTags")
+  sdrContact           Contact?
+
+  @@map("clients")
+}
+
+model ApiSetting {
+  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  setting_key     String
+  encrypted_value String
+  user_id         String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
+
+  @@map("api_settings")
+}
+
+model CampaignMetric {
+  id                 String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  campaign_name      String    @default("")
+  campaign_id        String?
+  spend              Float?
+  impressions        Int?
+  clicks             Int?
+  leads              Int?
+  date               DateTime? @db.Date
+  user_id            String
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @default(now()) @updatedAt
+  account_name       String?
+  ad_name            String?
+  ad_set_name        String?
+  reach              Int?      @default(0)
+  conversions        Int?      @default(0)
+  ctr                Decimal?  @default(0) @db.Decimal
+  cpc                Decimal?  @default(0) @db.Decimal
+  cpm                Decimal?  @default(0) @db.Decimal
+  cpl                Decimal?  @default(0) @db.Decimal
+  frequency          Decimal?  @default(0) @db.Decimal
+  link_clicks        Int?      @default(0)
+  unique_link_clicks Int?      @default(0)
+  thumbnail_url      String?
+  channel            String?
+
+  @@unique([user_id, campaign_name, ad_name, date], map: "campaign_metrics_unique")
+  @@map("campaign_metrics")
+}
+
+model FieldMapping {
+  id          String   @id @default(uuid())
+  source      String
+  fieldName   String
+  mappedField String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([source, fieldName])
+  @@map("field_mappings")
+}
+
+model Property {
+  id                   String                @id @default(uuid())
+  title                String
+  features             String[]              @default([])
+  address              String?
+  price                Float?
+  status               PropertyStatus        @default(LANCAMENTO)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  creatorId            String?
+  updaterId            String?
+  type                 String?
+  interestedClients    Client[]
+  facebookFormMappings FacebookFormMapping[]
+  creator              User?                 @relation("CreatedProperties", fields: [creatorId], references: [id])
+  updater              User?                 @relation("UpdatedProperties", fields: [updaterId], references: [id])
+  images               PropertyImage[]
+  propertyTypes        PropertyType[]
+
+  @@map("properties")
+}
+
+model PropertyType {
+  id           String   @id @default(uuid())
+  name         String
+  value        Float    @default(0)
+  propertyId   String
+  area         Float?
+  dormitorios  Int?
+  suites       Int?
+  vagas        Int?
+  floorPlanUrl String?
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_types")
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  url        String
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_images")
+}
+
+model Funnel {
+  id                   String                @id @default(uuid())
+  name                 String                @unique
+  isPreSales           Boolean               @default(false)
+  isDefaultEntry       Boolean               @default(false)
+  clients              Client[]
+  facebookFormMappings FacebookFormMapping[]
+  stages               FunnelStage[]
+  roulettes            LeadRoulette[]
+  userAccess           UserFunnelAccess[]
+
+  @@map("funnels")
+}
+
+model FunnelStage {
+  id                   String                @id @default(uuid())
+  name                 String
+  order                Int
+  color                String
+  funnelId             String
+  clients              Client[]
+  facebookFormMappings FacebookFormMapping[]
+  funnel               Funnel                @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+
+  @@unique([funnelId, name])
+  @@map("funnel_stages")
+}
+
+model LeadRoulette {
+  id       String             @id @default(uuid())
+  name     String
+  isActive Boolean            @default(true)
+  funnelId String?
+  funnel   Funnel?            @relation(fields: [funnelId], references: [id])
+  users    LeadRouletteUser[]
+
+  @@map("lead_roulettes")
+}
+
+model LeadRouletteUser {
+  rouletteId     String
+  userId         String
+  lastAssignedAt DateTime?
+  roulette       LeadRoulette @relation(fields: [rouletteId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([rouletteId, userId])
+  @@map("roulette_users")
+}
+
+model AttendanceConfig {
+  id           String             @id @default(cuid())
+  name         String
+  latitude     Float
+  longitude    Float
+  radiusMeters Int
+  schedules    Json
+  isActive     Boolean            @default(true)
+  records      AttendanceRecord[]
+
+  @@map("attendance_configs")
+}
+
+model AttendanceRecord {
+  id       String            @id @default(cuid())
+  userId   String
+  configId String?
+  config   AttendanceConfig? @relation(fields: [configId], references: [id])
+  user     User              @relation(fields: [userId], references: [id])
+
+  @@map("attendance_records")
+}
+
+model Task {
+  id             String    @id @default(uuid())
+  title          String
+  dateTime       DateTime
+  isCompleted    Boolean   @default(false)
+  clientId       String
+  userId         String
+  type           TaskType  @default(OTHER)
+  priority       Priority  @default(MEDIUM)
+  description    String?
+  reminderSentAt DateTime?
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model Note {
+  id       String @id @default(uuid())
+  content  String
+  authorId String
+  clientId String
+  author   User   @relation(fields: [authorId], references: [id])
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+model Tag {
+  id      String   @id @default(uuid())
+  name    String   @unique
+  color   String
+  clients Client[] @relation("ClientTags")
+
+  @@map("tags")
+}
+
+model PushSubscription {
+  id       String  @id @default(cuid())
+  endpoint String  @unique
+  userId   String
+  auth     String?
+  p256dh   String?
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model UserFunnelAccess {
+  userId      String
+  funnelId    String
+  accessLevel FunnelAccessLevel
+  funnel      Funnel            @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, funnelId])
+  @@map("user_funnel_access")
+}
+
+model ActiveOffer {
+  id          String              @id @default(uuid())
+  name        String
+  status      ActiveOfferStatus   @default(PENDING)
+  createdById String
+  clients     ActiveOfferClient[]
+  createdBy   User                @relation("CreatedOffers", fields: [createdById], references: [id])
+
+  @@map("active_offers")
+}
+
+model ActiveOfferClient {
+  id            String      @id @default(uuid())
+  activeOfferId String
+  clientId      String
+  assignedToId  String
+  activeOffer   ActiveOffer @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
+  assignedTo    User        @relation("AssignedCalls", fields: [assignedToId], references: [id])
+  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("active_offer_clients")
+}
+
+model ClientWonDetails {
+  id        String @id @default(uuid())
+  saleValue Float
+  clientId  String @unique
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_won_details")
+}
+
+model LostReason {
+  id     String  @id @default(uuid())
+  reason String
+  active Boolean @default(true)
+
+  @@map("lost_reasons")
+}
+
+model ClientDocument {
+  id       String @id @default(uuid())
+  name     String
+  url      String
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_documents")
+}
+
+model FacebookConnection {
+  id              String                @id @default(uuid())
+  accountId       String
+  pageId          String
+  pageName        String
+  pageAccessToken String
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  userAccessToken String?
+  formMappings    FacebookFormMapping[]
+
+  @@unique([accountId, pageId])
+  @@map("facebook_connections")
+}
+
+model FacebookFormMapping {
+  id              String             @id @default(uuid())
+  connectionId    String
+  formId          String             @unique
+  formName        String
+  pageId          String
+  propertyId      String?
+  roletaId        String?
+  funnelId        String?
+  funnelStageId   String?
+  agencia         String?
+  praca           String?
+  defaultBrokerId String?
+  isActive        Boolean            @default(true)
+  lastSyncedAt    DateTime?
+  leadCount       Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  fieldMappings   Json?
+  connection      FacebookConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  defaultBroker   User?              @relation("FbDefaultBroker", fields: [defaultBrokerId], references: [id])
+  funnel          Funnel?            @relation(fields: [funnelId], references: [id])
+  funnelStage     FunnelStage?       @relation(fields: [funnelStageId], references: [id])
+  property        Property?          @relation(fields: [propertyId], references: [id])
+
+  @@map("facebook_form_mappings")
+}
 
 enum Role {
   MARKETING_ADMIN
@@ -72,442 +478,89 @@ enum QualificationStatus {
 }
 
 // =======================================================================
-// MODELS UNIFICADOS (O CORAÇÃO DO SISTEMA)
+// SDR AI AGENT — MODELS (APPEND-ONLY)
 // =======================================================================
 
-model User {
-  id        String   @id // Supabase Auth UUID
-  name      String
-  email     String   @unique
-  accountId String?
-  role      Role     @default(BROKER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Contact {
+  id           String            @id @default(cuid())
+  crmClientId  String?           @unique
+  name         String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  crmClient    Client?           @relation(fields: [crmClientId], references: [id], onDelete: SetNull)
+  identities   ContactIdentity[]
+  conversations Conversation[]
 
-  // Hierarquia
-  supervisorId String?
-  supervisor   User?   @relation("Hierarchy", fields: [supervisorId], references: [id], onDelete: SetNull)
-  subordinates User[]  @relation("Hierarchy")
-
-  // CRM Relations
-  clientsAsBroker    Client[]          @relation("ClientBroker")
-  clientsCreatedByMe Client[]          @relation("ClientCreatedBy")
-  tasks              Task[]
-  notes              Note[]
-  pushSubscriptions  PushSubscription[]
-  notifications      Notification[]
-
-  // Property Relations
-  createdProperties Property[] @relation("CreatedProperties")
-  updatedProperties Property[] @relation("UpdatedProperties")
-
-  // Roulette & Access
-  rouletteAssignments LeadRouletteUser[]
-  funnelAccess        UserFunnelAccess[]
-
-  // Attendance
-  attendanceRecords AttendanceRecord[]
-
-  // Active Offers
-  createdOffers ActiveOffer[]       @relation("CreatedOffers")
-  assignedCalls ActiveOfferClient[] @relation("AssignedCalls")
-
-  // Lead Pool
-  qualifiedLeadsForMe Client[] @relation("QualifiedFor")
-
-  facebookFormMappings FacebookFormMapping[] @relation("FbDefaultBroker")
-
-  slackMemberId        String? @map("slack_member_id")
-  taskReminderMinutes  Int     @default(30)
-
-  @@map("users")
+  @@map("sdr_contacts")
 }
 
-model Client {
-  id             String   @id @default(uuid())
-  fullName       String
-  email          String?  @unique
-  phone          String?
-  facebookLeadId  String?  @unique @map("facebook_lead_id")
-  formResponses   Json?
-  campaignSource  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  accountId      String?
+model ContactIdentity {
+  id         String   @id @default(cuid())
+  contactId  String
+  channel    String   // "whatsapp", "instagram"
+  identifier String   // phone number, handle
+  createdAt  DateTime @default(now())
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
-  // Ownership
-  createdById String
-  createdBy   User   @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  brokerId    String
-  broker      User   @relation("ClientBroker", fields: [brokerId], references: [id], onDelete: Restrict)
-
-  // Real Estate Logic
-  propertyOfInterestId String?
-  propertyOfInterest   Property?           @relation(fields: [propertyOfInterestId], references: [id], onDelete: SetNull)
-  overallStatus        ClientOverallStatus @default(ACTIVE)
-
-  // Relations
-  documents          ClientDocument[]
-  tags               Tag[]               @relation("ClientTags")
-  tasks              Task[]
-  notes              Note[]
-  saleDetails        ClientWonDetails?
-  activeOfferClients ActiveOfferClient[]
-
-  // Funnel Logic
-  funnelId      String
-  funnel        Funnel      @relation(fields: [funnelId], references: [id])
-  funnelStageId String
-  funnelStage   FunnelStage @relation(fields: [funnelStageId], references: [id])
-
-  // Lead Pool
-  qualificationStatus QualificationStatus @default(WAITING)
-  qualifiedForId      String?
-  qualifiedFor        User?               @relation("QualifiedFor", fields: [qualifiedForId], references: [id], onDelete: SetNull)
-  enteredLeadPoolAt   DateTime?
-
-  @@map("clients")
+  @@unique([channel, identifier])
+  @@map("sdr_contact_identities")
 }
 
-// =======================================================================
-// MARKETING MODELS (REAL ROI HUB - UNIFICAÇÃO)
-// =======================================================================
+model Conversation {
+  id          String    @id @default(cuid())
+  contactId   String
+  agentId     String
+  status      String    @default("active") // active, closed, qualified, disqualified
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  metadata    Json      @default("{}")
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  agent       AgentSession @relation(fields: [agentId], references: [id])
+  messages    Message[]
 
-
-model ApiSetting {
-  id              String   @id @default(uuid())
-  setting_key     String // Onde você salvará Meta App ID, Token, etc.
-  encrypted_value String
-  user_id         String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  @@map("api_settings")
+  @@map("sdr_conversations")
 }
 
-model CampaignMetric {
-  id            String   @id @default(uuid())
-  campaign_name String
-  campaign_id   String?
-  spend         Float?
-  impressions   Int?
-  clicks        Int?
-  leads         Int?
-  date          DateTime @db.Date
-  user_id       String
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  direction      String       // "inbound", "outbound"
+  content        String       @db.Text
+  tokens         Int          @default(0)
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@map("campaign_metrics")
+  @@map("sdr_messages")
 }
 
-model FieldMapping {
-  id          String   @id @default(uuid())
-  source      String // ex: "meta_ads"
-  fieldName   String // Nome no Meta
-  mappedField String // Nome no modelo Client
+model AgentSession {
+  id                    String   @id @default(cuid())
+  name                  String   @unique
+  systemPrompt          String   @db.Text
+  initiationStrategy    String   @db.Text
+  qualificationBoundary String   @db.Text
+  targetFunnelStage     String   @default("lead_qualificado")
+  model                 String   @default("llama3-70b-8192")
+  provider              String   @default("groq")
+  temperature           Float    @default(0.3)
+  maxTokens             Int      @default(1024)
+  memoryMode            String   @default("window_20")
+  tools                 Json     @default("[]")
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  conversations         Conversation[]
+
+  @@map("sdr_agent_sessions")
+}
+
+model AIRule {
+  id          String   @id @default(cuid())
+  type        String   // "global", "agent_specific"
+  condition   String   @db.Text
+  action      String   @db.Text
+  priority    Int      @default(10)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  @@unique([source, fieldName])
-  @@map("field_mappings")
-}
-
-// =======================================================================
-// CRM MODELS (PROPRIEDADES, FUNIS, ROLETA, POOL)
-// =======================================================================
-
-model Property {
-  id                String          @id @default(uuid())
-  title             String
-  type              String?
-  features          String[]        @default([])
-  address           String?
-  price             Float?
-  status            PropertyStatus  @default(LANCAMENTO)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  interestedClients Client[]
-  images            PropertyImage[]
-  propertyTypes     PropertyType[]
-
-  creatorId String?
-  creator   User?   @relation("CreatedProperties", fields: [creatorId], references: [id])
-  updaterId String?
-  updater   User?   @relation("UpdatedProperties", fields: [updaterId], references: [id])
-
-  facebookFormMappings FacebookFormMapping[]
-
-  @@map("properties")
-}
-
-model PropertyType {
-  id           String   @id @default(uuid())
-  name         String
-  value        Float    @default(0)
-  area         Float?
-  dormitorios  Int?
-  suites       Int?
-  vagas        Int?
-  floorPlanUrl String?
-  propertyId   String
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@map("property_types")
-}
-
-model PropertyImage {
-  id         String   @id @default(uuid())
-  url        String
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@map("property_images")
-}
-
-model Funnel {
-  id             String             @id @default(uuid())
-  name           String             @unique
-  isDefaultEntry Boolean            @default(false)
-  stages         FunnelStage[]
-  clients        Client[]
-  roulettes      LeadRoulette[]
-  userAccess     UserFunnelAccess[]
-
-  facebookFormMappings FacebookFormMapping[]
-
-  @@map("funnels")
-}
-
-model FunnelStage {
-  id       String   @id @default(uuid())
-  name     String
-  order    Int
-  color    String
-  funnelId String
-  funnel   Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
-  clients  Client[]
-
-  facebookFormMappings FacebookFormMapping[]
-
-  @@unique([funnelId, name])
-  @@map("funnel_stages")
-}
-
-model LeadRoulette {
-  id       String             @id @default(uuid())
-  name     String
-  isActive Boolean            @default(true)
-  users    LeadRouletteUser[]
-  funnelId String?
-  funnel   Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
-
-  @@map("lead_roulettes")
-}
-
-model LeadRouletteUser {
-  rouletteId      String
-  roulette        LeadRoulette @relation(fields: [rouletteId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastAssignedAt  DateTime?
-
-  @@id([rouletteId, userId])
-  @@map("roulette_users")
-}
-
-
-model AttendanceConfig {
-  id           String             @id @default(cuid())
-  name         String
-  latitude     Float
-  longitude    Float
-  radiusMeters Int
-  schedules    Json
-  isActive     Boolean            @default(true)
-  records      AttendanceRecord[]
-
-  @@map("attendance_configs")
-}
-
-model AttendanceRecord {
-  id       String            @id @default(cuid())
-  userId   String
-  user     User              @relation(fields: [userId], references: [id])
-  configId String?
-  config   AttendanceConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
-
-  @@map("attendance_records")
-}
-
-model Task {
-  id              String    @id @default(uuid())
-  title           String
-  description     String?
-  dateTime        DateTime
-  isCompleted     Boolean   @default(false)
-  reminderSentAt  DateTime?
-  clientId        String
-  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type            TaskType  @default(OTHER)
-  priority        Priority  @default(MEDIUM)
-
-  @@map("tasks")
-}
-
-model Note {
-  id       String @id @default(uuid())
-  content  String
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id])
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("notes")
-}
-
-model Tag {
-  id      String   @id @default(uuid())
-  name    String   @unique
-  color   String
-  clients Client[] @relation("ClientTags")
-
-  @@map("tags")
-}
-
-model PushSubscription {
-  id       String  @id @default(cuid())
-  endpoint String  @unique
-  p256dh   String?
-  auth     String?
-  userId   String
-  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("push_subscriptions")
-}
-
-model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  body      String
-  type      String
-  data      Json?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@index([userId, isRead])
-  @@map("notifications")
-}
-
-model UserFunnelAccess {
-  userId      String
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  funnelId    String
-  funnel      Funnel            @relation(fields: [funnelId], references: [id], onDelete: Cascade)
-  accessLevel FunnelAccessLevel
-
-  @@id([userId, funnelId])
-  @@map("user_funnel_access")
-}
-
-model ActiveOffer {
-  id          String              @id @default(uuid())
-  name        String
-  status      ActiveOfferStatus   @default(PENDING)
-  createdById String
-  createdBy   User                @relation("CreatedOffers", fields: [createdById], references: [id])
-  clients     ActiveOfferClient[]
-
-  @@map("active_offers")
-}
-
-model ActiveOfferClient {
-  id            String      @id @default(uuid())
-  activeOfferId String
-  activeOffer   ActiveOffer @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
-  clientId      String
-  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  assignedToId  String
-  assignedTo    User        @relation("AssignedCalls", fields: [assignedToId], references: [id])
-
-  @@map("active_offer_clients")
-}
-
-model ClientWonDetails {
-  id        String @id @default(uuid())
-  saleValue Float
-  clientId  String @unique
-  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("client_won_details")
-}
-
-model LostReason {
-  id     String  @id @default(uuid())
-  reason String
-  active Boolean @default(true)
-
-  @@map("lost_reasons")
-}
-
-model ClientDocument {
-  id       String @id @default(uuid())
-  name     String
-  url      String
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("client_documents")
-}
-
-// =======================================================================
-// FACEBOOK LEAD ADS INTEGRATION
-// =======================================================================
-
-model FacebookConnection {
-  id              String                @id @default(uuid())
-  accountId       String
-  pageId          String
-  pageName        String
-  pageAccessToken String
-  userAccessToken String?
-  isActive        Boolean               @default(true)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  formMappings    FacebookFormMapping[]
-
-  @@unique([accountId, pageId])
-  @@map("facebook_connections")
-}
-
-model FacebookFormMapping {
-  id              String             @id @default(uuid())
-  connectionId    String
-  connection      FacebookConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  formId          String             @unique
-  formName        String
-  pageId          String
-  propertyId      String?
-  property        Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  roletaId        String?
-  funnelId        String?
-  funnel          Funnel?            @relation(fields: [funnelId], references: [id], onDelete: SetNull)
-  funnelStageId   String?
-  funnelStage     FunnelStage?       @relation(fields: [funnelStageId], references: [id], onDelete: SetNull)
-  agencia         String?
-  praca           String?
-  defaultBrokerId String?
-  defaultBroker   User?              @relation("FbDefaultBroker", fields: [defaultBrokerId], references: [id], onDelete: SetNull)
-  fieldMappings   Json?
-  isActive        Boolean            @default(true)
-  lastSyncedAt    DateTime?
-  leadCount       Int                @default(0)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-
-  @@map("facebook_form_mappings")
+  @@map("sdr_ai_rules")
 }
