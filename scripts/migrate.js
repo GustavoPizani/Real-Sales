@@ -15,15 +15,6 @@ try {
   console.log('[migrate] Baseline already resolved, continuing.')
 }
 
-// Se a migration de remoção do PRE_SALES falhou anteriormente, resolve o estado de erro
-// para que o deploy possa re-aplicar com o SQL corrigido.
-try {
-  run('prisma migrate resolve --rolled-back 20260427000000_remove_pre_sales_add_slack')
-  console.log('[migrate] Rolled back failed migration, will re-apply.')
-} catch {
-  console.log('[migrate] No failed migration to roll back, continuing.')
-}
-
 // Apply any pending migrations.
 run('prisma migrate deploy')
 console.log('[migrate] Deploy complete.')
