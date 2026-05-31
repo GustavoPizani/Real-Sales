@@ -5,7 +5,16 @@ CRM imobiliário com integração Meta Lead Ads, agentes SDR via WhatsApp (IA), 
 
 ## Analytics de Campanhas Meta Ads
 
-### MCP Server disponível: `meta-analytics`
+### MCP Server — dois modos de acesso
+
+**Claude Code (local):** servidor stdio via `.mcp.json`, conecta direto ao PostgreSQL.
+
+**claude.ai (web):** endpoint HTTP em `/api/mcp` deployado no Vercel.
+- URL: `https://[seu-dominio-vercel].vercel.app/api/mcp`
+- Auth: Bearer token `MCP_API_KEY` (configurar em Vercel → Settings → Environment Variables)
+- Configurar em claude.ai → Settings → Integrations → MCP Servers
+
+### Ferramentas disponíveis
 
 Quando estiver em Claude Code dentro deste projeto, o servidor MCP `meta-analytics` está disponível com as seguintes ferramentas:
 
