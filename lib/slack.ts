@@ -90,3 +90,23 @@ export async function sendSlackLeadNotification({
     }, botToken)
   }
 }
+
+export async function sendSlackSDRNotification(message: string) {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn("[SLACK SDR] SLACK_WEBHOOK_URL is not set");
+    return;
+  }
+
+  const blocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: message
+      }
+    }
+  ];
+
+  await post(webhookUrl, { blocks });
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "meta-analytics": {
+      "command": "node",
+      "args": ["C:\\Users\\gusta\\Real-sales\\mcp-meta-analytics\\dist\\index.js"],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres.zdwqgkecojvqkpexglow:RealHub%40Pizani@aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
+      }
+    }
+  }
+}

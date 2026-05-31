@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueForDebounce } from "@/lib/debounce";
+import { sendSlackSDRNotification } from "@/lib/slack";
 
 /**
  * POST /api/webhooks/waha
@@ -41,9 +42,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
 
-    // 2. Busca de Identidade do Canal
     let identity = await prisma.contactIdentity.findUnique({
-      where: { channel_externalId: { channel: "waha", externalId } },
+      where: { channel_identifier: { channel: "waha", identifier: externalId } },
       include: { contact: true },
     });
 
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
           // Vincula o canal de WhatsApp ao Client existente do CRM
           contact = await prisma.contact.create({
             data: {
-              displayName: msgData.notifyName || cleanPhone,
+              name: msgData.notifyName || cleanPhone,
               crmClientId: existingCrmClient.id,
             },
           });
@@ -78,12 +78,12 @@ export async function POST(req: Request) {
       } else {
         // Lead totalmente novo que veio do tráfego direto do WhatsApp
         contact = await prisma.contact.create({
-          data: { displayName: msgData.notifyName || cleanPhone },
+          data: { name: msgData.notifyName || cleanPhone },
         });
       }
 
       identity = await prisma.contactIdentity.create({
-        data: { channel: "waha", externalId, contactId: contact.id },
+        data: { channel: "waha", identifier: externalId, contactId: contact.id },
         include: { contact: true },
       });
     }
@@ -106,6 +106,11 @@ export async function POST(req: Request) {
           agentSessionId: defaultSession?.id || null,
         },
       });
+
+      // Disparar Gatilho 1 para o Slack (Início do Atendimento)
+      await sendSlackSDRNotification(
+        `🚀 Novo lead capturado e Bot SDR iniciou o atendimento: ${contact.name}`
+      );
     }
 
     // 5. Salvar a Mensagem Inbound no Banco
@@ -114,7 +119,7 @@ export async function POST(req: Request) {
         conversationId: conversation.id,
         direction: "inbound",
         role: "user",
-        text,
+        content: text,
         providerMsgId,
       },
     });
@@ -134,7 +139,7 @@ export async function POST(req: Request) {
     const normalizedMessage = {
       channel: "waha" as const,
       contactId: externalId,
-      text,
+      content: text,
       receivedAt: new Date().toISOString(),
     };
 

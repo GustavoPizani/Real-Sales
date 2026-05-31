@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendTextViaWaha } from "./waha-sender";
+import { sendSlackSDRNotification } from "@/lib/slack";
 import type { NormalizedMessage } from "@/lib/debounce";
 
 /**
@@ -63,7 +64,7 @@ export async function flushToLLM(
   }
 
   // Junta as mensagens recebidas na janela de 5 segundos
-  const userTurnText = bufferedMessages.map((m) => m.text).join("\n");
+  const userTurnText = bufferedMessages.map((m) => m.content).join("\n");
 
   // Informações do lead do CRM (se vinculado)
   const crmClient = conversation.contact?.crmClient;
@@ -87,8 +88,8 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
 - Use linguagem profissional, empática e objetiva
 - NÃO invente informações sobre imóveis, preços ou condições
 - Se não souber algo, diga que vai verificar com a equipe
-- Mantenha as respostas concisas (máx 3 parágrafos)
-- Use emojis com moderação e profissionalismo`;
+- Use emojis com moderação e profissionalismo
+- OBRIGATÓRIO: Quando o lead fornecer as informações necessárias do teto operacional, chame a ferramenta (tool) "qualify_lead" informando o resumo do que foi coletado.`;
 
   // Resgatar histórico recente da conversa
   const memoryWindow = parseInt(session.memoryMode.replace("window_", "")) || 20;
@@ -102,7 +103,7 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
     { role: "system", content: systemPromptCompleto },
     ...historicoDB.map((m) => ({
       role: m.role as GroqMessage["role"],
-      content: m.text,
+      content: m.content,
     })),
     { role: "user", content: userTurnText },
   ];
@@ -121,6 +122,26 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
         messages: messagesPayload,
         temperature: session.temperature,
         max_tokens: session.maxTokens,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "qualify_lead",
+              description: "Deve ser chamada APENAS e IMEDIATAMENTE quando o lead atinge o objetivo de qualificação estipulado (Teto Operacional). Mova o lead para a próxima etapa do funil.",
+              parameters: {
+                type: "object",
+                properties: {
+                  summary: {
+                    type: "string",
+                    description: "Resumo em um parágrafo das informações essenciais coletadas do lead (nome, orçamento, preferências, etc.)"
+                  }
+                },
+                required: ["summary"]
+              }
+            }
+          }
+        ],
+        tool_choice: "auto"
       }),
     });
 
@@ -138,7 +159,9 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
 
     const data = await response.json();
     const latencyMs = Date.now() - startTime;
-    const replyText: string = data.choices[0].message.content;
+    const messageObj = data.choices[0].message;
+    const replyText: string = messageObj.content || "";
+    const toolCalls = messageObj.tool_calls || [];
     const tokensIn: number = data.usage?.prompt_tokens || 0;
     const tokensOut: number = data.usage?.completion_tokens || 0;
 
@@ -159,12 +182,36 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
         conversationId,
         direction: "outbound",
         role: "assistant",
-        text: replyText,
+        content: replyText || "[Tool Call]",
         modelUsed: session.model,
         tokensIn,
         tokensOut,
       },
     });
+
+    // 2. Lidar com Tool Calls (Gatilho 2)
+    if (toolCalls.length > 0) {
+      for (const tool of toolCalls) {
+        if (tool.function.name === "qualify_lead") {
+          const args = JSON.parse(tool.function.arguments || "{}");
+          
+          // Encerrar o atendimento da IA
+          await prisma.conversation.update({
+            where: { id: conversationId },
+            data: { 
+              status: "qualified",
+              aiEnabled: false 
+            }
+          });
+
+          // Enviar pro Slack
+          const leadName = crmClient?.fullName || conversation.contact.name || "Desconhecido";
+          await sendSlackSDRNotification(
+            `✅ *Lead Qualificado pelo Bot SDR!*\nO cliente *${leadName}* atingiu o objetivo de qualificação e o bot encerrou o atendimento automático.\n\n*Resumo coletado:* ${args.summary || "Sem resumo."}`
+          );
+        }
+      }
+    }
 
     // Atualizar lastMessageAt
     await prisma.conversation.update({
@@ -173,7 +220,9 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
     });
 
     // Enviar a mensagem de volta para o cliente pelo canal Waha
-    await sendTextViaWaha(bufferedMessages[0].contactId, replyText);
+    if (replyText) {
+      await sendTextViaWaha(bufferedMessages[0].contactId, replyText);
+    }
   } catch (error) {
     console.error(
       JSON.stringify({ event: "llm.fatal_error", error: String(error) })

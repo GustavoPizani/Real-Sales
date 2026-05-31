@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(npx prisma *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(mkdir \"c:\\\\Users\\\\gusta\\\\Real-sales\\\\mcp-meta-analytics\" 2>/dev/null; ls \"c:\\\\Users\\\\gusta\\\\Real-sales\\\\mcp-meta-analytics\" 2>/dev/null || echo \"dir created\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\gusta\\Real-sales"
     ]
   }
 }

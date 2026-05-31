@@ -15,6 +15,6 @@ export const config = {
      * - api/webhooks (webhook endpoints — Waha, etc.)
      * - api/health (health check endpoint)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/sessions|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

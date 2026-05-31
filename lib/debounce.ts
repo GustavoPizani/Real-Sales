@@ -25,7 +25,7 @@ function getRedis(): Redis {
 export interface NormalizedMessage {
   channel: "waha";
   contactId: string;
-  text: string;
+  content: string;
   receivedAt: string;
 }
 

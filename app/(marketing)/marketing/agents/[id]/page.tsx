@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, MessageCircle, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,14 @@ export default function EditAgentPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [destinations, setDestinations] = useState<DestinationData | null>(null);
+  const [wahaStatus, setWahaStatus] = useState<string>("IDLE");
+
+  useEffect(() => {
+    fetch("/api/sessions/waha/status")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => data?.status && setWahaStatus(data.status))
+      .catch(() => {});
+  }, []);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -225,6 +233,35 @@ export default function EditAgentPage({ params }: { params: { id: string } }) {
               <Label>Limite de Atuação</Label>
               <Textarea rows={6} value={formData.qualificationBoundary} onChange={(e) => setFormData({ ...formData, qualificationBoundary: e.target.value })} className="focus-visible:ring-primary" />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="transition-colors hover:border-primary/50 md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-primary flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" /> Canal WhatsApp (SDR)
+            </CardTitle>
+            <CardDescription>O agente opera via WhatsApp. Conecte o número antes de ativar.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {wahaStatus === "WORKING" ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <span className="text-sm text-green-500 font-medium">WhatsApp conectado e operando</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">WhatsApp não conectado</span>
+                </>
+              )}
+            </div>
+            <Link href="/marketing/whatsapp">
+              <Button type="button" variant="outline" className="border-secondary-custom text-secondary-custom hover:bg-secondary-custom hover:text-white">
+                <MessageCircle className="mr-2 h-4 w-4" /> Conectar WhatsApp
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
