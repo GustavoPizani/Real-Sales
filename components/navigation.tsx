@@ -18,25 +18,16 @@ import {
   RotateCcw,
   Target,
   Megaphone,
-  Bot,
-  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Role } from '@prisma/client';
 
-type NavChild = { name: string; href: string; icon: React.ElementType; roles: string[] }
-type NavItem = { name: string; href: string; icon: React.ElementType; roles: string[]; children?: NavChild[] }
+type NavItem = { name: string; href: string; icon: React.ElementType; roles: string[] }
 
 const navigationLinks: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: Home, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
-  {
-    name: 'Marketing', href: '/marketing', icon: Megaphone, roles: ['ADMIN', 'MARKETING_ADMIN'],
-    children: [
-      { name: 'Agentes IA', href: '/marketing/agents', icon: Bot, roles: ['ADMIN', 'MARKETING_ADMIN'] },
-      { name: 'Conexão Waha', href: '/marketing/whatsapp', icon: Phone, roles: ['ADMIN', 'MARKETING_ADMIN'] },
-    ],
-  },
+  { name: 'Marketing', href: '/marketing', icon: Megaphone, roles: ['ADMIN', 'MARKETING_ADMIN'] },
   { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
@@ -58,24 +49,11 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
   const [isDesktopExpanded, setIsDesktopExpanded] = useState(false);
 
   const isExpanded = isDesktopExpanded || isMobileOpen;
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
-
-  const toggleMenu = (name: string) => setOpenMenus(prev => ({ ...prev, [name]: !prev[name] }));
-
-  const filteredNavigation = navigationLinks
-    .filter((link) => {
-      if (user?.isSuperAdmin) return true;
-      if (!user?.role || !link.roles) return false;
-      return link.roles.includes(user.role);
-    })
-    .map((link) => ({
-      ...link,
-      children: link.children?.filter((child) => {
-        if (user?.isSuperAdmin) return true;
-        if (!user?.role) return false;
-        return child.roles.includes(user.role);
-      }),
-    }));
+  const filteredNavigation = navigationLinks.filter((link) => {
+    if (user?.isSuperAdmin) return true;
+    if (!user?.role || !link.roles) return false;
+    return link.roles.includes(user.role);
+  });
 
   const getRoleLabel = (role: Role | string) => {
     const labels: Record<Role | string, string> = {
@@ -133,80 +111,26 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
           <ul className="space-y-2">
             {filteredNavigation.map((item) => {
               const Icon = item.icon;
-              const hasChildren = item.children && item.children.length > 0;
-              const isParentActive = pathname.startsWith(item.href);
-              const isOpen = openMenus[item.name] ?? isParentActive;
-
               return (
                 <li key={item.name}>
-                  {hasChildren ? (
-                    <>
-                      <button
-                        onClick={() => toggleMenu(item.name)}
-                        className={cn(
-                          "w-full flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 border-l-4",
-                          isParentActive
-                            ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
-                            : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:shadow-lg hover:shadow-secondary-custom/20"
-                        )}
-                      >
-                        <Icon className="h-5 w-5 flex-shrink-0" />
-                        <span className={cn(
-                          "ml-3 whitespace-nowrap transition-opacity flex-1 text-left",
-                          isExpanded ? "opacity-100" : "opacity-0"
-                        )}>
-                          {item.name}
-                        </span>
-                        {isExpanded && (
-                          <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", isOpen && "rotate-180")} />
-                        )}
-                      </button>
-                      {isOpen && isExpanded && (
-                        <ul className="mt-1 ml-4 space-y-1 border-l border-tertiary-custom/50 pl-2">
-                          {item.children!.map((child) => {
-                            const ChildIcon = child.icon;
-                            const isChildActive = pathname.startsWith(child.href);
-                            return (
-                              <li key={child.name}>
-                                <Link
-                                  href={child.href}
-                                  onClick={() => isMobileOpen && setIsMobileOpen(false)}
-                                  className={cn(
-                                    "flex items-center p-2 text-sm font-medium rounded-lg transition-all duration-200 border-l-4",
-                                    isChildActive
-                                      ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
-                                      : "text-gray-300 border-transparent hover:bg-tertiary-custom/60 hover:text-white"
-                                  )}
-                                >
-                                  <ChildIcon className="h-4 w-4 flex-shrink-0" />
-                                  <span className="ml-3 whitespace-nowrap">{child.name}</span>
-                                </Link>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      onClick={() => isMobileOpen && setIsMobileOpen(false)}
-                      className={cn(
-                        "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 group relative border-l-4",
-                        pathname.startsWith(item.href)
-                          ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
-                          : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:shadow-lg hover:shadow-secondary-custom/20"
-                      )}
-                    >
-                      <Icon className="h-5 w-5 flex-shrink-0" />
-                      <span className={cn(
-                        "ml-3 whitespace-nowrap transition-opacity",
-                        isExpanded ? "opacity-100" : "opacity-0"
-                      )}>
-                        {item.name}
-                      </span>
-                    </Link>
-                  )}
+                  <Link
+                    href={item.href}
+                    onClick={() => isMobileOpen && setIsMobileOpen(false)}
+                    className={cn(
+                      "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 group relative border-l-4",
+                      pathname.startsWith(item.href)
+                        ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
+                        : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:shadow-lg hover:shadow-secondary-custom/20"
+                    )}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <span className={cn(
+                      "ml-3 whitespace-nowrap transition-opacity",
+                      isExpanded ? "opacity-100" : "opacity-0"
+                    )}>
+                      {item.name}
+                    </span>
+                  </Link>
                 </li>
               );
             })}
