@@ -162,66 +162,88 @@ function PropertyPage() {
         </button>
       </header>
 
-      {/* ── HERO + GALERIA (combinados, above the fold) ── */}
+      {/* ── HERO + GALERIA ── */}
       <section className="pt-[64px]">
 
-        {/* Grid de fotos — desktop: main 2/3 + thumbs 1/3 | mobile: empilhado */}
-        <div className="lg:grid lg:grid-cols-3 lg:gap-0.5 lg:h-[80vh]">
-
-          {/* Imagem principal */}
+        {/* Grid principal — desktop: 2/3 imagem + 1/3 thumbs | altura contida */}
+        <div
+          className="grid grid-cols-1 lg:grid-cols-3 gap-0.5"
+          style={{ height: 'clamp(340px, 58vh, 620px)' }}
+        >
+          {/* Imagem principal com título sobreposto */}
           <button
             onClick={() => openGallery(0)}
-            className="relative w-full h-[55vw] lg:h-full lg:col-span-2 overflow-hidden group block"
+            className="relative lg:col-span-2 overflow-hidden group block h-full"
           >
             <img
               src={heroImage}
               alt={property.title}
               className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
             />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-full p-3">
-                <ZoomIn className="h-5 w-5 text-white" />
+
+            {/* Gradiente + título sobreposto */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)' }}
+            />
+            <div className="absolute bottom-0 left-0 right-0 px-6 sm:px-8 pb-6 sm:pb-8 text-left">
+              <span className="inline-block bg-secondary-custom/25 border border-secondary-custom/50 text-secondary-custom text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full mb-3">
+                {STATUS_LABEL[property.status] ?? property.status}
+              </span>
+              <h1 className="text-3xl sm:text-5xl font-bold text-white leading-tight tracking-tight">
+                {property.title}
+              </h1>
+              {property.address && (
+                <div className="flex items-center gap-1.5 text-white/60 text-sm mt-2">
+                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>{property.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Zoom hint */}
+            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="bg-black/50 backdrop-blur-sm rounded-full p-2">
+                <ZoomIn className="h-4 w-4 text-white" />
               </div>
             </div>
           </button>
 
-          {/* Grid de miniaturas — desktop: coluna vertical | mobile: linha horizontal */}
-          {property.images.length > 1 && (
-            <div className="hidden lg:grid grid-rows-3 gap-0.5">
-              {property.images.slice(1, 4).map((img, i) => {
-                const isLast = i === 2 && property.images.length > 4
-                return (
-                  <button
-                    key={img.id}
-                    onClick={() => openGallery(i + 1)}
-                    className="relative overflow-hidden group"
-                  >
-                    <img
-                      src={img.url}
-                      alt=""
-                      className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500"
-                    />
-                    {isLast && (
-                      <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
-                        <span className="text-white font-bold text-2xl">+{property.images.length - 4}</span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {/* Coluna de miniaturas — desktop */}
+          <div className="hidden lg:grid grid-rows-3 gap-0.5 h-full">
+            {property.images.slice(1, 4).map((img, i) => {
+              const isLast = i === 2 && property.images.length > 4
+              return (
+                <button
+                  key={img.id}
+                  onClick={() => openGallery(i + 1)}
+                  className="relative overflow-hidden group block"
+                >
+                  <img
+                    src={img.url}
+                    alt=""
+                    className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-500"
+                  />
+                  {isLast && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <span className="text-white font-bold text-xl">+{property.images.length - 4}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                </button>
+              )
+            })}
+          </div>
         </div>
 
-        {/* Miniaturas mobile — scroll horizontal */}
+        {/* Miniaturas mobile — strip horizontal abaixo */}
         {property.images.length > 1 && (
-          <div className="lg:hidden flex gap-1.5 overflow-x-auto px-4 py-2 scrollbar-none">
+          <div className="lg:hidden flex gap-1.5 overflow-x-auto px-4 py-2.5">
             {property.images.slice(1).map((img, i) => (
               <button
                 key={img.id}
                 onClick={() => openGallery(i + 1)}
-                className="flex-shrink-0 w-24 h-16 overflow-hidden rounded-lg"
+                className="flex-shrink-0 w-20 h-14 overflow-hidden rounded"
               >
                 <img src={img.url} alt="" className="w-full h-full object-cover" />
               </button>
@@ -229,21 +251,24 @@ function PropertyPage() {
           </div>
         )}
 
-        {/* Info do imóvel — abaixo das fotos */}
-        <div className="px-6 sm:px-12 lg:px-20 py-8 border-b border-border">
-          <span className="inline-block bg-secondary-custom/20 border border-secondary-custom/40 text-secondary-custom text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full mb-4">
+        {/* Separador discreto apenas no mobile (desktop já tem o título na foto) */}
+        <div className="lg:hidden px-6 pt-4 pb-2">
+          <span className="inline-block bg-secondary-custom/20 border border-secondary-custom/40 text-secondary-custom text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full">
             {STATUS_LABEL[property.status] ?? property.status}
           </span>
-          <h1 className="text-4xl sm:text-6xl font-bold leading-none tracking-tight mb-3 text-foreground">
+          <h1 className="text-3xl font-bold text-foreground leading-tight mt-2">
             {property.title}
           </h1>
           {property.address && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <MapPin className="h-4 w-4 text-secondary-custom flex-shrink-0" />
+            <div className="flex items-center gap-1.5 text-muted-foreground text-sm mt-1.5">
+              <MapPin className="h-3.5 w-3.5 text-secondary-custom flex-shrink-0" />
               <span>{property.address}</span>
             </div>
           )}
         </div>
+
+        {/* Linha divisória */}
+        <div className="border-b border-border mt-4 lg:mt-6" />
       </section>
 
       {/* ── FEATURES ── */}
