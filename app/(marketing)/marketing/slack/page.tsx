@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Bell, CheckCircle2, AlertCircle, Save, Loader2 } from "lucide-react"
+import { Bell, CheckCircle2, AlertCircle, Save, Loader2, MessageSquare } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase/client"
 
 interface SlackUser {
   id: string
@@ -23,12 +24,17 @@ const ROLE_LABELS: Record<string, string> = {
   BROKER: "Corretor",
 }
 
+const DEFAULT_MESSAGE = "Olá {{nome}}! 👋 Sou {{corretor}} da Real Sales.\nVi que você se interessou pelo {{produto}} e gostaria de te apresentar mais detalhes. Posso te ajudar?"
+
 export default function SlackConfigPage() {
   const { toast } = useToast()
   const [users, setUsers] = useState<SlackUser[]>([])
   const [slackIds, setSlackIds] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [firstMessage, setFirstMessage] = useState("")
+  const [savingMsg, setSavingMsg] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -47,7 +53,47 @@ export default function SlackConfigPage() {
     }
   }, [toast])
 
-  useEffect(() => { loadUsers() }, [loadUsers])
+  useEffect(() => {
+    loadUsers()
+    // Carrega userId e mensagem de primeiro contato
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      setUserId(user.id)
+      supabase
+        .from("api_settings")
+        .select("encrypted_value")
+        .eq("user_id", user.id)
+        .eq("setting_key", "WHATSAPP_FIRST_MESSAGE")
+        .maybeSingle()
+        .then(({ data }) => {
+          setFirstMessage(data?.encrypted_value ?? "")
+        })
+    })
+  }, [loadUsers])
+
+  const saveFirstMessage = async () => {
+    if (!userId) return
+    setSavingMsg(true)
+    try {
+      const { data: existing } = await supabase
+        .from("api_settings")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("setting_key", "WHATSAPP_FIRST_MESSAGE")
+        .maybeSingle()
+
+      const { error } = existing
+        ? await supabase.from("api_settings").update({ encrypted_value: firstMessage }).eq("user_id", userId).eq("setting_key", "WHATSAPP_FIRST_MESSAGE")
+        : await supabase.from("api_settings").insert({ user_id: userId, setting_key: "WHATSAPP_FIRST_MESSAGE", encrypted_value: firstMessage })
+
+      if (error) throw error
+      toast({ title: "Mensagem salva!", description: "Será usada no botão WhatsApp das notificações." })
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" })
+    } finally {
+      setSavingMsg(false)
+    }
+  }
 
   const save = async (userId: string) => {
     setSaving(userId)
@@ -103,6 +149,44 @@ export default function SlackConfigPage() {
             failText="Adicionar na Vercel → SLACK_BOT_TOKEN (scope: chat:write)"
             warn
           />
+        </CardContent>
+      </Card>
+
+      {/* Mensagem de Primeiro Contato */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-secondary-custom" />
+            Mensagem de Primeiro Contato (WhatsApp)
+          </CardTitle>
+          <CardDescription>
+            Texto pré-preenchido no botão <strong>💬 Enviar no WhatsApp</strong> das notificações do Slack.
+            Use as variáveis: <code className="bg-muted px-1 rounded text-xs">{`{{nome}}`}</code> (lead),{" "}
+            <code className="bg-muted px-1 rounded text-xs">{`{{produto}}`}</code> (imóvel),{" "}
+            <code className="bg-muted px-1 rounded text-xs">{`{{corretor}}`}</code> (corretor).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <textarea
+            className="w-full min-h-[110px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+            placeholder={DEFAULT_MESSAGE}
+            value={firstMessage}
+            onChange={(e) => setFirstMessage(e.target.value)}
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              O corretor só precisa clicar em Enviar — mensagem já vem preenchida no WhatsApp Web.
+            </p>
+            <Button
+              onClick={saveFirstMessage}
+              disabled={savingMsg}
+              size="sm"
+              className="bg-secondary-custom hover:bg-secondary-custom/90 text-primary-custom font-bold"
+            >
+              {savingMsg ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+              Salvar Mensagem
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
