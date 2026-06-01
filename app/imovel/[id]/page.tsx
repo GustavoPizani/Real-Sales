@@ -163,112 +163,72 @@ function PropertyPage() {
       </header>
 
       {/* ── HERO + GALERIA ── */}
-      <section className="pt-[64px]">
+      <section className="pt-[64px] px-4 sm:px-6 lg:px-10 pt-[72px] pb-0">
 
-        {/* Grid principal — desktop: 2/3 imagem + 1/3 thumbs | altura contida */}
-        <div
-          className="grid grid-cols-1 lg:grid-cols-3 gap-0.5"
-          style={{ height: 'clamp(340px, 58vh, 620px)' }}
-        >
-          {/* Imagem principal com título sobreposto */}
+        {/* Grid compacto — altura fixa 480px no desktop */}
+        <div className="h-[260px] sm:h-[380px] lg:h-[480px] grid grid-cols-2 lg:grid-cols-[1fr_1fr] gap-2 rounded-2xl overflow-hidden">
+
+          {/* Imagem principal */}
           <button
             onClick={() => openGallery(0)}
-            className="relative lg:col-span-2 overflow-hidden group block h-full"
+            className="relative overflow-hidden group h-full col-span-1 lg:col-span-1 block"
           >
-            <img
-              src={heroImage}
-              alt={property.title}
-              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
-            />
-
-            {/* Gradiente + título sobreposto */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)' }}
-            />
-            <div className="absolute bottom-0 left-0 right-0 px-6 sm:px-8 pb-6 sm:pb-8 text-left">
-              <span className="inline-block bg-secondary-custom/25 border border-secondary-custom/50 text-secondary-custom text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full mb-3">
-                {STATUS_LABEL[property.status] ?? property.status}
-              </span>
-              <h1 className="text-3xl sm:text-5xl font-bold text-white leading-tight tracking-tight">
-                {property.title}
-              </h1>
-              {property.address && (
-                <div className="flex items-center gap-1.5 text-white/60 text-sm mt-2">
-                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>{property.address}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Zoom hint */}
-            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="bg-black/50 backdrop-blur-sm rounded-full p-2">
-                <ZoomIn className="h-4 w-4 text-white" />
+            <img src={heroImage} alt={property.title} className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="bg-black/50 backdrop-blur-sm rounded-full p-1.5">
+                <ZoomIn className="h-3.5 w-3.5 text-white" />
               </div>
             </div>
           </button>
 
-          {/* Coluna de miniaturas — desktop */}
-          <div className="hidden lg:grid grid-rows-3 gap-0.5 h-full">
-            {property.images.slice(1, 4).map((img, i) => {
-              const isLast = i === 2 && property.images.length > 4
+          {/* Grade 2×2 à direita */}
+          <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full">
+            {[1, 2, 3, 4].map((i) => {
+              const img = property.images[i]
+              const isLast = i === 4 && property.images.length > 5
+              if (!img) return <div key={i} className="bg-muted rounded-lg" />
               return (
                 <button
                   key={img.id}
-                  onClick={() => openGallery(i + 1)}
-                  className="relative overflow-hidden group block"
+                  onClick={() => openGallery(i)}
+                  className="relative overflow-hidden group rounded-lg block h-full"
                 >
-                  <img
-                    src={img.url}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-500"
-                  />
+                  <img src={img.url} alt="" className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-500" />
                   {isLast && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <span className="text-white font-bold text-xl">+{property.images.length - 4}</span>
+                    <div className="absolute inset-0 bg-black/55 flex items-center justify-center rounded-lg">
+                      <span className="text-white font-bold text-base">+{property.images.length - 5} Fotos</span>
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                 </button>
               )
             })}
           </div>
         </div>
 
-        {/* Miniaturas mobile — strip horizontal abaixo */}
-        {property.images.length > 1 && (
-          <div className="lg:hidden flex gap-1.5 overflow-x-auto px-4 py-2.5">
-            {property.images.slice(1).map((img, i) => (
-              <button
-                key={img.id}
-                onClick={() => openGallery(i + 1)}
-                className="flex-shrink-0 w-20 h-14 overflow-hidden rounded"
-              >
-                <img src={img.url} alt="" className="w-full h-full object-cover" />
-              </button>
-            ))}
+        {/* Título e info — abaixo da galeria, estilo muvon */}
+        <div className="pt-5 pb-6">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="inline-block bg-secondary-custom/20 border border-secondary-custom/40 text-secondary-custom text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full">
+              {STATUS_LABEL[property.status] ?? property.status}
+            </span>
+            {property.type && (
+              <span className="inline-block border border-border text-muted-foreground text-[10px] font-semibold tracking-wider uppercase px-3 py-1 rounded-full">
+                {property.type}
+              </span>
+            )}
           </div>
-        )}
-
-        {/* Separador discreto apenas no mobile (desktop já tem o título na foto) */}
-        <div className="lg:hidden px-6 pt-4 pb-2">
-          <span className="inline-block bg-secondary-custom/20 border border-secondary-custom/40 text-secondary-custom text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full">
-            {STATUS_LABEL[property.status] ?? property.status}
-          </span>
-          <h1 className="text-3xl font-bold text-foreground leading-tight mt-2">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight tracking-tight">
             {property.title}
           </h1>
           {property.address && (
-            <div className="flex items-center gap-1.5 text-muted-foreground text-sm mt-1.5">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-sm mt-3">
               <MapPin className="h-3.5 w-3.5 text-secondary-custom flex-shrink-0" />
               <span>{property.address}</span>
             </div>
           )}
         </div>
 
-        {/* Linha divisória */}
-        <div className="border-b border-border mt-4 lg:mt-6" />
+        <div className="border-b border-border" />
       </section>
 
       {/* ── FEATURES ── */}
