@@ -53,7 +53,7 @@ function PropertyPage() {
 
   const [property, setProperty] = useState<PublicProperty | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedImage, setSelectedImage] = useState(0)
+  const [selectedImage, setSelectedImage] = useState(0) // kept for compat
   const [brokerId, setBrokerId] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
@@ -162,82 +162,89 @@ function PropertyPage() {
         </button>
       </header>
 
-      {/* ── HERO ── */}
-      <section className="relative h-screen flex items-end">
-        <div className="absolute inset-0">
-          <img src={heroImage} alt={property.title} className="w-full h-full object-cover" />
-          <div
-            className="absolute inset-0"
-            style={{ background: 'linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.65) 45%, transparent 100%)' }}
-          />
-        </div>
+      {/* ── HERO + GALERIA (combinados, above the fold) ── */}
+      <section className="pt-[64px]">
 
-        <div className="relative z-10 w-full px-6 sm:px-12 lg:px-20 pb-20">
-          <span className="inline-block bg-secondary-custom/20 border border-secondary-custom/40 text-secondary-custom text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full mb-5">
-            {STATUS_LABEL[property.status] ?? property.status}
-          </span>
+        {/* Grid de fotos — desktop: main 2/3 + thumbs 1/3 | mobile: empilhado */}
+        <div className="lg:grid lg:grid-cols-3 lg:gap-0.5 lg:h-[80vh]">
 
-          <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tight mb-4 max-w-4xl text-foreground">
-            {property.title}
-          </h1>
-
-          {property.address && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mt-4">
-              <MapPin className="h-4 w-4 text-secondary-custom flex-shrink-0" />
-              <span>{property.address}</span>
-            </div>
-          )}
-
+          {/* Imagem principal */}
           <button
-            onClick={scrollToContact}
-            className="mt-8 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown className="h-4 w-4 animate-bounce" />
-            Conheça o empreendimento
-          </button>
-        </div>
-      </section>
-
-      {/* ── GALLERY ── */}
-      {property.images.length > 0 && (
-        <section className="px-6 sm:px-12 lg:px-20 py-16">
-          <p className="text-secondary-custom text-xs font-bold tracking-widest uppercase mb-6">Galeria</p>
-
-          {/* Imagem principal clicável */}
-          <button
-            onClick={() => openGallery(selectedImage)}
-            className="relative w-full rounded-2xl overflow-hidden aspect-video max-h-[600px] mb-4 group block"
+            onClick={() => openGallery(0)}
+            className="relative w-full h-[55vw] lg:h-full lg:col-span-2 overflow-hidden group block"
           >
             <img
-              src={property.images[selectedImage]?.url || heroImage}
+              src={heroImage}
               alt={property.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
             />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded-full p-3">
-                <ZoomIn className="h-6 w-6 text-white" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-full p-3">
+                <ZoomIn className="h-5 w-5 text-white" />
               </div>
             </div>
           </button>
 
-          {/* Miniaturas */}
+          {/* Grid de miniaturas — desktop: coluna vertical | mobile: linha horizontal */}
           {property.images.length > 1 && (
-            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2">
-              {property.images.map((img, i) => (
-                <button
-                  key={img.id}
-                  onClick={() => setSelectedImage(i)}
-                  className={`relative aspect-video overflow-hidden rounded-lg border-2 transition-all duration-200 ${
-                    selectedImage === i ? "border-secondary-custom" : "border-border hover:border-muted-foreground/40"
-                  }`}
-                >
-                  <img src={img.url} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
+            <div className="hidden lg:grid grid-rows-3 gap-0.5">
+              {property.images.slice(1, 4).map((img, i) => {
+                const isLast = i === 2 && property.images.length > 4
+                return (
+                  <button
+                    key={img.id}
+                    onClick={() => openGallery(i + 1)}
+                    className="relative overflow-hidden group"
+                  >
+                    <img
+                      src={img.url}
+                      alt=""
+                      className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500"
+                    />
+                    {isLast && (
+                      <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                        <span className="text-white font-bold text-2xl">+{property.images.length - 4}</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                  </button>
+                )
+              })}
             </div>
           )}
-        </section>
-      )}
+        </div>
+
+        {/* Miniaturas mobile — scroll horizontal */}
+        {property.images.length > 1 && (
+          <div className="lg:hidden flex gap-1.5 overflow-x-auto px-4 py-2 scrollbar-none">
+            {property.images.slice(1).map((img, i) => (
+              <button
+                key={img.id}
+                onClick={() => openGallery(i + 1)}
+                className="flex-shrink-0 w-24 h-16 overflow-hidden rounded-lg"
+              >
+                <img src={img.url} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Info do imóvel — abaixo das fotos */}
+        <div className="px-6 sm:px-12 lg:px-20 py-8 border-b border-border">
+          <span className="inline-block bg-secondary-custom/20 border border-secondary-custom/40 text-secondary-custom text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full mb-4">
+            {STATUS_LABEL[property.status] ?? property.status}
+          </span>
+          <h1 className="text-4xl sm:text-6xl font-bold leading-none tracking-tight mb-3 text-foreground">
+            {property.title}
+          </h1>
+          {property.address && (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <MapPin className="h-4 w-4 text-secondary-custom flex-shrink-0" />
+              <span>{property.address}</span>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ── FEATURES ── */}
       {property.features && property.features.length > 0 && (
