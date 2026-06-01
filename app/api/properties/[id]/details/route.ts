@@ -46,6 +46,7 @@ export async function GET(
         dormitorios: t.dormitorios,
         suites: t.suites,
         vagas: t.vagas,
+        floorPlanUrl: t.floorPlanUrl ?? null,
       })),
       creatorName: property.creator?.name || 'N/A',
       updaterName: property.updater?.name || 'N/A',

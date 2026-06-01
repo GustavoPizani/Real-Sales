@@ -22,6 +22,7 @@ interface Typology {
   dormitorios?: number | null
   suites?: number | null
   vagas?: number | null
+  floorPlanUrl?: string | null
 }
 
 interface PropertyDetail {
@@ -221,6 +222,7 @@ export default function PropertyViewPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Planta</TableHead>
                       <TableHead>Tipologia</TableHead>
                       <TableHead>Área</TableHead>
                       <TableHead>Quartos</TableHead>
@@ -237,6 +239,19 @@ export default function PropertyViewPage() {
                     )}
                     {property.typologies.map((typology) => (
                       <TableRow key={typology.id}>
+                        <TableCell>
+                          {typology.floorPlanUrl ? (
+                            <a href={typology.floorPlanUrl} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={typology.floorPlanUrl}
+                                alt={`Planta ${typology.name}`}
+                                className="h-16 w-24 object-cover rounded-md border border-border hover:opacity-80 transition-opacity"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Sem planta</span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-medium">{typology.name || "N/A"}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
