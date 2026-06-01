@@ -35,6 +35,7 @@ export default function SlackConfigPage() {
   const [firstMessage, setFirstMessage] = useState("")
   const [savingMsg, setSavingMsg] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [slackStatus, setSlackStatus] = useState({ webhookConfigured: false, botTokenConfigured: false })
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -55,6 +56,11 @@ export default function SlackConfigPage() {
 
   useEffect(() => {
     loadUsers()
+    // Verifica status das variáveis de ambiente via API (server-side)
+    fetch("/api/marketing/slack-status")
+      .then(r => r.json())
+      .then(setSlackStatus)
+      .catch(() => {})
     // Carrega userId e mensagem de primeiro contato
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
@@ -111,8 +117,6 @@ export default function SlackConfigPage() {
       setSaving(null) }
   }
 
-  const webhookOk = Boolean(process.env.NEXT_PUBLIC_APP_URL)
-
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
       <div>
@@ -137,14 +141,14 @@ export default function SlackConfigPage() {
           <StatusRow
             label="Canal geral (SLACK_LEAD_WEBHOOK_URL)"
             description="Todas as notificações de leads vão para este canal"
-            ok={webhookOk}
+            ok={slackStatus.webhookConfigured}
             okText="Configurado"
             failText="Adicionar na Vercel → SLACK_LEAD_WEBHOOK_URL"
           />
           <StatusRow
             label="Bot Token (SLACK_BOT_TOKEN)"
             description="Necessário para enviar DMs diretas aos corretores"
-            ok={false}
+            ok={slackStatus.botTokenConfigured}
             okText="Configurado"
             failText="Adicionar na Vercel → SLACK_BOT_TOKEN (scope: chat:write)"
             warn
