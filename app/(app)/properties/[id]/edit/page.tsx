@@ -154,7 +154,7 @@ export default function EditPropertyPage() {
           if (typology.plantaFile) {
             const formData = new FormData();
             formData.append("file", typology.plantaFile);
-            const uploadResponse = await fetch("/api/Upload", { method: "POST", body: formData });
+            const uploadResponse = await fetch("/api/upload", { method: "POST", body: formData });
             if (!uploadResponse.ok) throw new Error(`Falha no upload da planta para ${typology.name}.`);
             const { url } = await uploadResponse.json();
             return { ...typology, floorPlanUrl: url };
