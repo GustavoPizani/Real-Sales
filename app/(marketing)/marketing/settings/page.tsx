@@ -231,6 +231,40 @@ export default function MarketingSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mensagem de Primeiro Contato WhatsApp */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span className="text-lg">💬</span>
+            Mensagem de Primeiro Contato (WhatsApp)
+          </CardTitle>
+          <CardDescription>
+            Texto que aparece pré-preenchido no botão WhatsApp da notificação do Slack.
+            Use <strong>{"{{nome}}"}</strong> para o nome do lead, <strong>{"{{produto}}"}</strong> para o imóvel e <strong>{"{{corretor}}"}</strong> para o corretor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <textarea
+              className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              placeholder={"Olá {{nome}}, tudo bem? Sou {{corretor}} da Real Sales! Vi que você se interessou pelo {{produto}}. Posso te contar mais detalhes?"}
+              value={settings["WHATSAPP_FIRST_MESSAGE"] || ""}
+              onChange={(e) => setSettings({ ...settings, WHATSAPP_FIRST_MESSAGE: e.target.value })}
+            />
+            <div className="flex justify-end">
+              <Button
+                onClick={() => saveSetting("WHATSAPP_FIRST_MESSAGE")}
+                disabled={saving === "WHATSAPP_FIRST_MESSAGE"}
+                className="bg-secondary-custom hover:bg-secondary-custom/90 text-primary-custom font-bold"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {saving === "WHATSAPP_FIRST_MESSAGE" ? "Salvando..." : "Salvar Mensagem"}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

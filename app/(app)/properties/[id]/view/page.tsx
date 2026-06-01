@@ -141,7 +141,7 @@ export default function PropertyViewPage() {
             Voltar
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{property.title}</h1>
+            <h1 className="text-3xl font-bold text-white">{property.title}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge className={STATUS_CLASS[property.status] ?? "bg-gray-100 text-gray-800"}>
                 {STATUS_LABEL[property.status] ?? property.status}

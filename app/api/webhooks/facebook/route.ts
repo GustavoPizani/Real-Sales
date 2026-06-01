@@ -48,7 +48,7 @@ async function processWebhookPayload(body: any) {
 
       const mapping = await prisma.facebookFormMapping.findUnique({
         where: { formId: String(form_id) },
-        include: { connection: true },
+        include: { connection: true, property: { select: { title: true } } },
       })
 
       if (!mapping || !mapping.isActive) {

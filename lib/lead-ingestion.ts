@@ -159,6 +159,26 @@ export async function ingestLead(
     select: { name: true, accountId: true, slackMemberId: true },
   })
 
+  // Lê mensagem de primeiro contato configurada pelo usuário
+  const firstMessageSetting = await prisma.apiSetting.findFirst({
+    where: { setting_key: 'WHATSAPP_FIRST_MESSAGE' },
+    select: { encrypted_value: true },
+  }).catch(() => null)
+
+  // A mensagem de primeiro contato é salva como texto puro (não é dado sensível)
+  let firstMessage: string | null = firstMessageSetting?.encrypted_value ?? null
+
+  // Substitui variáveis na mensagem
+  if (firstMessage) {
+    const propertyName = (mapping as any).property?.title ?? mapping.formName ?? ''
+    firstMessage = firstMessage
+      .replace(/\{\{nome\}\}/gi, fullName)
+      .replace(/\{\{produto\}\}/gi, propertyName)
+      .replace(/\{\{corretor\}\}/gi, broker?.name ?? 'Corretor')
+  }
+
+  const hasSdrAgent = !!(mapping as any).agentId
+
   await Promise.allSettled([
     notifyNewLead({
       clientId: client.id,
@@ -176,6 +196,8 @@ export async function ingestLead(
       brokerName: broker?.name ?? 'Corretor',
       brokerSlackMemberId: broker?.slackMemberId,
       campaignSource: campaign,
+      hasSdrAgent,
+      firstMessage,
     }),
   ])
 

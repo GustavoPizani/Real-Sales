@@ -13,6 +13,8 @@ function buildBlocks({
   brokerName,
   campaignSource,
   appUrl,
+  whatsappUrl,
+  hasSdrAgent,
 }: {
   clientId: string
   clientName: string
@@ -21,6 +23,8 @@ function buildBlocks({
   brokerName: string
   campaignSource?: string | null
   appUrl: string
+  whatsappUrl?: string | null
+  hasSdrAgent?: boolean
 }) {
   const fields: { type: string; text: string }[] = []
   if (campaignSource) fields.push({ type: 'mrkdwn', text: `*Campanha:*\n${campaignSource}` })
@@ -28,24 +32,60 @@ function buildBlocks({
   if (phone) fields.push({ type: 'mrkdwn', text: `*Telefone:*\n${phone}` })
   if (email) fields.push({ type: 'mrkdwn', text: `*E-mail:*\n${email}` })
 
+  const actionButtons: object[] = [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'Ver no CRM →', emoji: true },
+      url: `${appUrl}/client/${clientId}`,
+      style: 'primary',
+    },
+  ]
+
+  if (whatsappUrl) {
+    actionButtons.push({
+      type: 'button',
+      text: {
+        type: 'plain_text',
+        text: hasSdrAgent ? '🤖 Abrir WhatsApp (SDR)' : '💬 Enviar no WhatsApp',
+        emoji: true,
+      },
+      url: whatsappUrl,
+    })
+  }
+
   return [
     {
       type: 'header',
       text: { type: 'plain_text', text: `🔔 Novo lead — ${clientName}`, emoji: true },
     },
     { type: 'section', fields },
-    {
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Ver no CRM →', emoji: true },
-          url: `${appUrl}/client/${clientId}`,
-          style: 'primary',
-        },
-      ],
-    },
+    { type: 'actions', elements: actionButtons },
   ]
+}
+
+function buildWhatsAppUrl({
+  phone,
+  hasSdrAgent,
+  firstMessage,
+}: {
+  phone?: string | null
+  hasSdrAgent: boolean
+  firstMessage?: string | null
+}): string | null {
+  if (!phone) return null
+
+  const raw = phone.replace(/\D/g, '')
+  const formatted = raw.startsWith('55') && raw.length >= 12 ? raw : `55${raw}`
+
+  if (hasSdrAgent) {
+    // SDR ativo: abre o chat sem mensagem pré-preenchida
+    return `https://wa.me/${formatted}`
+  }
+
+  // Sem SDR: pré-preenche com a mensagem de primeiro contato configurada
+  if (!firstMessage) return `https://wa.me/${formatted}`
+
+  return `https://wa.me/${formatted}?text=${encodeURIComponent(firstMessage)}`
 }
 
 export async function sendSlackLeadNotification({
@@ -56,6 +96,8 @@ export async function sendSlackLeadNotification({
   brokerName,
   brokerSlackMemberId,
   campaignSource,
+  hasSdrAgent = false,
+  firstMessage,
 }: {
   clientId: string
   clientName: string
@@ -64,6 +106,8 @@ export async function sendSlackLeadNotification({
   brokerName: string
   brokerSlackMemberId?: string | null
   campaignSource?: string | null
+  hasSdrAgent?: boolean
+  firstMessage?: string | null
 }) {
   const webhookUrl = process.env.SLACK_LEAD_WEBHOOK_URL
   const botToken = process.env.SLACK_BOT_TOKEN
@@ -72,16 +116,26 @@ export async function sendSlackLeadNotification({
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined) ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
-    'https://real-sales.vercel.app'
+    'https://real-sales-ruby.vercel.app'
 
-  const blocks = buildBlocks({ clientId, clientName, phone, email, brokerName, campaignSource, appUrl })
+  const whatsappUrl = buildWhatsAppUrl({ phone, hasSdrAgent, firstMessage })
 
-  // Envia para o canal geral via Incoming Webhook
+  const blocks = buildBlocks({
+    clientId,
+    clientName,
+    phone,
+    email,
+    brokerName,
+    campaignSource,
+    appUrl,
+    whatsappUrl,
+    hasSdrAgent,
+  })
+
   if (webhookUrl) {
     await post(webhookUrl, { blocks })
   }
 
-  // Envia DM para o corretor via Bot API se tiver Member ID e Bot Token
   if (botToken && brokerSlackMemberId) {
     await post('https://slack.com/api/chat.postMessage', {
       channel: brokerSlackMemberId,
@@ -92,21 +146,13 @@ export async function sendSlackLeadNotification({
 }
 
 export async function sendSlackSDRNotification(message: string) {
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) {
-    console.warn("[SLACK SDR] SLACK_WEBHOOK_URL is not set");
-    return;
+    console.warn('[SLACK SDR] SLACK_WEBHOOK_URL is not set')
+    return
   }
 
-  const blocks = [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: message
-      }
-    }
-  ];
-
-  await post(webhookUrl, { blocks });
+  await post(webhookUrl, {
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: message } }],
+  })
 }
