@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import { useParams, useSearchParams } from "next/navigation"
-import { MapPin, Loader2, Send, Bed, Car, Square, CheckCircle2, ChevronDown, ArrowRight, X } from "lucide-react"
+import { MapPin, Loader2, Send, Bed, Car, Square, CheckCircle2, ChevronDown, ArrowRight, X, ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 interface PublicTypology {
@@ -63,6 +63,13 @@ function PropertyPage() {
   const [leadMessage, setLeadMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [floorPlanModal, setFloorPlanModal] = useState<string | null>(null)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
+
+  const openGallery = (index: number) => { setGalleryIndex(index); setGalleryOpen(true) }
+  const closeGallery = () => setGalleryOpen(false)
+  const prevImage = () => setGalleryIndex(i => (i - 1 + (property?.images.length ?? 1)) % (property?.images.length ?? 1))
+  const nextImage = () => setGalleryIndex(i => (i + 1) % (property?.images.length ?? 1))
 
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id
 
@@ -192,32 +199,43 @@ function PropertyPage() {
       </section>
 
       {/* ── GALLERY ── */}
-      {property.images.length > 1 && (
+      {property.images.length > 0 && (
         <section className="px-6 sm:px-12 lg:px-20 py-16">
           <p className="text-secondary-custom text-xs font-bold tracking-widest uppercase mb-6">Galeria</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
-            {property.images.map((img, i) => (
-              <button
-                key={img.id}
-                onClick={() => setSelectedImage(i)}
-                className={`relative aspect-video overflow-hidden rounded-lg border-2 transition-all duration-200 ${
-                  selectedImage === i ? "border-secondary-custom" : "border-border hover:border-muted-foreground/40"
-                }`}
-              >
-                <img src={img.url} alt="" className="w-full h-full object-cover" />
-                {selectedImage === i && (
-                  <div className="absolute inset-0 bg-secondary-custom/10" />
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="rounded-2xl overflow-hidden aspect-video max-h-[600px]">
+
+          {/* Imagem principal clicável */}
+          <button
+            onClick={() => openGallery(selectedImage)}
+            className="relative w-full rounded-2xl overflow-hidden aspect-video max-h-[600px] mb-4 group block"
+          >
             <img
               src={property.images[selectedImage]?.url || heroImage}
               alt={property.title}
               className="w-full h-full object-cover"
             />
-          </div>
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 rounded-full p-3">
+                <ZoomIn className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </button>
+
+          {/* Miniaturas */}
+          {property.images.length > 1 && (
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2">
+              {property.images.map((img, i) => (
+                <button
+                  key={img.id}
+                  onClick={() => setSelectedImage(i)}
+                  className={`relative aspect-video overflow-hidden rounded-lg border-2 transition-all duration-200 ${
+                    selectedImage === i ? "border-secondary-custom" : "border-border hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -244,32 +262,7 @@ function PropertyPage() {
         </section>
       )}
 
-      {/* ── LOCALIZAÇÃO ── */}
-      {property.address && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-        <section className="px-6 sm:px-12 lg:px-20 py-16 border-t border-border">
-          <p className="text-secondary-custom text-xs font-bold tracking-widest uppercase mb-3">Localização</p>
-          <h2 className="text-3xl sm:text-4xl font-bold mb-8 text-foreground">
-            Onde fica o empreendimento
-          </h2>
-          <div className="flex items-center gap-2 mb-6 text-muted-foreground text-sm">
-            <MapPin className="h-4 w-4 text-secondary-custom flex-shrink-0" />
-            <span>{property.address}</span>
-          </div>
-          <div className="rounded-2xl overflow-hidden border border-border" style={{ height: 420 }}>
-            <iframe
-              title="Localização do empreendimento"
-              width="100%"
-              height="100%"
-              style={{ border: 0 }}
-              loading="lazy"
-              allowFullScreen
-              src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(property.address)}&zoom=15`}
-            />
-          </div>
-        </section>
-      )}
-
-      {/* ── TIPOLOGIAS ── */}
+      {/* ── TIPOLOGIAS / PLANTAS ── */}
       {hasTypologies && (
         <section className="px-6 sm:px-12 lg:px-20 py-16 border-t border-border">
           <p className="text-secondary-custom text-xs font-bold tracking-widest uppercase mb-3">Plantas</p>
@@ -339,6 +332,99 @@ function PropertyPage() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* ── LOCALIZAÇÃO ── */}
+      {property.address && (
+        <section className="px-6 sm:px-12 lg:px-20 py-16 border-t border-border">
+          <p className="text-secondary-custom text-xs font-bold tracking-widest uppercase mb-3">Localização</p>
+          <h2 className="text-3xl sm:text-4xl font-bold mb-8 text-foreground">
+            Onde fica o empreendimento
+          </h2>
+          <div className="flex items-center gap-2 mb-6 text-muted-foreground text-sm">
+            <MapPin className="h-4 w-4 text-secondary-custom flex-shrink-0" />
+            <span>{property.address}</span>
+          </div>
+          <div className="rounded-2xl overflow-hidden border border-border" style={{ height: 420 }}>
+            <iframe
+              title="Localização do empreendimento"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              loading="lazy"
+              allowFullScreen
+              src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ""}&q=${encodeURIComponent(property.address)}&zoom=15`}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── GALLERY MODAL ── */}
+      {galleryOpen && property.images.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm"
+          onClick={closeGallery}
+        >
+          {/* Fechar */}
+          <button
+            onClick={closeGallery}
+            className="absolute top-5 right-5 text-white/60 hover:text-white transition-colors z-10"
+          >
+            <X className="h-8 w-8" />
+          </button>
+
+          {/* Contador */}
+          <span className="absolute top-5 left-1/2 -translate-x-1/2 text-white/40 text-sm tabular-nums">
+            {galleryIndex + 1} / {property.images.length}
+          </span>
+
+          {/* Prev */}
+          {property.images.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); prevImage() }}
+              className="absolute left-4 sm:left-8 text-white/60 hover:text-white transition-colors z-10 bg-black/30 hover:bg-black/50 rounded-full p-2"
+            >
+              <ChevronLeft className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Imagem */}
+          <div className="relative max-w-5xl max-h-[85vh] w-full px-16" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={property.images[galleryIndex]?.url}
+              alt={`${property.title} — foto ${galleryIndex + 1}`}
+              className="w-full h-full object-contain rounded-xl"
+              style={{ maxHeight: "85vh" }}
+            />
+          </div>
+
+          {/* Next */}
+          {property.images.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); nextImage() }}
+              className="absolute right-4 sm:right-8 text-white/60 hover:text-white transition-colors z-10 bg-black/30 hover:bg-black/50 rounded-full p-2"
+            >
+              <ChevronRight className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Miniaturas no rodapé do modal */}
+          {property.images.length > 1 && (
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5 px-4 max-w-full overflow-x-auto">
+              {property.images.map((img, i) => (
+                <button
+                  key={img.id}
+                  onClick={(e) => { e.stopPropagation(); setGalleryIndex(i) }}
+                  className={`flex-shrink-0 w-12 h-8 rounded overflow-hidden border-2 transition-all ${
+                    i === galleryIndex ? "border-secondary-custom" : "border-white/20 opacity-50 hover:opacity-100"
+                  }`}
+                >
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── FLOOR PLAN MODAL ── */}
