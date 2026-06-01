@@ -67,6 +67,35 @@ export default function PropertyViewPage() {
   const [shareableLink, setShareableLink] = useState("")
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState(false)
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
+  const [fullScreenIndex, setFullScreenIndex] = useState(0)
+
+  // Imagens unificadas: fotos + plantas das tipologias
+  const allImages = property
+    ? [
+        ...property.images.map(img => ({ url: img.url, label: property.title })),
+        ...property.typologies
+          .filter(t => t.floorPlanUrl)
+          .map(t => ({ url: t.floorPlanUrl!, label: `Planta — ${t.name}` })),
+      ]
+    : []
+
+  const openFullScreen = (index: number) => {
+    setFullScreenIndex(index)
+    setFullScreenImage(allImages[index]?.url ?? null)
+    setIsGalleryModalOpen(false)
+  }
+
+  const prevFullScreen = () => {
+    const newIdx = (fullScreenIndex - 1 + allImages.length) % allImages.length
+    setFullScreenIndex(newIdx)
+    setFullScreenImage(allImages[newIdx].url)
+  }
+
+  const nextFullScreen = () => {
+    const newIdx = (fullScreenIndex + 1) % allImages.length
+    setFullScreenIndex(newIdx)
+    setFullScreenImage(allImages[newIdx].url)
+  }
 
   const fetchProperty = useCallback(async () => {
     if (!propertyId) return
@@ -241,15 +270,21 @@ export default function PropertyViewPage() {
                       <TableRow key={typology.id}>
                         <TableCell>
                           {typology.floorPlanUrl ? (
-                            <a href={typology.floorPlanUrl} target="_blank" rel="noopener noreferrer">
+                            <button
+                              onClick={() => {
+                                const idx = allImages.findIndex(img => img.url === typology.floorPlanUrl)
+                                if (idx >= 0) openFullScreen(idx)
+                              }}
+                              className="block"
+                            >
                               <img
                                 src={typology.floorPlanUrl}
                                 alt={`Planta ${typology.name}`}
-                                className="h-16 w-24 object-cover rounded-md border border-border hover:opacity-80 transition-opacity"
+                                className="h-16 w-24 object-cover rounded-md border border-border hover:opacity-75 hover:scale-105 transition-all"
                               />
-                            </a>
+                            </button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">Sem planta</span>
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                         <TableCell className="font-medium">{typology.name || "N/A"}</TableCell>
@@ -367,49 +402,92 @@ export default function PropertyViewPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal da Galeria */}
+      {/* Modal da Galeria — fotos + plantas */}
       <Dialog open={isGalleryModalOpen} onOpenChange={setIsGalleryModalOpen}>
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Galeria de Imagens</DialogTitle>
-            <DialogDescription>Clique em uma imagem para ver em tela cheia.</DialogDescription>
+            <DialogDescription>
+              {property.images.length} foto{property.images.length !== 1 ? 's' : ''}
+              {allImages.length > property.images.length && ` · ${allImages.length - property.images.length} planta${allImages.length - property.images.length !== 1 ? 's' : ''}`}
+              {' '}— clique para ampliar
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto p-1 flex-1">
-            {property.images.map((image, index) => (
-              <button
-                key={index}
-                className="relative aspect-square w-full rounded-md overflow-hidden group focus:ring-2 focus:ring-primary focus:ring-offset-2 outline-none"
-                onClick={() => { setFullScreenImage(image.url); setIsGalleryModalOpen(false) }}
-              >
-                <img
-                  src={image.url || "/placeholder.svg"}
-                  alt={`${property.title} ${index + 1}`}
-                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                />
-              </button>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto p-1 flex-1">
+            {allImages.map((img, index) => {
+              const isFloorPlan = index >= property.images.length
+              return (
+                <button
+                  key={index}
+                  className="relative aspect-square w-full rounded-md overflow-hidden group focus:ring-2 focus:ring-primary outline-none"
+                  onClick={() => openFullScreen(index)}
+                >
+                  <img
+                    src={img.url}
+                    alt={img.label}
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  />
+                  {isFloorPlan && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
+                      <p className="text-white text-[10px] font-semibold truncate">{img.label}</p>
+                    </div>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Tela cheia */}
+      {/* Fullscreen com navegação */}
       {fullScreenImage && (
         <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 animate-in fade-in"
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
           onClick={() => setFullScreenImage(null)}
         >
+          {/* Fechar */}
           <button
-            className="absolute top-4 right-4 text-white/70 hover:text-white"
+            className="absolute top-4 right-4 text-white/60 hover:text-white z-10"
             onClick={() => setFullScreenImage(null)}
           >
-            <X className="h-8 w-8" />
+            <X className="h-7 w-7" />
           </button>
+
+          {/* Contador + label */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/50 text-sm text-center">
+            <span>{fullScreenIndex + 1} / {allImages.length}</span>
+            {fullScreenIndex >= property.images.length && (
+              <p className="text-white/40 text-xs mt-0.5">{allImages[fullScreenIndex]?.label}</p>
+            )}
+          </div>
+
+          {/* Prev */}
+          {allImages.length > 1 && (
+            <button
+              className="absolute left-4 text-white/60 hover:text-white bg-black/30 hover:bg-black/50 rounded-full p-2 z-10"
+              onClick={(e) => { e.stopPropagation(); prevFullScreen() }}
+            >
+              <ArrowLeft className="h-6 w-6" />
+            </button>
+          )}
+
+          {/* Imagem */}
           <img
             src={fullScreenImage}
-            alt="Visualização em tela cheia"
-            className="max-w-full max-h-full object-contain"
+            alt={allImages[fullScreenIndex]?.label}
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}
           />
+
+          {/* Next */}
+          {allImages.length > 1 && (
+            <button
+              className="absolute right-4 text-white/60 hover:text-white bg-black/30 hover:bg-black/50 rounded-full p-2 z-10"
+              onClick={(e) => { e.stopPropagation(); nextFullScreen() }}
+            >
+              <ArrowLeft className="h-6 w-6 rotate-180" />
+            </button>
+          )}
         </div>
       )}
     </div>
