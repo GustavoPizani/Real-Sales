@@ -138,6 +138,50 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [visitTime, setVisitTime] = useState("09:00");
   const [activeTab, setActiveTab] = useState("anotacoes");
 
+  // --- WhatsApp — Iniciar Conversa ---
+  const [isWhatsAppStartOpen, setIsWhatsAppStartOpen] = useState(false);
+  const [waAgents, setWaAgents] = useState<{ id: string; name: string; initiationStrategy: string }[]>([]);
+  const [waAgentId, setWaAgentId] = useState("");
+  const [waMessage, setWaMessage] = useState("");
+  const [isSendingWa, setIsSendingWa] = useState(false);
+
+  const openWhatsAppModal = async () => {
+    setIsWhatsAppStartOpen(true);
+    if (waAgents.length === 0) {
+      const res = await fetch("/api/agents");
+      if (res.ok) {
+        const data = await res.json();
+        setWaAgents(data);
+        if (data.length > 0) {
+          const def = data.find((a: any) => a.isDefault) ?? data[0];
+          setWaAgentId(def.id);
+          setWaMessage(def.initiationStrategy ?? "");
+        }
+      }
+    }
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!waMessage.trim()) return;
+    setIsSendingWa(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: waAgentId || undefined, message: waMessage }),
+      });
+      if (res.ok) {
+        toast({ title: "Mensagem enviada!", description: "Primeira mensagem enviada via WhatsApp." });
+        setIsWhatsAppStartOpen(false);
+      } else {
+        const err = await res.json();
+        toast({ variant: "destructive", title: "Erro", description: err.error ?? "Falha ao enviar" });
+      }
+    } finally {
+      setIsSendingWa(false);
+    }
+  };
+
   // --- Funções de Busca e Atualização de Dados ---
   const isInPreSalesFunnel = useMemo(() => {
     if (!client || !client.funnel) return false;
