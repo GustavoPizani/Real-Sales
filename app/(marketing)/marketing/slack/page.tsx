@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Bell, CheckCircle2, AlertCircle, Save, Loader2, MessageSquare } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,21 @@ export default function SlackConfigPage() {
   const [savingMsg, setSavingMsg] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [slackStatus, setSlackStatus] = useState({ webhookConfigured: false, botTokenConfigured: false })
+  const msgRef = useRef<HTMLTextAreaElement>(null)
+
+  const insertVariable = (variable: string) => {
+    const el = msgRef.current
+    if (!el) return
+    const start = el.selectionStart ?? firstMessage.length
+    const end = el.selectionEnd ?? firstMessage.length
+    const updated = firstMessage.slice(0, start) + variable + firstMessage.slice(end)
+    setFirstMessage(updated)
+    // Reposiciona o cursor após a variável inserida
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(start + variable.length, start + variable.length)
+    })
+  }
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -171,7 +186,27 @@ export default function SlackConfigPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Botões de inserção de variável */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: "{{nome}}", desc: "Lead" },
+              { label: "{{produto}}", desc: "Imóvel" },
+              { label: "{{corretor}}", desc: "Corretor" },
+            ].map(({ label, desc }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => insertVariable(label)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-secondary-custom/40 bg-secondary-custom/10 text-secondary-custom text-xs font-mono font-semibold hover:bg-secondary-custom/20 transition-colors"
+              >
+                <span>{label}</span>
+                <span className="text-secondary-custom/60 font-sans font-normal">{desc}</span>
+              </button>
+            ))}
+          </div>
+
           <textarea
+            ref={msgRef}
             className="w-full min-h-[110px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
             placeholder={DEFAULT_MESSAGE}
             value={firstMessage}
