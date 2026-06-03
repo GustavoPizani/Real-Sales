@@ -36,12 +36,15 @@ serve(async (req) => {
     // --- PROCESSAMENTO DA CONTA ---
     const processAccount = async (accountId) => {
         try {
-            const accountUrl = `https://graph.facebook.com/v18.0/act_${accountId}?fields=name,currency&access_token=${accessToken}`;
+            const accountUrl = `https://graph.facebook.com/v21.0/act_${accountId}?fields=name,currency&access_token=${accessToken}`;
             const accountRes = await fetch(accountUrl);
             const accountInfo = await accountRes.json();
+            if (accountInfo.error) {
+                return { id: accountId, success: false, error: accountInfo.error.message, data: [] };
+            }
             const accountName = accountInfo.name || `Conta ${accountId}`;
-            
-            let url = `https://graph.facebook.com/v18.0/act_${accountId}/insights?level=ad&fields=${fields}&time_range=${time_range}&time_increment=1&access_token=${accessToken}&limit=500`;
+
+            let url = `https://graph.facebook.com/v21.0/act_${accountId}/insights?level=ad&fields=${fields}&time_range=${time_range}&time_increment=1&access_token=${accessToken}&limit=500`;
             
             const accountInsights = [];
             let hasData = false;
@@ -109,7 +112,7 @@ serve(async (req) => {
         for (let i = 0; i < adIds.length; i += THUMB_CHUNK) {
             const chunk = adIds.slice(i, i + THUMB_CHUNK);
             const batchReq = chunk.map(id => ({ method: 'GET', relative_url: `${id}?fields=creative{id,image_url,thumbnail_url}` }));
-            const batchUrl = `https://graph.facebook.com/v18.0?batch=${encodeURIComponent(JSON.stringify(batchReq))}&access_token=${accessToken}`;
+            const batchUrl = `https://graph.facebook.com/v21.0?batch=${encodeURIComponent(JSON.stringify(batchReq))}&access_token=${accessToken}`;
             
             thumbPromises.push(
                 fetch(batchUrl, { method: 'POST' }).then(r => r.json()).then(resp => {

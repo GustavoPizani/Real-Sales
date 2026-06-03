@@ -60,10 +60,18 @@ export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number)
         const until = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
 
         if (accessToken && adAccountIds.length > 0) {
-          await supabase.functions.invoke('meta-insights', {
+          const { data: syncResult, error: syncError } = await supabase.functions.invoke('meta-insights', {
             body: { adAccountIds, accessToken, since, until }
           })
-          console.log("✅ Sincronização Meta finalizada.")
+          if (syncError) {
+            console.error("[SYNC] Erro na Edge Function:", syncError)
+            toast({ variant: "destructive", title: "Erro na sincronização", description: syncError.message || "Falha ao comunicar com a Meta API." })
+          } else if (syncResult?.failed > 0) {
+            console.warn("[SYNC] Contas com falha:", syncResult)
+            toast({ variant: "destructive", title: "Falha em algumas contas", description: `${syncResult.failed} conta(s) não sincronizaram. Verifique se o Access Token é válido.` })
+          } else {
+            console.log("✅ Sincronização Meta finalizada.", syncResult)
+          }
         } else {
           console.warn("[SYNC] META_ACCESS_TOKEN ou META_AD_ACCOUNT_IDS não configurados.")
           toast({ variant: "destructive", title: "Chaves Meta não configuradas", description: "Configure META_ACCESS_TOKEN e as Contas de Anúncio em Configurações." })
