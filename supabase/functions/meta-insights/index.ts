@@ -19,16 +19,21 @@ serve(async (req) => {
     const accountsToProcess = adAccountIds || (adAccountId ? [adAccountId] : []);
     const uniqueAccounts = [...new Set(accountsToProcess)].map(id => String(id).trim());
 
-    console.log(`[META-SYNC] Iniciando para ${uniqueAccounts.length} contas.`);
+    console.log(`[META-SYNC] Iniciando para ${uniqueAccounts.length} contas. Token presente: ${!!accessToken}. Since: ${since} Until: ${until}`);
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: req.headers.get("Authorization")! } } }
     );
-    
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error("Usuário não autenticado");
+
+    console.log(`[META-SYNC] Verificando autenticação...`);
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (!user) {
+        console.error(`[META-SYNC] Auth falhou:`, authError?.message);
+        throw new Error("Usuário não autenticado");
+    }
+    console.log(`[META-SYNC] Auth ok. user_id: ${user.id}`);
 
     const fields = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,reach,actions,conversions,cpc,ctr,frequency';
     const time_range = JSON.stringify({ since, until });
@@ -36,9 +41,11 @@ serve(async (req) => {
     // --- PROCESSAMENTO DA CONTA ---
     const processAccount = async (accountId) => {
         try {
+            console.log(`[META-SYNC] Chamando Meta API para conta: ${accountId}`);
             const accountUrl = `https://graph.facebook.com/v21.0/act_${accountId}?fields=name,currency&access_token=${accessToken}`;
             const accountRes = await fetch(accountUrl);
             const accountInfo = await accountRes.json();
+            console.log(`[META-SYNC] Resposta conta ${accountId}: status=${accountRes.status} name=${accountInfo.name} error=${accountInfo.error?.message}`);
             if (accountInfo.error) {
                 return { id: accountId, success: false, error: accountInfo.error.message, data: [] };
             }

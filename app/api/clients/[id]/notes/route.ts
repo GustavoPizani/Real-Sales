@@ -115,8 +115,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       prisma.note.create({
         data: {
           content,
-          createdBy: user.name,
-          clienteId: clientId,
+          authorId: user.id,
+          clientId: clientId,
         },
       }),
       prisma.client.update({
