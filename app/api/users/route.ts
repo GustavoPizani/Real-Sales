@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { type NextRequest } from "next/server";
-import { Prisma, Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 
 export const dynamic = 'force-dynamic';
 
@@ -60,12 +60,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Cria o perfil na tabela users com o UUID do Supabase
+    const creatorAccountId = user.accountId ?? user.id;
     const newUser = await prisma.user.create({
       data: {
         id: authData.user.id,
         name,
         email,
         role: role as Role,
+        accountId: creatorAccountId,
         supervisor: supervisorId ? { connect: { id: supervisorId } } : undefined,
       },
     });
