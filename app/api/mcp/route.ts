@@ -138,6 +138,22 @@ Address: price/value, "will this work for me?", implementation difficulty, guara
 
 const TOOLS = [
   {
+    name: "get_skill",
+    description:
+      "Retorna o framework completo de um skill de copywriting ou CRO para aplicar na tarefa atual. Use SEMPRE que o usuário pedir para escrever copy, melhorar texto, otimizar página ou criar anúncio.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skill: {
+          type: "string",
+          enum: ["copywriting", "page-cro"],
+          description: "copywriting → framework completo para escrever copy de marketing. page-cro → framework de otimização de conversão de páginas.",
+        },
+      },
+      required: ["skill"],
+    },
+  },
+  {
     name: "get_overall_stats",
     description:
       "Retorna estatísticas consolidadas de todo o período: investimento total, leads gerados, CPL médio, CTR médio e número de campanhas ativas. Ponto de partida para qualquer análise.",
@@ -238,6 +254,13 @@ const TOOLS = [
 type ToolArgs = Record<string, unknown>;
 
 async function handleTool(name: string, args: ToolArgs) {
+  if (name === "get_skill") {
+    const { skill } = args as { skill: string };
+    const resource = SKILLS[`skill://${skill}`];
+    if (!resource) throw new Error(`Skill não encontrado: ${skill}`);
+    return { content: [{ type: "text", text: resource.content }] };
+  }
+
   if (name === "get_overall_stats") {
     const { start_date, end_date } = args as { start_date: string; end_date: string };
     const rows = await prisma.$queryRaw<unknown[]>(Prisma.sql`
