@@ -11,6 +11,129 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, mcp-session-id",
 };
 
+// ─── Skill Resources ──────────────────────────────────────────────────────
+
+const SKILLS: Record<string, { name: string; description: string; content: string }> = {
+  "skill://copywriting": {
+    name: "Copywriting Framework",
+    description: "Framework completo para escrever copy de marketing que converte — headlines, CTAs, estrutura de página, princípios de clareza e benefícios.",
+    content: `# Copywriting
+
+You are an expert conversion copywriter. Your goal is to write marketing copy that is clear, compelling, and drives action.
+
+## Copywriting Principles
+
+### Clarity Over Cleverness
+If you have to choose between clear and creative, choose clear.
+
+### Benefits Over Features
+Features: What it does. Benefits: What that means for the customer.
+
+### Specificity Over Vagueness
+- Vague: "Save time on your workflow"
+- Specific: "Cut your weekly reporting from 4 hours to 15 minutes"
+
+### Customer Language Over Company Language
+Use words your customers use. Mirror voice-of-customer from reviews, interviews, support tickets.
+
+## Writing Style Rules
+1. Simple over complex — "Use" not "utilize"
+2. Specific over vague — Avoid "streamline," "optimize," "innovative"
+3. Active over passive — "We generate reports" not "Reports are generated"
+4. Confident over qualified — Remove "almost," "very," "really"
+5. Show over tell — Describe the outcome instead of using adverbs
+6. Honest over sensational — Never fabricate statistics
+
+## Page Structure Framework
+
+### Above the Fold
+**Headline formulas:**
+- "{Achieve outcome} without {pain point}"
+- "The {category} for {audience}"
+- "Never {unpleasant event} again"
+- "{Question highlighting main pain point}"
+
+**Subheadline** — expands on headline, 1-2 sentences max
+
+**Primary CTA** — "Start Free Trial" > "Sign Up"
+
+### Core Sections
+| Section | Purpose |
+|---------|---------|
+| Social Proof | Logos, stats, testimonials |
+| Problem/Pain | Show you understand their situation |
+| Solution/Benefits | Connect to outcomes (3-5 key benefits) |
+| How It Works | 3-4 steps |
+| Objection Handling | FAQ, guarantees |
+| Final CTA | Recap value, repeat CTA |
+
+## CTA Copy
+**Weak:** Submit, Sign Up, Learn More, Click Here
+**Strong:** Start Free Trial, Get [Specific Thing], See [Product] in Action
+
+**Formula:** [Action Verb] + [What They Get] + [Qualifier if needed]
+
+## Output Format
+1. **Page Copy** — organized by section
+2. **Annotations** — why each choice, which principle applied
+3. **Alternatives** — 2-3 headline/CTA options with rationale`,
+  },
+  "skill://page-cro": {
+    name: "Page CRO Framework",
+    description: "Framework de Conversion Rate Optimization para analisar e melhorar páginas de marketing — homepage, landing pages, pricing, feature pages.",
+    content: `# Page CRO (Conversion Rate Optimization)
+
+Analyze pages across these dimensions, in order of impact:
+
+## 1. Value Proposition Clarity (Highest Impact)
+- Can a visitor understand what this is within 5 seconds?
+- Is the primary benefit clear, specific, and differentiated?
+- Written in customer's language (not company jargon)?
+
+## 2. Headline Effectiveness
+- Communicates core value proposition?
+- Specific enough to be meaningful?
+- Matches the traffic source's messaging?
+
+**Strong patterns:**
+- "Get [desired outcome] without [pain point]"
+- Include numbers, timeframes, concrete details
+- "Join 10,000+ teams who..."
+
+## 3. CTA Placement and Copy
+- One clear primary action?
+- Visible without scrolling?
+- Button copy communicates value?
+  - Weak: "Submit," "Sign Up," "Learn More"
+  - Strong: "Start Free Trial," "Get My Report," "See Pricing"
+
+## 4. Visual Hierarchy
+- Can someone scanning get the main message?
+- Most important elements visually prominent?
+- Enough white space?
+
+## 5. Trust Signals
+- Customer logos near CTAs
+- Testimonials (specific, attributed, with photos)
+- Case studies with real numbers
+- Review scores
+
+## 6. Objection Handling
+Address: price/value, "will this work for me?", implementation difficulty, guarantees
+
+## 7. Friction Points
+- Too many form fields?
+- Unclear next steps?
+- Mobile experience issues?
+
+## Output Format
+1. **Quick Wins** — easy changes, immediate impact
+2. **High-Impact Changes** — bigger effort, significant improvement
+3. **Test Ideas** — hypotheses worth A/B testing
+4. **Copy Alternatives** — 2-3 options for headlines/CTAs with rationale`,
+  },
+};
+
 // ─── Tool definitions ──────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -373,7 +496,7 @@ export async function POST(request: NextRequest) {
     if (method === "initialize") {
       result = {
         protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {} },
         serverInfo: { name: "meta-analytics", version: "1.0.0" },
       };
     } else if (method === "ping") {
@@ -383,6 +506,22 @@ export async function POST(request: NextRequest) {
     } else if (method === "tools/call") {
       const { name, arguments: toolArgs } = params as { name: string; arguments: ToolArgs };
       result = await handleTool(name, toolArgs ?? {});
+    } else if (method === "resources/list") {
+      result = {
+        resources: Object.entries(SKILLS).map(([uri, skill]) => ({
+          uri,
+          name: skill.name,
+          description: skill.description,
+          mimeType: "text/markdown",
+        })),
+      };
+    } else if (method === "resources/read") {
+      const { uri } = params as { uri: string };
+      const skill = SKILLS[uri];
+      if (!skill) throw new Error(`Resource not found: ${uri}`);
+      result = {
+        contents: [{ uri, mimeType: "text/markdown", text: skill.content }],
+      };
     } else if (method?.startsWith("notifications/")) {
       // Notifications don't get a response
       return new NextResponse(null, { status: 202, headers: corsHeaders });
