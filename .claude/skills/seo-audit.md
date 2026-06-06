@@ -1,147 +1,178 @@
 ---
 name: seo-audit
-description: When the user wants to audit, review, or diagnose SEO issues on their site. Also use when the user mentions "SEO audit," "technical SEO," "why am I not ranking," "SEO issues," "on-page SEO," "meta tags review," or "SEO health check."
-metadata:
-  version: 1.0.0
+description: Auditar, revisar ou diagnosticar SEO de páginas imobiliárias — especialmente a página pública /imovel/[id]. Use quando o usuário mencionar "SEO", "não estou ranqueando", "meta tags", "schema markup", "aparecer no Google" ou "otimizar página do empreendimento".
 ---
 
-# SEO Audit
+# SEO Audit — Imobiliário
 
-You are an expert in search engine optimization. Your goal is to identify SEO issues and provide actionable recommendations to improve organic search performance.
+Você é especialista em SEO para mercado imobiliário. Foco principal: página pública de empreendimentos (`/imovel/[id]`), que é o principal ponto de entrada orgânica do sistema.
 
-## Initial Assessment
-
-**Check for product marketing context first:**
-If `.claude/product-marketing-context.md` exists, read it before asking questions.
-
-Before auditing, understand:
-1. **Site Context** — type of site, primary SEO goal, priority keywords
-2. **Current State** — known issues, organic traffic level, recent changes
-3. **Scope** — full audit or specific pages, technical + on-page, access to Search Console
+## Contexto do Sistema
+- **Stack**: Next.js 14 (App Router), Tailwind, Vercel
+- **Página prioritária**: `/imovel/[id]` — página pública do empreendimento
+- **Schema relevante**: `RealEstateListing`, `LocalBusiness`, `BreadcrumbList`
+- **Objetivo SEO**: ranquear para buscas de alto valor como "apartamento Prado Paulista", "empreendimento Complexo Matarazzo", "apartamento Avenida Paulista"
 
 ---
 
-## ⚠️ Schema Markup Detection Limitation
+## Coleta de Dados (antes de analisar)
 
-**`web_fetch` cannot reliably detect structured data / schema markup.**
-
-Many CMS plugins inject JSON-LD via client-side JavaScript — it won't appear in `web_fetch` output.
-
-**To accurately check for schema markup:**
-1. Browser tool: `document.querySelectorAll('script[type="application/ld+json"]')`
-2. Google Rich Results Test: https://search.google.com/test/rich-results
-3. Screaming Frog (renders JavaScript)
-
-**Never report "no schema found" based solely on `web_fetch` or `curl`.**
+1. **Leia o arquivo da página** — `app/imovel/[id]/page.tsx`
+2. **Leia o componente de propriedade** — `app/(app)/properties/[id]/view/page.tsx` ou similar
+3. **Verifique o schema.prisma** — campos disponíveis em `Property` para popular o schema markup
+4. **Verifique se existe `generateMetadata`** no arquivo da página
 
 ---
 
-## Audit Framework
+## Prioridade de Auditoria
 
-### Priority Order
-1. **Crawlability & Indexation** (can Google find and index it?)
-2. **Technical Foundations** (fast and functional?)
-3. **On-Page Optimization** (content optimized?)
-4. **Content Quality** (deserves to rank?)
-5. **Authority & Links** (has credibility?)
+### 1. Metadados Dinâmicos (maior impacto)
 
----
+Verificar se a página tem `generateMetadata` com dados do empreendimento:
 
-## Technical SEO
+```tsx
+// app/imovel/[id]/page.tsx
+export async function generateMetadata({ params }): Promise<Metadata> {
+  const property = await getProperty(params.id)
+  return {
+    title: `${property.title} | ${property.neighborhood} - ${property.city}`,
+    description: `${property.description?.slice(0, 155)}`,
+    openGraph: {
+      title: property.title,
+      images: [property.images?.[0]],
+    },
+  }
+}
+```
 
-### Crawlability
-- robots.txt — no unintentional blocks, sitemap referenced
-- XML Sitemap — exists, submitted to Search Console, canonical URLs only
-- Site Architecture — important pages within 3 clicks of homepage
-- Internal linking — no orphan pages
+**Problemas comuns:**
+- Título genérico ("Imóvel | Real Sales") igual para todos os empreendimentos
+- Description vazia ou truncada no lugar errado
+- Sem Open Graph (links no WhatsApp/LinkedIn sem preview)
 
-### Indexation
-- site:domain.com check
-- Noindex tags on important pages?
-- Canonicals pointing wrong direction?
-- Redirect chains/loops?
-- Duplicate content without canonicals?
+### 2. Schema Markup — RealEstateListing
 
-### Core Web Vitals
-- **LCP** (Largest Contentful Paint): < 2.5s
-- **INP** (Interaction to Next Paint): < 200ms
-- **CLS** (Cumulative Layout Shift): < 0.1
+A página `/imovel/[id]` deve ter JSON-LD:
 
-### Mobile-Friendliness
-- Responsive design, tap target sizes, viewport configured
-- Same content as desktop, no horizontal scroll
+```tsx
+const schema = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "RealEstateListing",
+      "name": property.title,
+      "description": property.description,
+      "image": property.images,
+      "url": `${siteUrl}/imovel/${property.id}`,
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": property.address,
+        "addressLocality": property.city || "São Paulo",
+        "addressRegion": "SP",
+        "addressCountry": "BR"
+      },
+      "offers": {
+        "@type": "Offer",
+        "priceCurrency": "BRL",
+        "availability": "https://schema.org/InStock"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": siteUrl },
+        { "@type": "ListItem", "position": 2, "name": property.title }
+      ]
+    }
+  ]
+}
+```
 
----
+⚠️ **Importante**: `web_fetch` não detecta JSON-LD injetado via JS. Valide sempre com:
+- Google Rich Results Test: https://search.google.com/test/rich-results
+- `document.querySelectorAll('script[type="application/ld+json"]')` no DevTools
 
-## On-Page SEO
+### 3. Estrutura de Headings
 
-### Title Tags
-- Unique per page
-- Primary keyword near beginning
-- 50-60 characters
+```
+H1 → Nome do empreendimento (único por página)
+H2 → Seções: "Sobre o projeto", "Plantas", "Localização"
+H3 → Subseções
+```
 
-### Meta Descriptions
-- Unique per page, 150-160 characters
-- Includes primary keyword, compelling reason to click
+**Erros comuns**: múltiplos H1, H1 genérico como "Detalhes do Imóvel", heading pulando nível.
 
-### Heading Structure
-- One H1 per page with primary keyword
-- Logical hierarchy (H1 → H2 → H3), no level-skipping
+### 4. Core Web Vitals (Next.js específico)
 
-### Content
-- Keyword in first 100 words
-- Answers search intent
-- No thin content
+| Métrica | Meta | Verificar em |
+|---------|------|-------------|
+| LCP | < 2.5s | Imagem hero carregada com `priority` prop? |
+| CLS | < 0.1 | Imagens com `width`/`height` definidos? |
+| INP | < 200ms | Interações do mapa/galeria |
 
-### Images
-- Descriptive filenames and alt text
-- Compressed, WebP format, lazy loading
+**Checagens rápidas para Next.js:**
+- Imagem principal tem `<Image priority />` ?
+- Imagens têm `width` e `height` ou `fill` + container sized?
+- Fonte carregada com `next/font`?
 
-### Internal Linking
-- Important pages well-linked
-- Descriptive anchor text, no broken links
+### 5. URL e Canonicals
 
----
+- URL deve ser descritiva se possível: `/imovel/prado-paulista` > `/imovel/8eb1f272`
+- Canonical tag aponta para si mesma?
+- HTTPS em todos os recursos (sem mixed content)?
 
-## Content Quality (E-E-A-T)
+### 6. Conteúdo da Página
 
-- **Experience**: First-hand insights, real examples
-- **Expertise**: Accurate, detailed, properly sourced
-- **Authoritativeness**: Recognized in the space
-- **Trustworthiness**: Accurate, transparent, HTTPS
+Para ranquear em buscas de empreendimento:
+- Nome do empreendimento nos primeiros 100 caracteres do texto visível
+- Bairro e cidade mencionados no texto (não só no endereço)
+- Alt text nas imagens: `"Prado Paulista - apartamento 300m² Avenida Paulista SP"`
+- Descrição com pelo menos 300 palavras de conteúdo único
 
 ---
 
 ## Output Format
 
-**Executive Summary** — overall health, top 3-5 issues, quick wins
+### Resumo Executivo
+- Estado atual: sem SEO / SEO básico / SEO otimizado
+- Top 3 problemas por impacto
 
-**For each issue:**
-- **Issue**: What's wrong
-- **Impact**: High/Medium/Low
-- **Evidence**: How found
-- **Fix**: Specific recommendation
-- **Priority**: 1-5
+### Por problema:
+- **Problema**: o que está errado
+- **Impacto**: Alto/Médio/Baixo + por quê importa para imobiliário
+- **Fix**: código específico para Next.js App Router
+- **Prioridade**: 1 (urgente) → 3 (nice to have)
 
-**Prioritized Action Plan:**
-1. Critical fixes (blocking indexation/ranking)
-2. High-impact improvements
-3. Quick wins
-4. Long-term recommendations
-
----
-
-## Tools
-
-- Google Search Console (essential)
-- PageSpeed Insights
-- Rich Results Test (**use for schema — it renders JavaScript**)
-- Mobile-Friendly Test
-- Screaming Frog (paid, renders JS)
+### Plano de ação
+1. Crítico — bloqueia indexação ou ranqueamento
+2. Alto impacto — implementar esta semana
+3. Melhorias — para sprint seguinte
 
 ---
 
-## Related Skills
-- **schema-markup**: For implementing structured data
-- **page-cro**: For optimizing pages for conversion
-- **analytics-tracking**: For measuring SEO performance
+## Checklist Rápido
+
+- [ ] `generateMetadata` com título único por empreendimento?
+- [ ] Meta description entre 150-160 chars com keyword?
+- [ ] Open Graph com imagem do empreendimento?
+- [ ] JSON-LD `RealEstateListing` presente e server-rendered?
+- [ ] Um H1 por página com nome do empreendimento?
+- [ ] Imagem hero com `priority` prop?
+- [ ] Imagens com alt text descritivo (nome + bairro + cidade)?
+- [ ] URL canônica configurada?
+- [ ] Robots.txt não bloqueia `/imovel/`?
+- [ ] Sitemap inclui páginas de empreendimentos?
+
+---
+
+## Ferramentas
+- **Rich Results Test** — valida schema (renderiza JS): https://search.google.com/test/rich-results
+- **PageSpeed Insights** — Core Web Vitals por URL
+- **Search Console** — cobertura de indexação e erros
+
+---
+
+## Skills Relacionadas
+- **schema-markup**: implementação detalhada de JSON-LD
+- **copywriting**: otimizar textos da página para conversão
+- **page-cro**: otimizar a página para gerar leads (não só ranquear)

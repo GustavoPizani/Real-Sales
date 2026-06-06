@@ -419,6 +419,56 @@ model FacebookFormMapping {
   @@map("facebook_form_mappings")
 }
 
+model WhatsappBroadcast {
+  id              String                     @id @default(uuid())
+  accountId       String
+  name            String
+  messageTemplate String                     @db.Text
+  limitPerRun     Int                        @default(15)
+  startHour       Int                        @default(9)
+  endHour         Int                        @default(18)
+  delayMin        Int                        @default(60)
+  delayMax        Int                        @default(190)
+  status          BroadcastStatus            @default(DRAFT)
+  aiEnabled       Boolean                    @default(false)
+  aiSystemPrompt  String?                    @db.Text
+  lastRunAt       DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  contacts        WhatsappBroadcastContact[]
+  conversations   Conversation[]
+
+  @@map("whatsapp_broadcasts")
+}
+
+model WhatsappBroadcastContact {
+  id           String          @id @default(uuid())
+  broadcastId  String
+  name         String?
+  phone        String
+  status       ContactStatus   @default(PENDING)
+  sentAt       DateTime?
+  errorMessage String?
+  createdAt    DateTime        @default(now())
+  broadcast    WhatsappBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_broadcast_contacts")
+}
+
+enum BroadcastStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  FINISHED
+}
+
+enum ContactStatus {
+  PENDING
+  SENT
+  FAILED
+  INVALID
+}
+
 enum Role {
   MARKETING_ADMIN
   DIRECTOR
@@ -507,19 +557,21 @@ model ContactIdentity {
 }
 
 model Conversation {
-  id          String    @id @default(cuid())
-  contactId   String
-  agentId     String?
-  channel     String    @default("waha")
-  status      String    @default("active") // active, closed, qualified, disqualified
-  aiEnabled   Boolean   @default(true)
+  id            String        @id @default(cuid())
+  contactId     String
+  agentId       String?
+  broadcastId   String?
+  channel       String        @default("waha")
+  status        String        @default("active")
+  aiEnabled     Boolean       @default(true)
   lastMessageAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  metadata    Json      @default("{}")
-  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  agent       AgentSession? @relation(fields: [agentId], references: [id])
-  messages    Message[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  metadata      Json          @default("{}")
+  contact       Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  agent         AgentSession? @relation(fields: [agentId], references: [id])
+  broadcast     WhatsappBroadcast? @relation(fields: [broadcastId], references: [id], onDelete: SetNull)
+  messages      Message[]
 
   @@map("sdr_conversations")
 }

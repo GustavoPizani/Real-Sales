@@ -94,9 +94,21 @@ export async function POST(req: Request) {
     });
 
     if (!conversation) {
-      // Atribuir o AgentSession padrão se existir
       const defaultSession = await prisma.agentSession.findFirst({
         where: { isDefault: true },
+      });
+
+      // Verificar se este número pertence a uma campanha de broadcast com IA ativa
+      const cleanPhone = externalId.replace(/\D/g, "");
+      const phoneSuffix = cleanPhone.slice(-11);
+      const broadcastContact = await prisma.whatsappBroadcastContact.findFirst({
+        where: {
+          phone: { endsWith: phoneSuffix },
+          status: "SENT",
+          broadcast: { status: { in: ["ACTIVE", "FINISHED"] } },
+        },
+        include: { broadcast: { select: { id: true, aiSystemPrompt: true, aiEnabled: true } } },
+        orderBy: { sentAt: "desc" },
       });
 
       conversation = await prisma.conversation.create({
@@ -104,12 +116,14 @@ export async function POST(req: Request) {
           contactId: identity.contactId,
           channel: "waha",
           agentSessionId: defaultSession?.id || null,
+          ...(broadcastContact
+            ? { broadcastId: broadcastContact.broadcast.id, aiEnabled: broadcastContact.broadcast.aiEnabled }
+            : {}),
         },
       });
 
-      // Disparar Gatilho 1 para o Slack (Início do Atendimento)
       await sendSlackSDRNotification(
-        `🚀 Novo lead capturado e Bot SDR iniciou o atendimento: ${contact.name}`
+        `🚀 Novo lead capturado e Bot SDR iniciou o atendimento: ${identity.contact?.name ?? externalId}`
       );
     }
 

@@ -29,7 +29,8 @@ export async function flushToLLM(
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: {
-      agentSession: true,
+      agent: true,
+      broadcast: { select: { id: true, aiSystemPrompt: true, name: true } },
       contact: {
         include: {
           crmClient: {
@@ -48,11 +49,15 @@ export async function flushToLLM(
 
   if (!conversation || !conversation.aiEnabled) return;
 
-  const session =
-    conversation.agentSession ||
-    (await prisma.agentSession.findFirst({ where: { isDefault: true } }));
+  const isBroadcastConversation = !!conversation.broadcastId && !!conversation.broadcast?.aiSystemPrompt;
 
-  if (!session) {
+  const session =
+    !isBroadcastConversation
+      ? conversation.agent ||
+        (await prisma.agentSession.findFirst({ where: { isDefault: true } }))
+      : null;
+
+  if (!isBroadcastConversation && !session) {
     console.error(
       JSON.stringify({
         event: "llm.no_session",
@@ -72,15 +77,26 @@ export async function flushToLLM(
     ? `\n[CONTEXTO DO LEAD NO CRM]\nNome: ${crmClient.fullName}\nTelefone: ${crmClient.phone || "N/A"}\nID CRM: ${crmClient.id}`
     : "\n[LEAD NOVO — Ainda não cadastrado no CRM]";
 
-  // COMPOSIÇÃO MODULAR OBRIGATÓRIA DO PROMPT DO SDR
-  const systemPromptCompleto = `${session.systemPrompt}
+  // Prompt de sistema: broadcast tem prompt próprio, SDR usa AgentSession
+  const systemPromptCompleto = isBroadcastConversation
+    ? `${conversation.broadcast!.aiSystemPrompt}
+${clientContext}
+
+[REGRAS GERAIS]
+- Responda SEMPRE em português do Brasil (pt-BR)
+- Use linguagem profissional, empática e objetiva
+- NÃO invente informações sobre imóveis, preços ou condições
+- Se não souber algo, diga que vai verificar com a equipe
+- Use emojis com moderação e profissionalismo
+- Quando o lead confirmar interesse ou fornecer as informações solicitadas, chame a ferramenta "qualify_lead" com um resumo do que foi coletado.`
+    : `${session!.systemPrompt}
 ${clientContext}
 
 [DIRETRIZES DE ABORDAGEM E INÍCIO DE CONVERSA]
-${session.initiationStrategy}
+${session!.initiationStrategy}
 
 [BARREIRA DE QUALIFICAÇÃO / TETO OPERACIONAL]
-Você é um SDR e deve interagir APENAS até cumprir este objetivo: ${session.qualificationBoundary}.
+Você é um SDR e deve interagir APENAS até cumprir este objetivo: ${session!.qualificationBoundary}.
 Assim que coletar essas informações ou o cliente atingir esse ponto, você DEVE encerrar a conversa com uma frase de despedida profissional indicando que um consultor especializado entrará em contato. NÃO invente novos tópicos e não responda mais perguntas após cumprir a meta.
 
 [REGRAS GERAIS]
@@ -91,8 +107,11 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
 - Use emojis com moderação e profissionalismo
 - OBRIGATÓRIO: Quando o lead fornecer as informações necessárias do teto operacional, chame a ferramenta (tool) "qualify_lead" informando o resumo do que foi coletado.`;
 
-  // Resgatar histórico recente da conversa
-  const memoryWindow = parseInt(session.memoryMode.replace("window_", "")) || 20;
+  // Parâmetros do modelo — broadcast usa defaults, SDR usa AgentSession
+  const modelName   = session?.model       ?? "llama3-70b-8192";
+  const temperature = session?.temperature ?? 0.7;
+  const maxTokens   = session?.maxTokens   ?? 512;
+  const memoryWindow = session ? parseInt(session.memoryMode.replace("window_", "")) || 20 : 10;
   const historicoDB = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "asc" },
@@ -118,10 +137,10 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: session.model,
+        model: modelName,
         messages: messagesPayload,
-        temperature: session.temperature,
-        max_tokens: session.maxTokens,
+        temperature,
+        max_tokens: maxTokens,
         tools: [
           {
             type: "function",
@@ -169,7 +188,7 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
       JSON.stringify({
         event: "llm.response",
         conversationId,
-        model: session.model,
+        model: modelName,
         latencyMs,
         tokensIn,
         tokensOut,
@@ -183,7 +202,7 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
         direction: "outbound",
         role: "assistant",
         content: replyText || "[Tool Call]",
-        modelUsed: session.model,
+        modelUsed: session?.model ?? modelName,
         tokensIn,
         tokensOut,
       },
