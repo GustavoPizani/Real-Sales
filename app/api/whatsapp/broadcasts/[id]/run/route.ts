@@ -68,6 +68,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (broadcast.status === 'FINISHED') {
     return NextResponse.json({ error: 'Campanha já finalizada' }, { status: 400 })
   }
+  if (broadcast.status === 'PAUSED') {
+    return NextResponse.json({ error: 'Campanha pausada. Retome antes de disparar.' }, { status: 400 })
+  }
 
   // Validate time window
   const now = new Date()
@@ -78,6 +81,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       skipped: true,
     })
   }
+
+  // Marca como ACTIVE imediatamente (visível na UI antes dos delays)
+  await prisma.whatsappBroadcast.update({
+    where: { id: params.id },
+    data: { status: 'ACTIVE' },
+  })
 
   // Get pending contacts up to the limit
   const contacts = await prisma.whatsappBroadcastContact.findMany({
@@ -122,6 +131,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         : { status: 'FAILED', errorMessage: 'Falha ao enviar pelo WAHA' },
     })
     ok ? results.sent++ : results.failed++
+
+    // Check if user paused mid-batch
+    const current = await prisma.whatsappBroadcast.findUnique({ where: { id: params.id }, select: { status: true } })
+    if (current?.status === 'PAUSED') break
 
     // Random delay between messages (except after last one)
     if (contact !== contacts[contacts.length - 1]) {

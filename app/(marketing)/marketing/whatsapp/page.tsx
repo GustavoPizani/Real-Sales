@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
-  QrCode, RefreshCw, CheckCircle2, AlertCircle, Plus, Play,
+  QrCode, RefreshCw, CheckCircle2, AlertCircle, Plus, Play, Pause,
   Trash2, Upload, Users, Send, Clock, Settings2,
   Zap, MessageSquare, Info, Bot,
 } from "lucide-react";
@@ -754,9 +754,10 @@ function ContactUploadDialog({
 
 // ─── Broadcast Card ───────────────────────────────────────────────────────────
 
-function BroadcastCard({ broadcast, onEdit, onDelete, onRun, onUploadContacts }: {
+function BroadcastCard({ broadcast, onEdit, onDelete, onRun, onPause, onResume, onUploadContacts, isRunning }: {
   broadcast: Broadcast; onEdit: () => void; onDelete: () => void;
-  onRun: () => void; onUploadContacts: () => void;
+  onRun: () => void; onPause: () => void; onResume: () => void;
+  onUploadContacts: () => void; isRunning: boolean;
 }) {
   const progress = broadcast.stats.total > 0
     ? Math.round((broadcast.stats.sent / broadcast.stats.total) * 100) : 0;
@@ -828,12 +829,31 @@ function BroadcastCard({ broadcast, onEdit, onDelete, onRun, onUploadContacts }:
           <Button size="sm" variant="outline" onClick={onUploadContacts} className="flex-1">
             <Users className="w-4 h-4 mr-1" /> Contatos
           </Button>
-          <Button size="sm" onClick={onRun}
-            disabled={broadcast.status === "FINISHED" || broadcast.stats.pending === 0}
-            className="flex-1 bg-secondary-custom text-white hover:bg-secondary-custom/80">
-            <Play className="w-4 h-4 mr-1" />
-            {broadcast.status === "FINISHED" ? "Concluída" : "Disparar Agora"}
-          </Button>
+          {broadcast.status === "FINISHED" ? (
+            <Button size="sm" disabled className="flex-1">Concluída</Button>
+          ) : broadcast.status === "ACTIVE" ? (
+            <Button size="sm" onClick={onPause}
+              className="flex-1 bg-yellow-500/90 text-white hover:bg-yellow-500">
+              {isRunning
+                ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                : <Pause className="w-4 h-4 mr-1" />}
+              Pausar
+            </Button>
+          ) : broadcast.status === "PAUSED" ? (
+            <Button size="sm" onClick={onResume}
+              className="flex-1 bg-yellow-600 text-white hover:bg-yellow-600/80">
+              <Play className="w-4 h-4 mr-1" /> Retomar
+            </Button>
+          ) : (
+            <Button size="sm" onClick={onRun}
+              disabled={isRunning || broadcast.stats.pending === 0}
+              className="flex-1 bg-secondary-custom text-white hover:bg-secondary-custom/80">
+              {isRunning
+                ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                : <Play className="w-4 h-4 mr-1" />}
+              {isRunning ? "Iniciando..." : "Disparar Agora"}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -849,17 +869,18 @@ function DisparadorTab({ wahaWorking }: { wahaWorking: boolean }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Broadcast | null>(null);
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
 
-  const fetchBroadcasts = useCallback(async () => {
-    setLoading(true);
+  const fetchBroadcasts = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/whatsapp/broadcasts");
       const data = await res.json();
       setBroadcasts(data.broadcasts ?? []);
     } catch {
-      toast({ title: "Erro ao carregar campanhas", variant: "destructive" });
+      if (!silent) toast({ title: "Erro ao carregar campanhas", variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [toast]);
 
@@ -891,17 +912,46 @@ function DisparadorTab({ wahaWorking }: { wahaWorking: boolean }) {
   };
 
   const handleRun = async (id: string) => {
+    setRunningIds(prev => new Set(prev).add(id));
     try {
       const res = await fetch(`/api/whatsapp/broadcasts/${id}/run`, { method: "POST" });
       const data = await res.json();
       if (data.skipped) toast({ title: "Fora do horário", description: data.error, variant: "destructive" });
       else if (data.finished) toast({ title: "Campanha concluída!" });
       else toast({ title: "Disparo executado", description: `${data.sent} enviados · ${data.failed} falhas · ${data.remaining} restantes` });
-      fetchBroadcasts();
     } catch {
       toast({ title: "Erro ao disparar", variant: "destructive" });
+    } finally {
+      setRunningIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+      fetchBroadcasts();
     }
   };
+
+  const handlePause = async (id: string) => {
+    setRunningIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+    await fetch(`/api/whatsapp/broadcasts/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "PAUSED" }),
+    });
+    toast({ title: "Campanha pausada" });
+    fetchBroadcasts();
+  };
+
+  const handleResume = async (id: string) => {
+    await fetch(`/api/whatsapp/broadcasts/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ACTIVE" }),
+    });
+    handleRun(id);
+  };
+
+  // Polling em tempo real: a cada 3s enquanto qualquer broadcast está ACTIVE
+  const hasActiveBroadcast = broadcasts.some(b => b.status === "ACTIVE");
+  useEffect(() => {
+    if (!hasActiveBroadcast && runningIds.size === 0) return;
+    const id = setInterval(() => fetchBroadcasts(true), 3000);
+    return () => clearInterval(id);
+  }, [hasActiveBroadcast, runningIds.size, fetchBroadcasts]);
 
   return (
     <div className="space-y-6">
@@ -955,7 +1005,10 @@ function DisparadorTab({ wahaWorking }: { wahaWorking: boolean }) {
               onEdit={() => { setEditing(b); setFormOpen(true); }}
               onDelete={() => handleDelete(b.id)}
               onRun={() => handleRun(b.id)}
+              onPause={() => handlePause(b.id)}
+              onResume={() => handleResume(b.id)}
               onUploadContacts={() => setUploadTarget(b.id)}
+              isRunning={runningIds.has(b.id)}
             />
           ))}
         </div>
