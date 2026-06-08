@@ -34,15 +34,22 @@ async function sendMessage(phone: string, text: string): Promise<boolean> {
 }
 
 // Resolve spintax: {opção1|opção2|opção3} → escolhe uma aleatoriamente
+// Suporta variáveis {nome} aninhadas dentro de blocos spintax
 function resolveSpintax(template: string, vars: Record<string, string> = {}): string {
-  let text = template.replace(/\{([^{}]+)\}/g, (_, group) => {
-    const options = group.split('|')
-    return options[Math.floor(Math.random() * options.length)]
-  })
-  // Replace {{variavel}}
+  // Step 1: substituir variáveis {{nome}} → valor real (antes do spintax)
+  let text = template
   for (const [k, v] of Object.entries(vars)) {
     text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'gi'), v)
   }
+  // Step 2: resolver spintax em loop até estabilizar (resolve de dentro pra fora)
+  let prev: string
+  do {
+    prev = text
+    text = text.replace(/\{([^{}]+)\}/g, (_, group) => {
+      const options = group.split('|')
+      return options[Math.floor(Math.random() * options.length)]
+    })
+  } while (text !== prev)
   return text
 }
 
