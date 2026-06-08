@@ -117,6 +117,12 @@ function WhatsAppConnectionSection({ onStatusChange }: { onStatusChange?: (s: Wa
     setConnecting(true);
     setWaStatus("STARTING");
     try {
+      // Se já está conectado (trocar número), faz logout primeiro
+      if (waStatus === "WORKING") {
+        await fetch("/api/sessions/waha/disconnect", { method: "POST" });
+        // Aguarda a sessão parar antes de reconectar
+        await new Promise(r => setTimeout(r, 1500));
+      }
       const res = await fetch("/api/sessions/waha/ensure", { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.status) {

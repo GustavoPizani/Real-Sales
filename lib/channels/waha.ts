@@ -1,6 +1,7 @@
 export interface ChannelAdapter {
   ensureSession(sessionName: string): Promise<{ ok: boolean; status?: string; qrCode?: string; error?: string }>;
   getSessionStatus(sessionName: string): Promise<{ ok: boolean; status: string; qrCode?: string }>;
+  logoutSession(sessionName: string): Promise<{ ok: boolean; error?: string }>;
 }
 
 export class WahaAdapter implements ChannelAdapter {
@@ -71,6 +72,26 @@ export class WahaAdapter implements ChannelAdapter {
       return this.getSessionStatus(sessionName);
     } catch (error: any) {
       console.error("[WahaAdapter] ensureSession fatal:", error);
+      return { ok: false, error: error.message ?? String(error) };
+    }
+  }
+
+  async logoutSession(sessionName = "default") {
+    const base = this.baseUrl;
+    try {
+      // Logout desconecta o número do WhatsApp e limpa a sessão
+      await fetch(`${base}/api/sessions/${sessionName}/logout`, {
+        method: "POST",
+        headers: this.headers,
+      }).catch(() => {});
+      // Para a sessão após logout
+      await fetch(`${base}/api/sessions/${sessionName}/stop`, {
+        method: "POST",
+        headers: this.headers,
+      }).catch(() => {});
+      return { ok: true };
+    } catch (error: any) {
+      console.error("[WahaAdapter] logoutSession fatal:", error);
       return { ok: false, error: error.message ?? String(error) };
     }
   }
