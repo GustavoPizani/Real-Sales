@@ -38,6 +38,8 @@ model User {
   supervisor           User?                 @relation("Hierarchy", fields: [supervisorId], references: [id])
   subordinates         User[]                @relation("Hierarchy")
 
+  @@index([accountId])
+  @@index([supervisorId])
   @@map("users")
 }
 
@@ -75,6 +77,11 @@ model Client {
   tags                 Tag[]               @relation("ClientTags")
   sdrContact           Contact?
 
+  @@index([accountId])
+  @@index([brokerId])
+  @@index([funnelId])
+  @@index([funnelStageId])
+  @@index([createdById])
   @@map("clients")
 }
 
@@ -166,6 +173,7 @@ model PropertyType {
   floorPlanUrl String?
   property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
+  @@index([propertyId])
   @@map("property_types")
 }
 
@@ -214,6 +222,7 @@ model LeadRoulette {
   funnel   Funnel?            @relation(fields: [funnelId], references: [id])
   users    LeadRouletteUser[]
 
+  @@index([funnelId])
   @@map("lead_roulettes")
 }
 
@@ -269,13 +278,15 @@ model Task {
 }
 
 model Note {
-  id       String @id @default(uuid())
-  content  String
-  authorId String
-  clientId String
-  author   User   @relation(fields: [authorId], references: [id])
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  clientId  String
+  createdAt DateTime @default(now())
+  author    User     @relation(fields: [authorId], references: [id])
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@map("notes")
 }
 

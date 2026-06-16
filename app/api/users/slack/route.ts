@@ -12,7 +12,6 @@ export async function GET() {
   }
 
   const users = await prisma.user.findMany({
-    where: { accountId: user.accountId },
     select: { id: true, name: true, email: true, role: true, slackMemberId: true },
     orderBy: { name: 'asc' },
   })

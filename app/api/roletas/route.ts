@@ -15,7 +15,7 @@ export async function GET() {
     // Corrigido: Usando leadRoulette em vez de roleta ou clientRoulette
     const roletas = await prisma.leadRoulette.findMany({
       include: {
-        funnel: true,
+        funnel: { select: { id: true, name: true } },
         users: { // Corrigido: Nome da relação no novo schema
           include: {
             user: {

@@ -199,15 +199,24 @@ function FunnelColumn({ stage, clients }: { stage: FunnelStage; clients: Cliente
 }
 
 
+const LAST_FUNNEL_STORAGE_KEY = 'pipeline:lastFunnelId';
+
 // --- Componente Principal da Página ---
 export default function PipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-  
+
   const [allClients, setAllClients] = useState<Cliente[]>([]);
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
+
+  const selectFunnel = useCallback((funnelId: string) => {
+    setSelectedFunnelId(funnelId);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LAST_FUNNEL_STORAGE_KEY, funnelId);
+    }
+  }, []);
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [roleSettings, setRoleSettings] = useState<{ roleName: string; isActive: boolean }[]>([]);
@@ -288,7 +297,11 @@ export default function PipelinePage() {
       setFunnels(funnelsArray);
 
       if (funnelsArray.length > 0 && !selectedFunnelId) {
-        setSelectedFunnelId(funnelsArray[0].id);
+        const lastFunnelId = typeof window !== 'undefined'
+          ? window.localStorage.getItem(LAST_FUNNEL_STORAGE_KEY)
+          : null;
+        const hasLastFunnel = lastFunnelId && funnelsArray.some((f: Funnel) => f.id === lastFunnelId);
+        setSelectedFunnelId(hasLastFunnel ? lastFunnelId : funnelsArray[0].id);
       }
 
       setBrokers(brokersArray);
@@ -685,7 +698,7 @@ export default function PipelinePage() {
       <header className="border-b bg-card flex-shrink-0">
         {/* Mobile header */}
         <div className="flex items-center gap-2 px-4 py-3 lg:hidden">
-          <Select value={selectedFunnelId || ''} onValueChange={setSelectedFunnelId}>
+          <Select value={selectedFunnelId || ''} onValueChange={selectFunnel}>
             <SelectTrigger className="flex-1 h-9 text-sm">
               <SelectValue placeholder="Selecione um funil..." />
             </SelectTrigger>
@@ -706,7 +719,7 @@ export default function PipelinePage() {
         <div className="hidden lg:flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
                 <h1 className="text-xl font-bold text-foreground">Pipeline de Vendas</h1>
-                <Select value={selectedFunnelId || ''} onValueChange={setSelectedFunnelId}>
+                <Select value={selectedFunnelId || ''} onValueChange={selectFunnel}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Selecione um funil..." />
                   </SelectTrigger>

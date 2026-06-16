@@ -43,7 +43,7 @@ async function getClientWithDetails(id: string) {
             },
             documents: true,
             notes: {
-                orderBy: { id: 'desc' },
+                orderBy: { createdAt: 'desc' },
             },
             tasks: {
                 orderBy: {
