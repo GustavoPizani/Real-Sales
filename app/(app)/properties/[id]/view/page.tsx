@@ -138,7 +138,7 @@ export default function PropertyViewPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <div className="flex items-center gap-2 text-gray-600">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           <p>A carregar dados do imóvel...</p>
         </div>
@@ -150,8 +150,8 @@ export default function PropertyViewPage() {
     return (
       <div className="p-6">
         <div className="text-center py-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Imóvel não encontrado</h2>
-          <p className="text-gray-600 mb-4">O imóvel que você está procurando não existe ou foi removido.</p>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Imóvel não encontrado</h2>
+          <p className="text-muted-foreground mb-4">O imóvel que você está procurando não existe ou foi removido.</p>
           <Button onClick={() => router.push("/properties")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar para Imóveis
@@ -173,10 +173,10 @@ export default function PropertyViewPage() {
           <div>
             <h1 className="text-3xl font-bold text-white">{property.title}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <Badge className={STATUS_CLASS[property.status] ?? "bg-gray-100 text-gray-800"}>
+              <Badge className={STATUS_CLASS[property.status] ?? "bg-muted text-muted-foreground"}>
                 {STATUS_LABEL[property.status] ?? property.status}
               </Badge>
-              {property.type && <span className="text-sm text-gray-600">{property.type}</span>}
+              {property.type && <span className="text-sm text-muted-foreground">{property.type}</span>}
             </div>
           </div>
         </div>
@@ -263,7 +263,7 @@ export default function PropertyViewPage() {
                   <TableBody>
                     {property.typologies.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-gray-500">Nenhuma tipologia cadastrada.</TableCell>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">Nenhuma tipologia cadastrada.</TableCell>
                       </TableRow>
                     )}
                     {property.typologies.map((typology) => (
@@ -290,25 +290,25 @@ export default function PropertyViewPage() {
                         <TableCell className="font-medium">{typology.name || "N/A"}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Square className="h-4 w-4 text-gray-400" />
+                            <Square className="h-4 w-4 text-muted-foreground/70" />
                             <span>{typology.area != null ? `${typology.area}m²` : "—"}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Bed className="h-4 w-4 text-gray-400" />
+                            <Bed className="h-4 w-4 text-muted-foreground/70" />
                             <span>{typology.dormitorios ?? "—"}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Bath className="h-4 w-4 text-gray-400" />
+                            <Bath className="h-4 w-4 text-muted-foreground/70" />
                             <span>{typology.suites ?? "—"}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Car className="h-4 w-4 text-gray-400" />
+                            <Car className="h-4 w-4 text-muted-foreground/70" />
                             <span>{typology.vagas ?? "—"}</span>
                           </div>
                         </TableCell>
@@ -334,7 +334,7 @@ export default function PropertyViewPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-700">{property.address || "Endereço não informado"}</p>
+              <p className="text-foreground/80">{property.address || "Endereço não informado"}</p>
             </CardContent>
           </Card>
 
@@ -344,8 +344,8 @@ export default function PropertyViewPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600">Status</p>
-                <Badge className={STATUS_CLASS[property.status] ?? "bg-gray-100 text-gray-800"}>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <Badge className={STATUS_CLASS[property.status] ?? "bg-muted text-muted-foreground"}>
                   {STATUS_LABEL[property.status] ?? property.status}
                 </Badge>
               </div>
@@ -353,9 +353,9 @@ export default function PropertyViewPage() {
               <Separator />
 
               <div>
-                <p className="text-sm text-gray-600">Tipo</p>
+                <p className="text-sm text-muted-foreground">Tipo</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Home className="h-4 w-4 text-gray-500" />
+                  <Home className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">{property.type || "Não informado"}</span>
                 </div>
               </div>
@@ -365,7 +365,7 @@ export default function PropertyViewPage() {
               {(property.updaterName || property.creatorName) && (
                 <>
                   <div>
-                    <p className="text-sm text-gray-600">Última edição por</p>
+                    <p className="text-sm text-muted-foreground">Última edição por</p>
                     <p className="font-medium">{property.updaterName || property.creatorName}</p>
                   </div>
                   <Separator />
@@ -373,7 +373,7 @@ export default function PropertyViewPage() {
               )}
 
               <div>
-                <p className="text-sm text-gray-600">Data de atualização</p>
+                <p className="text-sm text-muted-foreground">Data de atualização</p>
                 <p className="font-medium">{new Date(property.updatedAt).toLocaleDateString("pt-BR")}</p>
               </div>
             </CardContent>

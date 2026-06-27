@@ -74,6 +74,39 @@ export async function notifyNewLead({
   await Promise.allSettled(pushTasks)
 }
 
+export async function notifyNewTask({
+  taskTitle,
+  clientName,
+  userId,
+  clientId,
+  dateTime,
+}: {
+  taskTitle: string
+  clientName: string
+  userId: string
+  clientId: string
+  dateTime: string
+}) {
+  const formattedDate = new Date(dateTime).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  })
+
+  await createNotification(
+    userId,
+    '📋 Nova tarefa criada',
+    `${taskTitle} — ${clientName} · ${formattedDate}`,
+    'TASK',
+    { clientId, clientName }
+  )
+
+  await sendWebPush(
+    userId,
+    '📋 Nova tarefa',
+    `${taskTitle} — ${clientName} · ${formattedDate}`,
+    { clientId, clientName }
+  )
+}
+
 export async function sendWebPush(
   userId: string,
   title: string,

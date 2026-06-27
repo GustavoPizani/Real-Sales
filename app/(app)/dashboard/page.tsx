@@ -100,6 +100,11 @@ export default function DashboardPage() {
   const [propertyForm, setPropertyForm] = useState({ title: "", endereco: "", price: "" });
   const [taskForm, setTaskForm] = useState({ title: "", description: "", dueDate: "", clientId: "" });
 
+  // Modal de conclusão de tarefa
+  const [isCompleteTaskOpen, setIsCompleteTaskOpen] = useState(false);
+  const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
+  const [completionComment, setCompletionComment] = useState("");
+
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
     setIsDataLoading(true);
@@ -202,6 +207,36 @@ export default function DashboardPage() {
       toast({ title: "Sucesso!", description: "Tarefa criada com sucesso." });
       setIsTaskModalOpen(false);
       setTaskForm({ title: "", description: "", dueDate: "", clientId: "" });
+      fetchDashboardData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  const handleCompleteTask = async () => {
+    if (!taskToComplete) return;
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(`/api/tasks/${taskToComplete.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isCompleted: true }),
+      });
+      if (!res.ok) throw new Error("Falha ao concluir tarefa.");
+
+      if (taskToComplete.clientId) {
+        const noteContent = `Tarefa Concluída: "${taskToComplete.title}".\n\nComentário: ${completionComment || "Nenhum comentário adicionado."}`;
+        await fetch(`/api/clients/${taskToComplete.clientId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ content: noteContent }),
+        });
+      }
+
+      toast({ title: "Sucesso!", description: "Tarefa concluída e anotação criada." });
+      setIsCompleteTaskOpen(false);
+      setTaskToComplete(null);
+      setCompletionComment("");
       fetchDashboardData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -417,16 +452,20 @@ export default function DashboardPage() {
                   Array.from({ length: 3 }).map((_, i) => <TaskRowSkeleton key={i} />)
                 ) : pendingTasks.length > 0 ? (
                   pendingTasks.map(task => (
-                    <Link href={task.client ? `/client/${task.client.id}` : "#"} key={task.id} className="block p-3 rounded-md hover:bg-accent">
+                    <button
+                      key={task.id}
+                      className="block w-full text-left p-3 rounded-md hover:bg-accent cursor-pointer"
+                      onClick={() => { setTaskToComplete(task); setCompletionComment(""); setIsCompleteTaskOpen(true); }}
+                    >
                       <div className="flex justify-between items-start">
                         <p className="font-medium">{task.title}</p>
-                        {task.client && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.client.fullName}</span>}
+                        {task.client && <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{task.client.fullName}</span>}
                       </div>
-                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                         <Clock className="h-3 w-3" />
                         {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}
                       </p>
-                    </Link>
+                    </button>
                   ))
                 ) : (
                   <p className="text-center text-muted-foreground py-8">Nenhuma tarefa pendente.</p>
@@ -437,16 +476,20 @@ export default function DashboardPage() {
                   Array.from({ length: 3 }).map((_, i) => <TaskRowSkeleton key={i} />)
                 ) : overdueTasks.length > 0 ? (
                   overdueTasks.map(task => (
-                    <Link href={task.client ? `/client/${task.client.id}` : "#"} key={task.id} className="block p-3 rounded-md hover:bg-accent">
+                    <button
+                      key={task.id}
+                      className="block w-full text-left p-3 rounded-md hover:bg-accent cursor-pointer"
+                      onClick={() => { setTaskToComplete(task); setCompletionComment(""); setIsCompleteTaskOpen(true); }}
+                    >
                       <div className="flex justify-between items-start">
                         <p className="font-medium text-red-500">{task.title}</p>
-                        {task.client && <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{task.client.fullName}</span>}
+                        {task.client && <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{task.client.fullName}</span>}
                       </div>
-                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                         <AlertCircle className="h-3 w-3 text-red-500" />
                         {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}
                       </p>
-                    </Link>
+                    </button>
                   ))
                 ) : (
                   <p className="text-center text-muted-foreground py-8">Nenhuma tarefa atrasada.</p>
@@ -456,6 +499,34 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de conclusão de tarefa */}
+      <Dialog open={isCompleteTaskOpen} onOpenChange={(open) => {
+        setIsCompleteTaskOpen(open);
+        if (!open) { setTaskToComplete(null); setCompletionComment(""); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Concluir Tarefa: {taskToComplete?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {taskToComplete?.client && (
+              <p className="text-sm text-muted-foreground">Cliente: <span className="font-medium text-foreground">{taskToComplete.client.fullName}</span></p>
+            )}
+            <Label htmlFor="dashboard-comment">Comentário de conclusão</Label>
+            <Textarea
+              id="dashboard-comment"
+              placeholder="Descreva o resultado ou adicione informações relevantes..."
+              value={completionComment}
+              onChange={(e) => setCompletionComment(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsCompleteTaskOpen(false)}>Cancelar</Button>
+            <Button type="button" onClick={handleCompleteTask}>Confirmar Conclusão</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

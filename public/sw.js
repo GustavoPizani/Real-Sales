@@ -1,4 +1,4 @@
-const CACHE_NAME = 'real-sales-v4';
+const CACHE_NAME = 'nordic-crm-v5';
 const STATIC_ASSETS = ['/', '/dashboard'];
 
 function urlBase64ToUint8Array(base64String) {
@@ -51,7 +51,7 @@ self.addEventListener('push', (event) => {
   if (!event.data) return;
 
   let payload;
-  try { payload = event.data.json(); } catch { payload = { title: 'Real Sales', body: event.data.text() }; }
+  try { payload = event.data.json(); } catch { payload = { title: 'Nordic CRM', body: event.data.text() }; }
 
   const data = payload.data ?? {};
   const clientId = data.clientId;
@@ -72,7 +72,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title ?? 'Real Sales', options)
+    self.registration.showNotification(payload.title ?? 'Nordic CRM', options)
       .then(() => {
         if ('setAppBadge' in navigator) {
           return navigator.setAppBadge(1).catch(() => null)

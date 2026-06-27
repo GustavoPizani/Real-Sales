@@ -7,21 +7,21 @@ import { PushSubscriber } from "@/components/push-subscriber";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import Script from "next/script";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
-  title: "Real Sales CRM",
+  title: "Nordic CRM",
   description: "CRM Imobiliário de Alta Performance",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Real Sales",
+    title: "Nordic",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#023863",
+  themeColor: "#07090D",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

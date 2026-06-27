@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
         // 2. Criar o Workbook e as Planilhas
         const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'Real Sales';
+        workbook.creator = 'Nordic CRM';
         workbook.created = new Date();
 
         // --- Aba 1: Importação de Clientes ---

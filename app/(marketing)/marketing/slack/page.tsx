@@ -24,7 +24,7 @@ const ROLE_LABELS: Record<string, string> = {
   BROKER: "Corretor",
 }
 
-const DEFAULT_MESSAGE = "Olá {{nome}}! 👋 Sou {{corretor}} da Real Sales.\nVi que você se interessou pelo {{produto}} e gostaria de te apresentar mais detalhes. Posso te ajudar?"
+const DEFAULT_MESSAGE = "Olá {{nome}}! 👋 Sou {{corretor}} da Nordic.\nVi que você se interessou pelo {{produto}} e gostaria de te apresentar mais detalhes. Posso te ajudar?"
 
 export default function SlackConfigPage() {
   const { toast } = useToast()
@@ -303,7 +303,7 @@ export default function SlackConfigPage() {
           <CardTitle className="text-base">Como configurar o Bot Token</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>1. Acesse <strong>api.slack.com/apps</strong> → selecione o app Real Sales</p>
+          <p>1. Acesse <strong>api.slack.com/apps</strong> → selecione o app Nordic CRM</p>
           <p>2. Em <strong>OAuth & Permissions</strong>, adicione o scope <code className="bg-muted px-1 rounded">chat:write</code></p>
           <p>3. Clique em <strong>Install to Workspace</strong> e autorize</p>
           <p>4. Copie o <strong>Bot User OAuth Token</strong> (começa com <code className="bg-muted px-1 rounded">xoxb-</code>)</p>

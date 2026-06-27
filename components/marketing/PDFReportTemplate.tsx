@@ -99,7 +99,7 @@ const ReportPage = ({ title, subTitle, metrics, dateRange, isLast }: any) => {
             {dateRange?.from ? format(dateRange.from, "dd MMM yyyy", { locale: ptBR }) : ""} –{" "}
             {dateRange?.to ? format(dateRange.to, "dd MMM yyyy", { locale: ptBR }) : ""}
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Real Sales</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Nordic CRM</p>
         </div>
       </div>
 
@@ -154,7 +154,7 @@ const ReportPage = ({ title, subTitle, metrics, dateRange, isLast }: any) => {
 
       {/* Rodapé */}
       <div className="border-t border-slate-100 pt-3 text-center mt-auto">
-        <p className="text-[9px] text-slate-400">Relatório Confidencial · Gerado por Real Sales</p>
+        <p className="text-[9px] text-slate-400">Relatório Confidencial · Gerado por Nordic CRM</p>
       </div>
     </div>
   );

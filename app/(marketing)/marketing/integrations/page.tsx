@@ -660,7 +660,7 @@ export default function IntegrationsPage() {
               onChange={(e) => setManualToken(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Gere em: developers.facebook.com/tools/explorer → selecione "Real Sales" → adicione permissão <code className="bg-muted px-1 rounded">leads_retrieval</code> → Generate Access Token
+              Gere em: developers.facebook.com/tools/explorer → selecione "Nordic CRM" → adicione permissão <code className="bg-muted px-1 rounded">leads_retrieval</code> → Generate Access Token
             </p>
           </div>
           <DialogFooter>

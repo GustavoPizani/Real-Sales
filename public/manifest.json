@@ -1,12 +1,12 @@
 {
-  "id": "real-sales-crm",
-  "name": "Real Sales CRM",
-  "short_name": "Real Sales",
+  "id": "nordic-crm",
+  "name": "Nordic CRM",
+  "short_name": "Nordic",
   "description": "CRM de vendas imobiliárias",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#023863",
+  "background_color": "#07090D",
+  "theme_color": "#07090D",
   "orientation": "portrait-primary",
   "icons": [
     {

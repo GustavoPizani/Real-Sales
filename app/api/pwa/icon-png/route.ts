@@ -7,15 +7,15 @@ export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
   const size = Math.min(Math.max(parseInt(new URL(request.url).searchParams.get('size') ?? '192'), 16), 512)
-  const radius = Math.round(size * 0.167)
-  const fontSize = Math.round(size * 0.375)
+  const radius = Math.round(size * 0.1875)
+  const fontSize = Math.round(size * 0.4)
 
   return new ImageResponse(
     createElement('div', {
       style: {
         width: size,
         height: size,
-        background: '#023863',
+        background: '#07090D',
         borderRadius: radius,
         display: 'flex',
         alignItems: 'center',
@@ -23,10 +23,10 @@ export async function GET(request: NextRequest) {
         fontFamily: 'Arial Black, sans-serif',
         fontSize,
         fontWeight: 900,
-        color: '#aa8d44',
+        color: '#E8B66C',
         letterSpacing: 2,
       },
-    }, 'RS'),
+    }, 'N'),
     { width: size, height: size }
   )
 }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
+import { notifyNewTask } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Título, data e cliente são obrigatórios.' }, { status: 400 });
     }
 
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { fullName: true },
+    });
+
     const newTask = await prisma.task.create({
       data: {
         title,
@@ -56,6 +62,14 @@ export async function POST(request: NextRequest) {
         priority: body.priority ?? 'MEDIUM',
       },
     });
+
+    notifyNewTask({
+      taskTitle: title,
+      clientName: client?.fullName ?? 'Cliente',
+      userId: user.id,
+      clientId,
+      dateTime,
+    }).catch(() => null);
 
     return NextResponse.json(newTask, { status: 201 });
   } catch (error) {

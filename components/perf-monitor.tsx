@@ -86,7 +86,7 @@ export function PerfMonitor() {
       const domLoad = Math.round(nav.domContentLoadedEventEnd - nav.startTime);
       const total = Math.round(nav.loadEventEnd - nav.startTime);
 
-      console.group("%c🚀 Real Sales — Performance da página", STYLE.header);
+      console.group("%c🚀 Nordic CRM — Performance da página", STYLE.header);
       console.log(`%cTTFB (tempo até 1º byte):  %c${ttfb}ms`, STYLE.dim, ttfb < 200 ? STYLE.ok : STYLE.warn);
       console.log(`%cDOMContentLoaded:           %c${domLoad}ms`, STYLE.dim, domLoad < 800 ? STYLE.ok : STYLE.warn);
       console.log(`%cLoad total:                 %c${total}ms`, STYLE.dim, total < 1500 ? STYLE.ok : STYLE.slow);

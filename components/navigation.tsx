@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-// ADICIONADO: Megaphone na lista de imports abaixo
 import {
   Home,
   Building,
@@ -74,15 +73,15 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
   return (
     <>
       {isMobileOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+        <div
+          className="lg:hidden fixed inset-0 bg-black/60 z-40"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
-      <aside 
+      <aside
         className={cn(
-          "sidebar-custom text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
+          "sidebar-custom text-[var(--text-secondary)] h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
           isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
           "lg:translate-x-0",
           "overflow-y-auto overflow-x-hidden",
@@ -91,24 +90,24 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
         onMouseEnter={() => !isMobileOpen && setIsDesktopExpanded(true)}
         onMouseLeave={() => !isMobileOpen && setIsDesktopExpanded(false)}
       >
-        <div className="p-4 flex-shrink-0 border-b border-tertiary-custom/50 flex items-center justify-between">
+        <div className="p-4 flex-shrink-0 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center justify-start gap-3">
-            <img src="/logo.png" alt="Real Sales Logo" className="w-8 h-8" />
+            <img src="/nordic-logo.svg" alt="Nordic CRM" className="w-8 h-8" />
             <div className={cn(
               "flex flex-col transition-opacity duration-200 whitespace-nowrap",
               isExpanded ? "opacity-100" : "opacity-0"
             )}>
-              <span className="text-lg font-extrabold leading-tight text-white">Real Sales</span>
-              <span className="text-xs text-gray-200 font-normal">CRM</span>
+              <span className="text-lg font-semibold leading-tight text-[var(--text-primary)]">Nordic</span>
+              <span className="text-xs text-[var(--text-muted)] font-normal">CRM</span>
             </div>
           </Link>
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setIsMobileOpen(false)}>
+          <Button variant="ghost" size="icon" className="lg:hidden text-[var(--text-secondary)]" onClick={() => setIsMobileOpen(false)}>
             <X className="h-6 w-6" />
           </Button>
         </div>
-        
+
         <nav className="flex-grow px-2 py-4">
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {filteredNavigation.map((item) => {
               const Icon = item.icon;
               return (
@@ -117,10 +116,10 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                     href={item.href}
                     onClick={() => isMobileOpen && setIsMobileOpen(false)}
                     className={cn(
-                      "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 group relative border-l-4",
+                      "flex items-center py-[10px] px-4 text-sm font-medium rounded-md transition-all duration-200 group relative border-l-2",
                       pathname.startsWith(item.href)
-                        ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
-                        : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white hover:shadow-lg hover:shadow-secondary-custom/20"
+                        ? "text-[var(--accent-primary)] border-[var(--accent-primary)] bg-[var(--accent-glow)]"
+                        : "text-[var(--text-secondary)] border-transparent hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
                     )}
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />
@@ -137,10 +136,10 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
           </ul>
         </nav>
 
-        <div className="p-3 border-t border-tertiary-custom/50 flex-shrink-0">
+        <div className="p-3 border-t border-[var(--border-subtle)] flex-shrink-0">
           <div className="flex items-center min-w-0 mb-3">
-              <div className="w-10 h-10 bg-tertiary-custom rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-md font-medium text-white">
+              <div className="w-10 h-10 bg-[var(--accent-glow)] rounded-full flex items-center justify-center flex-shrink-0 border border-[var(--border-accent)]">
+                <span className="text-md font-medium text-[var(--accent-primary)]">
                   {user?.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
@@ -148,18 +147,18 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                 "ml-3 min-w-0 flex-1 transition-opacity whitespace-nowrap",
                 isExpanded ? "opacity-100" : "opacity-0"
               )}>
-                <p className="text-sm font-semibold truncate">{user?.name}</p>
-                <p className="text-xs text-gray-400 truncate">
+                <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{user?.name}</p>
+                <p className="text-xs text-[var(--text-muted)] truncate">
                   {getRoleLabel(user?.role || '')}
                 </p>
               </div>
           </div>
-          
+
           <Button
             onClick={handleLogout}
             variant="ghost"
             className={cn(
-              "w-full text-gray-300 hover:bg-tertiary-custom/60 hover:text-white transition-colors duration-200",
+              "w-full text-[var(--text-secondary)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)] transition-colors duration-200",
               isExpanded ? "justify-start" : "justify-center"
             )}
           >

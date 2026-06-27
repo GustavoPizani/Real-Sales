@@ -102,6 +102,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [isEditClientDialogOpen, setIsEditClientDialogOpen] = useState(false);
   const [isEditPropertyDialogOpen, setIsEditPropertyDialogOpen] = useState(false);
   const [isScheduleVisitOpen, setIsScheduleVisitOpen] = useState(false);
+  // ── Modal de conclusão de tarefa ──
+  const [isCompleteTaskDialogOpen, setIsCompleteTaskDialogOpen] = useState(false);
+  const [taskToComplete, setTaskToComplete] = useState<Tarefa | null>(null);
+  const [completionComment, setCompletionComment] = useState("");
   // ✅ --- ESTADOS PARA QUALIFICAÇÃO ---
   const [isQualifyModalOpen, setIsQualifyModalOpen] = useState(false);
   const [targetRoletaId, setTargetRoletaId] = useState<string>('');
@@ -659,6 +663,36 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     }
   };
 
+  const handleCompleteTask = async () => {
+    if (!taskToComplete) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`/api/tasks/${taskToComplete.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ isCompleted: true }),
+      });
+      if (!res.ok) throw new Error('Falha ao concluir tarefa.');
+
+      if (clientId) {
+        const noteContent = `Tarefa Concluída: "${taskToComplete.title}".\n\nComentário: ${completionComment || "Nenhum comentário adicionado."}`;
+        await fetch(`/api/clients/${clientId}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ content: noteContent }),
+        });
+      }
+
+      toast({ title: "Sucesso!", description: "Tarefa concluída e anotação criada." });
+      setIsCompleteTaskDialogOpen(false);
+      setTaskToComplete(null);
+      setCompletionComment("");
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
   const handleRiaDialogClose = () => {
     setIsRiaDialogOpen(false);
     setMessages([]); // Limpa as mensagens ao fechar
@@ -943,7 +977,23 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   <Table>
                     <TableHeader><TableRow><TableHead>Tarefa</TableHead><TableHead>Data/Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {client.tasks?.length > 0 ? client.tasks.map(task => (<TableRow key={task.id}><TableCell>{task.title}</TableCell><TableCell>{format(new Date(task.dateTime), "dd/MM/yy HH:mm")}</TableCell><TableCell><Badge variant={task.isCompleted ? "secondary" : "default"}>{task.isCompleted ? "Concluída" : "Pendente"}</Badge></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
+                      {client.tasks?.length > 0 ? client.tasks.map(task => (
+                        <TableRow
+                          key={task.id}
+                          className={task.isCompleted ? "opacity-60" : "cursor-pointer hover:bg-accent/50"}
+                          onClick={() => {
+                            if (!task.isCompleted) {
+                              setTaskToComplete(task);
+                              setCompletionComment("");
+                              setIsCompleteTaskDialogOpen(true);
+                            }
+                          }}
+                        >
+                          <TableCell>{task.title}</TableCell>
+                          <TableCell>{format(new Date(task.dateTime), "dd/MM/yy HH:mm")}</TableCell>
+                          <TableCell><Badge variant={task.isCompleted ? "secondary" : "default"}>{task.isCompleted ? "Concluída" : "Pendente"}</Badge></TableCell>
+                        </TableRow>
+                      )) : <TableRow><TableCell colSpan={3} className="text-center">Nenhuma tarefa.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </TabsContent>
@@ -1372,6 +1422,31 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* ── MODAL DE CONCLUSÃO DE TAREFA ── */}
+      <Dialog open={isCompleteTaskDialogOpen} onOpenChange={(open) => {
+        setIsCompleteTaskDialogOpen(open);
+        if (!open) { setTaskToComplete(null); setCompletionComment(""); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Concluir Tarefa: {taskToComplete?.title}</DialogTitle>
+            <DialogDescription>Adicione um comentário de conclusão que será salvo nas anotações do cliente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Label htmlFor="task-comment">Comentário de conclusão</Label>
+            <Textarea
+              id="task-comment"
+              placeholder="Descreva o resultado ou adicione informações relevantes..."
+              value={completionComment}
+              onChange={(e) => setCompletionComment(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsCompleteTaskDialogOpen(false)}>Cancelar</Button>
+            <Button type="button" onClick={handleCompleteTask}>Confirmar Conclusão</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -38,14 +38,14 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
     <>
       {isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          className="lg:hidden fixed inset-0 bg-black/60 z-40"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
       <aside
         className={cn(
-          "sidebar-custom text-white h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
+          "sidebar-custom text-[var(--text-secondary)] h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
           isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
           "lg:translate-x-0 overflow-y-auto overflow-x-hidden",
           isDesktopExpanded ? "lg:w-64" : "lg:w-16"
@@ -54,20 +54,20 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
         onMouseLeave={() => !isMobileOpen && setIsDesktopExpanded(false)}
       >
         {/* Header */}
-        <div className="p-4 flex-shrink-0 border-b border-tertiary-custom/50 flex items-center justify-between">
+        <div className="p-4 flex-shrink-0 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Real Sales Logo" className="w-8 h-8 flex-shrink-0" />
+            <img src="/nordic-logo.svg" alt="Nordic CRM" className="w-8 h-8 flex-shrink-0" />
             <div className={cn(
               "flex flex-col transition-opacity duration-200 whitespace-nowrap",
               isExpanded ? "opacity-100" : "opacity-0"
             )}>
-              <span className="text-base font-extrabold leading-tight text-white">Real Sales</span>
-              <span className="text-xs font-bold" style={{ color: "var(--secondary-custom)" }}>
+              <span className="text-base font-semibold leading-tight text-[var(--text-primary)]">Nordic</span>
+              <span className="text-xs font-semibold text-[var(--accent-primary)]">
                 Marketing
               </span>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="lg:hidden text-white" onClick={() => setIsMobileOpen(false)}>
+          <Button variant="ghost" size="icon" className="lg:hidden text-[var(--text-secondary)]" onClick={() => setIsMobileOpen(false)}>
             <X className="h-5 w-5" />
           </Button>
         </div>
@@ -85,10 +85,10 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
                     href={item.href}
                     onClick={() => isMobileOpen && setIsMobileOpen(false)}
                     className={cn(
-                      "flex items-center p-3 text-sm font-medium rounded-lg transition-all duration-200 border-l-4",
+                      "flex items-center py-[10px] px-4 text-sm font-medium rounded-md transition-all duration-200 border-l-2",
                       isActive
-                        ? "text-secondary-custom border-secondary-custom bg-white/[0.06]"
-                        : "text-gray-200 border-transparent hover:bg-tertiary-custom/60 hover:text-white"
+                        ? "text-[var(--accent-primary)] border-[var(--accent-primary)] bg-[var(--accent-glow)]"
+                        : "text-[var(--text-secondary)] border-transparent hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
                     )}
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />
@@ -106,14 +106,14 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
         </nav>
 
         {/* Bottom */}
-        <div className="p-3 border-t border-tertiary-custom/50 flex-shrink-0 space-y-2">
+        <div className="p-3 border-t border-[var(--border-subtle)] flex-shrink-0 space-y-2">
           {/* Back to CRM */}
           <Link
             href="/dashboard"
             onClick={() => isMobileOpen && setIsMobileOpen(false)}
             className={cn(
-              "flex items-center p-3 text-sm font-semibold rounded-lg border transition-all duration-200",
-              "border-secondary-custom/50 text-secondary-custom hover:bg-secondary-custom/10"
+              "flex items-center py-[10px] px-4 text-sm font-semibold rounded-md border transition-all duration-200",
+              "border-[var(--border-accent)] text-[var(--accent-primary)] hover:bg-[var(--accent-glow)] hover:border-[var(--border-strong)]"
             )}
           >
             <ArrowLeft className="h-5 w-5 flex-shrink-0" />
@@ -127,8 +127,8 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
 
           {/* User */}
           <div className="flex items-center min-w-0 px-1 py-1">
-            <div className="w-8 h-8 bg-tertiary-custom rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-semibold text-white">
+            <div className="w-8 h-8 bg-[var(--accent-glow)] rounded-full flex items-center justify-center flex-shrink-0 border border-[var(--border-accent)]">
+              <span className="text-sm font-semibold text-[var(--accent-primary)]">
                 {user?.name?.charAt(0).toUpperCase()}
               </span>
             </div>
@@ -136,8 +136,8 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
               "ml-3 min-w-0 flex-1 transition-opacity duration-200 whitespace-nowrap",
               isExpanded ? "opacity-100" : "opacity-0"
             )}>
-              <p className="text-sm font-semibold truncate leading-tight">{user?.name}</p>
-              <p className="text-xs text-gray-400 truncate">Marketing</p>
+              <p className="text-sm font-semibold truncate leading-tight text-[var(--text-primary)]">{user?.name}</p>
+              <p className="text-xs text-[var(--text-muted)] truncate">Marketing</p>
             </div>
           </div>
 
@@ -146,7 +146,7 @@ export function MarketingNavigation({ isMobileOpen, setIsMobileOpen }: Marketing
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full text-gray-300 hover:bg-tertiary-custom/60 hover:text-white transition-colors",
+              "w-full text-[var(--text-secondary)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)] transition-colors",
               isExpanded ? "justify-start" : "justify-center"
             )}
           >

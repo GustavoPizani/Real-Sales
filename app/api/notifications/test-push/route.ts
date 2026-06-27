@@ -33,7 +33,7 @@ export async function POST() {
   const webpush = await import('web-push')
   webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
   const payload = JSON.stringify({
-    title: '✅ Teste Real Sales',
+    title: '✅ Teste Nordic CRM',
     body: 'Push funcionando! Você receberá alertas de novos leads aqui.',
     data: {},
   })

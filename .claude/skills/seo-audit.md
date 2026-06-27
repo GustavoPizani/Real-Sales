@@ -46,7 +46,7 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 ```
 
 **Problemas comuns:**
-- Título genérico ("Imóvel | Real Sales") igual para todos os empreendimentos
+- Título genérico ("Imóvel | Nordic CRM") igual para todos os empreendimentos
 - Description vazia ou truncada no lugar errado
 - Sem Open Graph (links no WhatsApp/LinkedIn sem preview)
 

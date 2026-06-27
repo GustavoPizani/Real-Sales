@@ -223,13 +223,23 @@ export default function TasksPage() {
           </div>
         ) : (
           tasks.map((task) => (
-            <Card key={task.id} className="hover:shadow-lg transition-shadow">
+            <Card
+              key={task.id}
+              className={`hover:shadow-lg transition-shadow ${!task.isCompleted ? 'cursor-pointer' : ''}`}
+              onClick={() => {
+                if (!task.isCompleted) {
+                  setTaskToComplete(task);
+                  setCompletionComment("");
+                  setIsCompleteTaskDialogOpen(true);
+                }
+              }}
+            >
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-semibold line-clamp-2">{task.title}</CardTitle>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {!task.isCompleted && (

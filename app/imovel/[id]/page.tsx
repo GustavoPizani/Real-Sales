@@ -150,7 +150,7 @@ function PropertyPage() {
       {/* ── STICKY HEADER ── */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 bg-background/90 backdrop-blur-md border-b border-border">
         <div className="flex items-center gap-3">
-          <span className="text-secondary-custom font-bold tracking-widest text-xs uppercase">Real Sales</span>
+          <span className="text-secondary-custom font-bold tracking-widest text-xs uppercase">Nordic</span>
           <span className="text-muted-foreground/30">|</span>
           <span className="text-muted-foreground text-sm truncate max-w-[200px] sm:max-w-none">{property.title}</span>
         </div>
@@ -516,7 +516,7 @@ function PropertyPage() {
 
       {/* ── FOOTER ── */}
       <footer className="px-6 sm:px-12 lg:px-20 py-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2">
-        <span className="text-secondary-custom font-bold tracking-widest text-xs uppercase">Real Sales CRM</span>
+        <span className="text-secondary-custom font-bold tracking-widest text-xs uppercase">Nordic CRM</span>
         <span className="text-muted-foreground/40 text-xs">Este link foi gerado pelo corretor responsável pelo atendimento.</span>
       </footer>
     </div>
