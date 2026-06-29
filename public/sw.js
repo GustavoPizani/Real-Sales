@@ -1,5 +1,5 @@
-const CACHE_NAME = 'nordic-crm-v5';
-const STATIC_ASSETS = ['/', '/dashboard'];
+const CACHE_NAME = 'nordic-crm-v6';
+const STATIC_ASSETS = ['/login', '/icons/icon.svg', '/nordic-logo.svg'];
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -37,13 +37,21 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        if (response.ok) {
+        if (response.ok && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() =>
+        caches.match(request).then((cached) => {
+          if (cached) return cached;
+          if (request.mode === 'navigate') {
+            return caches.match('/login');
+          }
+          return new Response('Offline', { status: 503 });
+        })
+      )
   );
 });
 
@@ -59,8 +67,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: payload.body ?? '',
-    icon: '/api/pwa/icon-png?size=192',
-    badge: '/api/pwa/icon-png?size=72',
+    icon: '/icons/icon.png',
+    badge: '/icons/icon.png',
     data: { ...data, url },
     vibrate: [200, 100, 200],
     requireInteraction: true,
@@ -81,8 +89,6 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Quando o OS rotaciona o token de push (comum no iOS), reinscreve automaticamente
-// sem precisar abrir o app — evita o gap onde o servidor tem assinatura inválida
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     (async () => {
@@ -106,8 +112,8 @@ self.addEventListener('pushsubscriptionchange', (event) => {
         console.error('[SW] pushsubscriptionchange falhou:', err)
       }
     })()
-  )
-})
+  );
+});
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
@@ -120,18 +126,15 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Se já tem uma janela aberta com essa URL, foca nela
       const existing = windowClients.find((c) => c.url.includes(url));
       if (existing) {
         existing.focus();
         return existing.navigate(url);
       }
-      // Tenta focar qualquer janela do app e navegar
       if (windowClients.length > 0) {
         windowClients[0].focus();
         return windowClients[0].navigate(url);
       }
-      // Nenhuma janela aberta — abre uma nova
       return clients.openWindow(url);
     })
   );

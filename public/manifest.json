@@ -3,35 +3,24 @@
   "name": "Nordic CRM",
   "short_name": "Nordic",
   "description": "CRM de vendas imobiliárias",
-  "start_url": "/dashboard",
+  "start_url": "/login",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#07090D",
   "theme_color": "#07090D",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/api/pwa/icon-png?size=192",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/api/pwa/icon-png?size=192",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/api/pwa/icon-png?size=512",
+      "src": "/icons/icon.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/api/pwa/icon-png?size=512",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ],
   "categories": ["business", "productivity"]
