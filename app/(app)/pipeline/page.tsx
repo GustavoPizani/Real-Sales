@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { type Cliente, type User as Broker, Role, ClientOverallStatus } from "@/lib/types";
+import { cachedFetch } from "@/lib/api-cache";
 import { DateRange } from "react-day-picker";
 import { useMobileHeader } from "@/contexts/mobile-header-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -269,10 +270,10 @@ export default function PipelinePage() {
 
       const [clientsRes, funnelsRes, brokersRes, tagsRes, rolesRes] = await Promise.all([
         fetch('/api/clients'),
-        fetch('/api/funnels'),
-        fetch('/api/users'),
-        fetch('/api/tags'),
-        fetch('/api/role-settings'),
+        cachedFetch('/api/funnels'),
+        cachedFetch('/api/users'),
+        cachedFetch('/api/tags'),
+        cachedFetch('/api/role-settings'),
       ]);
 
       if (!clientsRes.ok || !funnelsRes.ok || !brokersRes.ok || !tagsRes.ok)

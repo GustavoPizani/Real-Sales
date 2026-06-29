@@ -25,6 +25,7 @@ import { ptBR } from "date-fns/locale";
 import { type Client as Cliente, type Property as Imovel, ClientOverallStatus, type Note as Nota, type Task as Tarefa, type User as Usuario, type ClientDocument as DocumentoCliente, type Tag } from "@/lib/types";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { cachedFetch, invalidateCache } from '@/lib/api-cache';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
@@ -193,18 +194,37 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   }, [client]);
 
 
+  const refreshClient = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      const res = await fetch(`/api/clients/${clientId}`);
+      if (!res.ok) throw new Error("Erro ao buscar cliente");
+      const data = await res.json();
+      setClient(data.client);
+      if (data.client) {
+        setNewFunnelStageId(data.client.funnelStageId);
+        setEditClientForm({
+          fullName: data.client.fullName,
+          email: data.client.email || "",
+          phone: data.client.phone || ""
+        });
+        setNewPropertyId(data.client.propertyOfInterestId || "");
+      }
+    } catch { /* silent — UI already has data */ }
+  }, [clientId]);
+
   const fetchData = useCallback(async () => {
     if (!clientId) return;
     setLoading(true);
     try {
       const [clientRes, funnelsRes, reasonsRes, propertiesRes, usersRes, tagsRes, roletasRes] = await Promise.all([
         fetch(`/api/clients/${clientId}`),
-        fetch('/api/funnels'),
-        fetch('/api/lost-reasons'),
-        fetch('/api/properties'),
-        fetch('/api/users'),
-        fetch('/api/tags'),
-        fetch('/api/roletas?status=active'),
+        cachedFetch('/api/funnels'),
+        cachedFetch('/api/lost-reasons'),
+        cachedFetch('/api/properties'),
+        cachedFetch('/api/users'),
+        cachedFetch('/api/tags'),
+        cachedFetch('/api/roletas?status=active'),
       ]);
 
       if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
@@ -226,7 +246,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       setAllTags(tagsData.tags || []);
 
       if (clientData.client) {
-        setNewFunnelStageId(clientData.client.funnelStageId); // Inicializa com o ID da etapa atual
+        setNewFunnelStageId(clientData.client.funnelStageId);
         setEditClientForm({
           fullName: clientData.client.fullName,
           email: clientData.client.email || "",
@@ -246,7 +266,8 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     fetchData();
   }, [fetchData]);
 
-  const handleUpdateClient = async (payload: object, options?: { successMessage?: string }) => {
+  const handleUpdateClient = async (payload: object, options?: { successMessage?: string; skipRefresh?: boolean }) => {
+    const previousClient = client;
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`/api/clients/${clientId}`, {
@@ -259,9 +280,10 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         throw new Error(errorData.error || 'Falha ao atualizar cliente.');
       }
       toast({ title: "Sucesso!", description: options?.successMessage || "Cliente atualizado com sucesso." });
-      fetchData();
+      if (!options?.skipRefresh) refreshClient();
       return true;
     } catch (error: any) {
+      if (previousClient) setClient(previousClient);
       toast({ variant: "destructive", title: "Erro", description: error.message });
       return false;
     }
@@ -398,7 +420,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       }
 
       toast({ title: "Sucesso!", description: "Todos os documentos foram enviados." });
-      fetchData();
+      refreshClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro no Upload", description: error.message });
     } finally {
@@ -578,7 +600,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       toast({ title: "Sucesso!", description: "Anotação adicionada." });
       setNewNote("");
       setIsNoteDialogOpen(false);
-      fetchData();
+      refreshClient();
       return true;
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -616,7 +638,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       toast({ title: "Sucesso!", description: "Anotação atualizada." });
       setIsEditNoteDialogOpen(false);
       setEditingNote(null);
-      fetchData(); // Re-busca os dados para refletir a alteração
+      refreshClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
@@ -638,7 +660,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       toast({ title: "Sucesso!", description: "Anotação excluída." });
       setIsEditNoteDialogOpen(false);
       setEditingNote(null);
-      fetchData();
+      refreshClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
@@ -657,7 +679,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       toast({ title: "Sucesso!", description: "Tarefa criada." });
       setIsTaskDialogOpen(false);
       setTaskForm({ title: "", description: "", dateTime: "" });
-      fetchData();
+      refreshClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
@@ -687,7 +709,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       setIsCompleteTaskDialogOpen(false);
       setTaskToComplete(null);
       setCompletionComment("");
-      fetchData();
+      refreshClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
@@ -788,7 +810,12 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               return (
                 <button
                   key={stage.id}
-                  onClick={() => { if (!isActive) handleUpdateClient({ funnelStageId: stage.id }, { successMessage: `Movido para "${stage.name}".` }) }}
+                  onClick={() => {
+                    if (!isActive) {
+                      setClient(prev => prev ? { ...prev, funnelStageId: stage.id, funnelStage: { ...prev.funnelStage, id: stage.id, name: stage.name } } : null);
+                      handleUpdateClient({ funnelStageId: stage.id }, { successMessage: `Movido para "${stage.name}".`, skipRefresh: true });
+                    }
+                  }}
                   style={{ clipPath, zIndex: idx + 1, marginLeft: idx > 0 ? '-12px' : '0' }}
                   className={[
                     'relative flex flex-1 min-w-[90px] h-11 items-center justify-center px-5 text-xs font-medium transition-colors select-none',
@@ -835,7 +862,11 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                       <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Etapa do Funil</Label>
                       <Select
                         value={client.funnelStageId ?? ""}
-                        onValueChange={(v) => handleUpdateClient({ funnelStageId: v }, { successMessage: "Etapa do funil alterada." })}
+                        onValueChange={(v) => {
+                          const stage = stagesForCurrentFunnel.find(s => s.id === v);
+                          if (stage) setClient(prev => prev ? { ...prev, funnelStageId: v, funnelStage: { ...prev.funnelStage, id: v, name: stage.name } } : null);
+                          handleUpdateClient({ funnelStageId: v }, { successMessage: "Etapa do funil alterada.", skipRefresh: true });
+                        }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Selecione uma etapa..." />
