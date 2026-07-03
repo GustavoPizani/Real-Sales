@@ -31,6 +31,7 @@ import { GoogleMapsPicker } from "@/components/google-maps-picker";
 // --- Interfaces ---
 interface User extends BaseUser {
     leadCount?: number;
+    lastAssignedAt?: string | null;
 }
 
 interface Funnel {
@@ -788,6 +789,7 @@ export default function RoletaPage() {
         validFrom: '',
         validUntil: '',
         funnelId: '',
+        constante: true,
     })
     const [participantOrder, setParticipantOrder] = useState<User[]>([]);
     const [message, setMessage] = useState("")
@@ -844,7 +846,7 @@ export default function RoletaPage() {
             });
             if (response.ok) {
                 const data = await response.json();
-                setFunnels(data.funnels || []);
+                setFunnels(Array.isArray(data) ? data : (data.funnels || []));
             }
         } catch (error) {
             console.error("Erro ao carregar funis:", error);
@@ -860,15 +862,20 @@ export default function RoletaPage() {
         }
         try {
             const token = localStorage.getItem('authToken');
+            const payload = {
+                ...formData,
+                validFrom: formData.constante ? '' : formData.validFrom,
+                validUntil: formData.constante ? '' : formData.validUntil,
+            };
             const response = await fetch("/api/roletas", {
                 method: "POST",
                 headers: { 'Authorization': `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(payload),
             })
             if (response.ok) {
                 setMessage("Roleta criada com sucesso!")
                 setShowCreateModal(false)
-                setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' })
+                setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '', constante: true })
                 setParticipantOrder([]);
                 loadRoletas()
             } else {
@@ -891,15 +898,21 @@ export default function RoletaPage() {
         }
         try {
             const token = localStorage.getItem('authToken');
+            const payload = {
+                ...formData,
+                validFrom: formData.constante ? '' : formData.validFrom,
+                validUntil: formData.constante ? '' : formData.validUntil,
+                ativa: editingRoleta.ativa,
+            };
             const response = await fetch(`/api/roletas/${editingRoleta.id}`, {
                 method: "PUT",
                 headers: { 'Authorization': `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ ...formData, ativa: editingRoleta.ativa }),
+                body: JSON.stringify(payload),
             })
             if (response.ok) {
                 setMessage("Roleta atualizada com sucesso!")
                 setEditingRoleta(null)
-                setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' })
+                setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '', constante: true })
                 setParticipantOrder([]);
                 loadRoletas()
             } else {
@@ -970,6 +983,7 @@ export default function RoletaPage() {
             validFrom: roleta.validFrom ? new Date(roleta.validFrom).toISOString().slice(0, 16) : '',
             validUntil: roleta.validUntil ? new Date(roleta.validUntil).toISOString().slice(0, 16) : '',
             funnelId: roleta.funnelId || '',
+            constante: !roleta.validFrom && !roleta.validUntil,
         })
         const selectedUsers = allUsers.filter(u => roleta.usuarios.some(ru => ru.id === u.id));
         setParticipantOrder(selectedUsers);
@@ -1039,7 +1053,14 @@ export default function RoletaPage() {
                     <div className="flex justify-center">
                         {currentActiveRoleta ? (() => {
                             const roleta = currentActiveRoleta;
-                            const nextCorretorIndex = roleta.usuarios.length > 0 ? (roleta.last_assigned_index + 1) % roleta.usuarios.length : 0;
+                            // "Na vez" é quem tem o lastAssignedAt mais antigo (ou nunca recebeu lead) — mesmo critério usado na atribuição real dos leads.
+                            const nextCorretorIndex = roleta.usuarios.reduce((bestIndex, u, index) => {
+                                if (bestIndex === -1) return index;
+                                const best = roleta.usuarios[bestIndex];
+                                if (!u.lastAssignedAt) return best.lastAssignedAt ? index : bestIndex;
+                                if (!best.lastAssignedAt) return bestIndex;
+                                return new Date(u.lastAssignedAt).getTime() < new Date(best.lastAssignedAt).getTime() ? index : bestIndex;
+                            }, -1);
                             return (
                                 <Card key={roleta.id} className="w-full max-w-2xl">
                                     <CardHeader><CardTitle className="text-xl">{roleta.name}</CardTitle><CardDescription>{roleta.funnel?.name || 'Sem funil associado'}</CardDescription></CardHeader>
@@ -1052,7 +1073,7 @@ export default function RoletaPage() {
                                                     <div key={BROKER.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-accent/40">
                                                         <div>
                                                             <p className="font-medium text-foreground">{BROKER.name || BROKER.email}</p>
-                                                            <p className={`text-sm font-semibold ${isNext ? 'text-green-500' : 'text-muted-foreground'}`}>{isNext ? 'NA VEZ - ' : ''}{leadCount} QUALIFICADO(S)</p>
+                                                            <p className={`text-sm font-semibold ${isNext ? 'text-green-500' : 'text-muted-foreground'}`}>{isNext ? 'NA VEZ - ' : ''}{leadCount} LEAD{leadCount === 1 ? '' : 'S'} RECEBIDO{leadCount === 1 ? '' : 'S'}</p>
                                                         </div>
                                                         <span className="text-lg font-medium text-muted-foreground">{index + 1}</span>
                                                     </div>
@@ -1074,7 +1095,7 @@ export default function RoletaPage() {
                                 <CardDescription>Gerencie as roletas de distribuição de leads</CardDescription>
                             </div>
                         {user?.role === 'MARKETING_ADMIN' && (
-                            <Button onClick={() => { setShowCreateModal(true); setParticipantOrder([]); setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '' }) }} className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
+                            <Button onClick={() => { setShowCreateModal(true); setParticipantOrder([]); setFormData({ name: "", usuarios: [], validFrom: '', validUntil: '', funnelId: '', constante: true }) }} className="bg-secondary-custom hover:bg-secondary-custom/90 text-white">
                                 <Plus className="h-4 w-4 mr-2" />Nova Roleta
                             </Button>
                         )}
@@ -1124,7 +1145,12 @@ export default function RoletaPage() {
                                                         {roleta.validFrom ? `De: ${safeFormatDateTime(roleta.validFrom)}` : 'Desde sempre'}<br />
                                                         {roleta.validUntil ? `Até: ${safeFormatDateTime(roleta.validUntil)}` : 'Para sempre'}
                                                     </TableCell>
-                                                    <TableCell>{roleta.usuarios.length > 0 && roleta.last_assigned_index < roleta.usuarios.length ? roleta.usuarios[roleta.last_assigned_index]?.name || "N/A" : "Nenhum"}</TableCell>
+                                                    <TableCell>
+                                                        {(() => {
+                                                            const last = roleta.usuarios.filter(u => u.lastAssignedAt).sort((a, b) => new Date(b.lastAssignedAt!).getTime() - new Date(a.lastAssignedAt!).getTime())[0];
+                                                            return last?.name || "Nenhum";
+                                                        })()}
+                                                    </TableCell>
                                                     <TableCell>{safeFormatDate(roleta.createdAt, "dd/MM/yyyy")}</TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
@@ -1168,16 +1194,25 @@ export default function RoletaPage() {
                                 <SelectContent>{funnelsForRoleta.map(funnel => (<SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>))}</SelectContent>
                             </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between rounded-md border p-3">
                             <div>
-                                <Label htmlFor="validFrom">Válida a partir de</Label>
-                                <Input id="validFrom" type="datetime-local" value={formData.validFrom || ''} onChange={(e) => setFormData(prev => ({ ...prev, validFrom: e.target.value }))} />
+                                <Label htmlFor="constante">Roleta constante (24h)</Label>
+                                <p className="text-xs text-muted-foreground">Desligue para definir um período de validade (data/hora de início e fim)</p>
                             </div>
-                            <div>
-                                <Label htmlFor="validUntil">Válida até</Label>
-                                <Input id="validUntil" type="datetime-local" value={formData.validUntil || ''} onChange={(e) => setFormData(prev => ({ ...prev, validUntil: e.target.value }))} />
-                            </div>
+                            <Switch id="constante" checked={formData.constante} onCheckedChange={(checked) => setFormData(prev => ({ ...prev, constante: checked }))} />
                         </div>
+                        {!formData.constante && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label htmlFor="validFrom">Válida a partir de</Label>
+                                    <Input id="validFrom" type="datetime-local" value={formData.validFrom || ''} onChange={(e) => setFormData(prev => ({ ...prev, validFrom: e.target.value }))} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="validUntil">Válida até</Label>
+                                    <Input id="validUntil" type="datetime-local" value={formData.validUntil || ''} onChange={(e) => setFormData(prev => ({ ...prev, validUntil: e.target.value }))} />
+                                </div>
+                            </div>
+                        )}
                         <div>
                             <Label>Participantes</Label>
                             <div className="mt-2 space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
@@ -1213,16 +1248,25 @@ export default function RoletaPage() {
                                 <SelectContent>{funnelsForRoleta.map(funnel => (<SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>))}</SelectContent>
                             </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between rounded-md border p-3">
                             <div>
-                                <Label htmlFor="edit_validFrom">Válida a partir de</Label>
-                                <Input id="edit_validFrom" type="datetime-local" value={formData.validFrom || ''} onChange={(e) => setFormData(prev => ({ ...prev, validFrom: e.target.value }))} />
+                                <Label htmlFor="edit_constante">Roleta constante (24h)</Label>
+                                <p className="text-xs text-muted-foreground">Desligue para definir um período de validade (data/hora de início e fim)</p>
                             </div>
-                            <div>
-                                <Label htmlFor="edit_validUntil">Válida até</Label>
-                                <Input id="edit_validUntil" type="datetime-local" value={formData.validUntil || ''} onChange={(e) => setFormData(prev => ({ ...prev, validUntil: e.target.value }))} />
-                            </div>
+                            <Switch id="edit_constante" checked={formData.constante} onCheckedChange={(checked) => setFormData(prev => ({ ...prev, constante: checked }))} />
                         </div>
+                        {!formData.constante && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label htmlFor="edit_validFrom">Válida a partir de</Label>
+                                    <Input id="edit_validFrom" type="datetime-local" value={formData.validFrom || ''} onChange={(e) => setFormData(prev => ({ ...prev, validFrom: e.target.value }))} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="edit_validUntil">Válida até</Label>
+                                    <Input id="edit_validUntil" type="datetime-local" value={formData.validUntil || ''} onChange={(e) => setFormData(prev => ({ ...prev, validUntil: e.target.value }))} />
+                                </div>
+                            </div>
+                        )}
                         <div>
                             <Label>Participantes</Label>
                             <div className="mt-2 space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">

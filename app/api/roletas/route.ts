@@ -1,39 +1,74 @@
 // app/api/roletas/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 
 // GET: Busca todas as roletas e os corretores associados
-export async function GET() {
+// ?status=active filtra apenas roletas ativas e dentro do período de validade (ou constantes, sem período definido)
+export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Corrigido: Usando leadRoulette em vez de roleta ou clientRoulette
+    const onlyActive = request.nextUrl.searchParams.get('status') === 'active';
+    const now = new Date();
+
     const roletas = await prisma.leadRoulette.findMany({
+      where: onlyActive
+        ? {
+            isActive: true,
+            AND: [
+              { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
+              { OR: [{ validUntil: null }, { validUntil: { gte: now } }] },
+            ],
+          }
+        : undefined,
       include: {
         funnel: { select: { id: true, name: true } },
-        users: { // Corrigido: Nome da relação no novo schema
+        users: {
           include: {
             user: {
-              select: { id: true, name: true }
-            }
+              select: { id: true, name: true, email: true, role: true },
+            },
           },
         },
       },
-      orderBy: { name: 'asc' } // Corrigido: Usando name em vez de nome
+      orderBy: { name: 'asc' },
     });
 
-    // Formata os dados para o frontend (opcional, dependendo de como sua tela espera)
-    const formattedRoletas = roletas.map(roleta => ({
-      ...roleta,
-      corretores: roleta.users.map(u => ({
-        id: u.userId,
-        nome: u.user.name // Mapeia name de volta para nome se a sua tela pedir 'nome'
-      }))
+    // Conta quantos leads cada corretor recebeu através do funil desta roleta
+    const leadCounts = await prisma.client.groupBy({
+      by: ['brokerId', 'funnelId'],
+      where: {
+        funnelId: { in: roletas.map((r) => r.funnelId).filter((id): id is string => !!id) },
+      },
+      _count: { _all: true },
+    });
+    const leadCountKey = (brokerId: string, funnelId: string) => `${brokerId}::${funnelId}`;
+    const leadCountMap = new Map(leadCounts.map((c) => [leadCountKey(c.brokerId, c.funnelId!), c._count._all]));
+
+    // Formata os dados no formato que a tela espera
+    const formattedRoletas = roletas.map((roleta) => ({
+      id: roleta.id,
+      name: roleta.name,
+      ativa: roleta.isActive,
+      validFrom: roleta.validFrom,
+      validUntil: roleta.validUntil,
+      last_assigned_index: roleta.lastAssignedIndex,
+      funnelId: roleta.funnelId,
+      funnel: roleta.funnel,
+      createdAt: roleta.createdAt,
+      usuarios: roleta.users.map((u) => ({
+        id: u.user.id,
+        name: u.user.name,
+        email: u.user.email,
+        role: u.user.role,
+        lastAssignedAt: u.lastAssignedAt,
+        leadCount: roleta.funnelId ? leadCountMap.get(leadCountKey(u.user.id, roleta.funnelId)) ?? 0 : 0,
+      })),
     }));
 
     return NextResponse.json(formattedRoletas, {
@@ -52,24 +87,24 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { name, funnelId, userIds } = body;
+    const { name, funnelId, userIds, usuarios, validFrom, validUntil } = body;
+    const ids: string[] = userIds ?? usuarios ?? [];
 
-    // if (!name || !userIds || !Array.isArray(userIds)) { // Original validation, keeping it commented out for now
-    //   return NextResponse.json(
-    //     { error: 'Nome e pelo menos um usuário são obrigatórios.' },
-    //     { status: 400 }
-    //   );
-    // }
+    if (!name || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json(
+        { error: 'Nome e pelo menos um usuário são obrigatórios.' },
+        { status: 400 }
+      );
+    }
 
-    // Corrigido: Usando leadRoulette em vez de roleta ou clientRoulette
     const newRoleta = await prisma.leadRoulette.create({
       data: {
         name,
-        funnelId,
+        funnelId: funnelId || null,
+        validFrom: validFrom ? new Date(validFrom) : null,
+        validUntil: validUntil ? new Date(validUntil) : null,
         users: {
-          create: userIds.map((id: string) => ({
-            userId: id
-          })),
+          create: ids.map((id: string) => ({ userId: id })),
         },
       },
     });

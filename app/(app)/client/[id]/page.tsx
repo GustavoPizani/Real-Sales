@@ -74,7 +74,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [funnels, setFunnels] = useState<any[]>([]); // Alterado de funnelStages para funnels
   const [users, setUsers] = useState<Usuario[]>([]);
   const [lostReasons, setLostReasons] = useState<any[]>([]);
-  const [activeRoletas, setActiveRoletas] = useState<any[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -107,9 +106,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [isCompleteTaskDialogOpen, setIsCompleteTaskDialogOpen] = useState(false);
   const [taskToComplete, setTaskToComplete] = useState<Tarefa | null>(null);
   const [completionComment, setCompletionComment] = useState("");
-  // ✅ --- ESTADOS PARA QUALIFICAÇÃO ---
-  const [isQualifyModalOpen, setIsQualifyModalOpen] = useState(false);
-  const [targetRoletaId, setTargetRoletaId] = useState<string>('');
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   // ✅ --- ESTADOS PARA EDIÇÃO DE NOTAS ---
   const [editingNote, setEditingNote] = useState<Nota | null>(null);
@@ -188,12 +184,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   // --- Funções de Busca e Atualização de Dados ---
-  const isInPreSalesFunnel = useMemo(() => {
-    if (!client || !client.funnel) return false;
-    return client.funnel.name === 'Pré-Vendas';
-  }, [client]);
-
-
   const refreshClient = useCallback(async () => {
     if (!clientId) return;
     try {
@@ -217,14 +207,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     if (!clientId) return;
     setLoading(true);
     try {
-      const [clientRes, funnelsRes, reasonsRes, propertiesRes, usersRes, tagsRes, roletasRes] = await Promise.all([
+      const [clientRes, funnelsRes, reasonsRes, propertiesRes, usersRes, tagsRes] = await Promise.all([
         fetch(`/api/clients/${clientId}`),
         cachedFetch('/api/funnels'),
         cachedFetch('/api/lost-reasons'),
         cachedFetch('/api/properties'),
         cachedFetch('/api/users'),
         cachedFetch('/api/tags'),
-        cachedFetch('/api/roletas?status=active'),
       ]);
 
       if (!clientRes.ok) throw new Error("Cliente não encontrado ou erro na API");
@@ -235,13 +224,11 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       const propertiesData = await propertiesRes.json();
       const usersData = await usersRes.json();
       const tagsData = await tagsRes.json();
-      const roletasData = await roletasRes.json();
 
       setClient(clientData.client);
       setUsers(usersData.users || []);
       setFunnels(Array.isArray(funnelsData) ? funnelsData : funnelsData.funnels ?? []);
       setLostReasons(reasonsData.reasons || []);
-      setActiveRoletas(roletasData || []);
       setProperties(propertiesData || []);
       setAllTags(tagsData.tags || []);
 
@@ -565,29 +552,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     if (success) { setIsFunnelDialogOpen(false); }
   };
 
-  const handleQualifyClient = async () => {
-    if (!targetRoletaId) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, selecione uma roleta de destino.' });
-      return;
-    }
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`/api/clients/${clientId}/transition`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ roletaId: targetRoletaId }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Falha ao qualificar o cliente.');
-      }
-      toast({ title: 'Sucesso!', description: 'Cliente qualificado e movido para o novo funil.' });
-      setIsQualifyModalOpen(false);
-      fetchData(); // Re-busca os dados para atualizar a UI
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Erro na Qualificação', description: error.message });
-    }
-  };
   const handleAddNote = async (content: string) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -884,12 +848,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <TabsContent value="actions" className="mt-4">
                 <Card>
                   <CardContent className="pt-6 space-y-2">
-                    {isInPreSalesFunnel && (
-                      <Button variant="outline" className="w-full justify-start text-green-600 hover:text-green-700" onClick={() => setIsQualifyModalOpen(true)}>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Qualificar
-                      </Button>
-                    )}
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsDocumentsModalOpen(true)}>
                       <FileText className="h-4 w-4 mr-2" />
                       Documentação
@@ -1175,14 +1133,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           <Card>
             <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {isInPreSalesFunnel && (
-                <>
-                  <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setIsQualifyModalOpen(true)}>
-                    <CheckCircle className="h-4 w-4 mr-2" />Qualificar e Avançar
-                  </Button>
-                  <Separator />
-                </>
-              )}
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
@@ -1414,25 +1364,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ --- MODAL DE QUALIFICAÇÃO --- ✅ */}
-      <Dialog open={isQualifyModalOpen} onOpenChange={setIsQualifyModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Qualificar e Enviar para Roleta</DialogTitle>
-            <DialogDescription>Selecione a roleta que fará a distribuição deste lead.</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="target-roleta">Roleta de Destino</Label>
-            <Select value={targetRoletaId} onValueChange={setTargetRoletaId}>
-              <SelectTrigger id="target-roleta"><SelectValue placeholder="Selecione uma roleta..." /></SelectTrigger>
-              <SelectContent>
-                {activeRoletas.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsQualifyModalOpen(false)}>Cancelar</Button><Button onClick={handleQualifyClient} disabled={!targetRoletaId}>Confirmar e Enviar</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
       {/* ✅ --- MODAL DE EDIÇÃO DE NOTA --- ✅ */}
       <Dialog open={isEditNoteDialogOpen} onOpenChange={setIsEditNoteDialogOpen}>
         <DialogContent>

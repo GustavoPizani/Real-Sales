@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Facebook, Plus, Trash2, RefreshCw, CheckCircle2, Zap, Copy, Check, ChevronsUpDown, DatabaseZap } from "lucide-react"
+import { Loader2, Facebook, Plus, Trash2, RefreshCw, CheckCircle2, Zap, Copy, Check, ChevronsUpDown, DatabaseZap, Pencil } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -54,11 +54,28 @@ interface Mapping {
   funnel?: { name: string } | null
   funnelStage?: { name: string } | null
   defaultBroker?: { name: string } | null
+  roulette?: { name: string } | null
+  propertyId?: string | null
+  roletaId?: string | null
+  funnelId: string
+  funnelStageId: string
+  defaultBrokerId?: string | null
   agencia?: string | null
   praca?: string | null
   isActive: boolean
   leadCount: number
   lastSyncedAt?: string | null
+}
+
+const EMPTY_EDIT_FORM = {
+  propertyId: "",
+  roletaId: "",
+  funnelId: "",
+  funnelStageId: "",
+  defaultBrokerId: "",
+  agencia: "",
+  praca: "",
+  isActive: true,
 }
 
 interface FormQuestion {
@@ -132,8 +149,16 @@ export default function IntegrationsPage() {
 
   const [formData, setFormData] = useState(EMPTY_FORM)
 
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingMappingId, setEditingMappingId] = useState<string | null>(null)
+  const [editFormData, setEditFormData] = useState(EMPTY_EDIT_FORM)
+  const [savingEdit, setSavingEdit] = useState(false)
+
   const selectedFunnel = funnels.find((f) => f.id === formData.funnelId)
   const funnelStages = selectedFunnel?.stages ?? []
+
+  const selectedEditFunnel = funnels.find((f) => f.id === editFormData.funnelId)
+  const editFunnelStages = selectedEditFunnel?.stages ?? []
 
   const fetchCrmData = useCallback(async () => {
     const [fRes, pRes, rRes, uRes, mRes] = await Promise.all([
@@ -289,6 +314,10 @@ export default function IntegrationsPage() {
       toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios", description: "Página, Formulário, Funil e Etapa são obrigatórios." })
       return
     }
+    if (!formData.roletaId && !formData.defaultBrokerId) {
+      toast({ variant: "destructive", title: "Selecione um Corretor Padrão ou uma Roleta", description: "Sem um dos dois, os leads deste formulário serão rejeitados (sem corretor para atribuir)." })
+      return
+    }
     setSavingMapping(true)
     try {
       const res = await fetch("/api/facebook/mappings", {
@@ -377,6 +406,59 @@ export default function IntegrationsPage() {
     await fetch(`/api/facebook/mappings/${id}`, { method: "DELETE" })
     toast({ title: "Mapeamento removido" })
     await fetchCrmData()
+  }
+
+  const openEditDialog = (m: Mapping) => {
+    setEditingMappingId(m.id)
+    setEditFormData({
+      propertyId: m.propertyId ?? "",
+      roletaId: m.roletaId ?? "",
+      funnelId: m.funnelId ?? "",
+      funnelStageId: m.funnelStageId ?? "",
+      defaultBrokerId: m.defaultBrokerId ?? "",
+      agencia: m.agencia ?? "",
+      praca: m.praca ?? "",
+      isActive: m.isActive,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateMapping = async () => {
+    if (!editingMappingId) return
+    if (!editFormData.funnelId || !editFormData.funnelStageId) {
+      toast({ variant: "destructive", title: "Funil e Etapa são obrigatórios" })
+      return
+    }
+    if (!editFormData.roletaId && !editFormData.defaultBrokerId) {
+      toast({ variant: "destructive", title: "Selecione um Corretor Padrão ou uma Roleta", description: "Sem um dos dois, os leads deste formulário serão rejeitados (sem corretor para atribuir)." })
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/facebook/mappings/${editingMappingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: editFormData.propertyId || null,
+          roletaId: editFormData.roletaId || null,
+          funnelId: editFormData.funnelId,
+          funnelStageId: editFormData.funnelStageId,
+          defaultBrokerId: editFormData.defaultBrokerId || null,
+          agencia: editFormData.agencia || null,
+          praca: editFormData.praca || null,
+          isActive: editFormData.isActive,
+        }),
+      })
+      if (!res.ok) throw new Error("Falha ao salvar")
+      toast({ title: "Mapeamento atualizado!" })
+      setIsEditDialogOpen(false)
+      setEditingMappingId(null)
+      await fetchCrmData()
+    } catch {
+      toast({ variant: "destructive", title: "Erro ao atualizar mapeamento" })
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   const handleActivatePush = async () => {
@@ -551,6 +633,7 @@ export default function IntegrationsPage() {
                       {m.funnel && <Badge variant="outline" className="text-xs">{m.funnel.name}</Badge>}
                       {m.funnelStage && <Badge variant="outline" className="text-xs">{m.funnelStage.name}</Badge>}
                       {m.defaultBroker && <Badge variant="outline" className="text-xs">{m.defaultBroker.name}</Badge>}
+                      {m.roulette && <Badge variant="outline" className="text-xs">🔄 {m.roulette.name}</Badge>}
                       {m.agencia && <Badge variant="outline" className="text-xs">{m.agencia}</Badge>}
                       {m.praca && <Badge variant="outline" className="text-xs">{m.praca}</Badge>}
                     </div>
@@ -568,6 +651,10 @@ export default function IntegrationsPage() {
                     <Button variant="outline" size="sm" disabled={syncingId === m.id || fullSyncingId === m.id} onClick={() => handleFullSync(m.id, m.formName)} title="Sync completo — busca todos os leads históricos">
                       {fullSyncingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <DatabaseZap className="h-3 w-3" />}
                       <span className="ml-1.5 text-xs sm:hidden">Sync Completo</span>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openEditDialog(m)} title="Editar roteamento">
+                      <Pencil className="h-3 w-3" />
+                      <span className="ml-1.5 text-xs sm:hidden">Editar</span>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id)}>
                       <Trash2 className="h-3 w-3 text-destructive" />
@@ -876,6 +963,98 @@ export default function IntegrationsPage() {
             <Button onClick={handleSave} disabled={savingMapping}>
               {savingMapping && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Salvar Mapeamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar Roteamento do Mapeamento */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Roteamento</DialogTitle>
+            <DialogDescription>Altere para onde os leads deste formulário são enviados — corretor fixo ou rodízio.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Empreendimento</Label>
+              <Select value={editFormData.propertyId || "__none__"} onValueChange={(v) => setEditFormData((p) => ({ ...p, propertyId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum</SelectItem>
+                  {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Rodízio</Label>
+              <Select value={editFormData.roletaId || "__none__"} onValueChange={(v) => setEditFormData((p) => ({ ...p, roletaId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum</SelectItem>
+                  {roulettes.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Funil <span className="text-destructive">*</span></Label>
+              <Select value={editFormData.funnelId} onValueChange={(v) => setEditFormData((p) => ({ ...p, funnelId: v, funnelStageId: "" }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione um funil" /></SelectTrigger>
+                <SelectContent>
+                  {funnels.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Etapa de Entrada <span className="text-destructive">*</span></Label>
+              <Select value={editFormData.funnelStageId} onValueChange={(v) => setEditFormData((p) => ({ ...p, funnelStageId: v }))} disabled={!editFormData.funnelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={!editFormData.funnelId ? "Selecione um funil primeiro" : "Selecione uma etapa"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {editFunnelStages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Corretor Padrão</Label>
+              <Select value={editFormData.defaultBrokerId || "__none__"} onValueChange={(v) => setEditFormData((p) => ({ ...p, defaultBrokerId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Nenhum (usa rodízio)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum (usa rodízio)</SelectItem>
+                  {brokers.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Preencha um corretor fixo OU um rodízio — não os dois. O corretor fixo tem prioridade se ambos estiverem definidos.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Agência</Label>
+                <Input placeholder="Nome da agência" value={editFormData.agencia} onChange={(e) => setEditFormData((p) => ({ ...p, agencia: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Praça</Label>
+                <Input placeholder="Ex: São Paulo" value={editFormData.praca} onChange={(e) => setEditFormData((p) => ({ ...p, praca: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
+              <Checkbox id="editIsActive" checked={editFormData.isActive} onCheckedChange={(v) => setEditFormData((p) => ({ ...p, isActive: !!v }))} />
+              <label htmlFor="editIsActive" className="text-sm font-medium cursor-pointer">Mapeamento ativo</label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleUpdateMapping} disabled={savingEdit}>
+              {savingEdit && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>

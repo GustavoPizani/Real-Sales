@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "lead_roulettes" ADD COLUMN "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

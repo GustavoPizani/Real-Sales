@@ -156,7 +156,7 @@ export async function ingestLead(
 
   const broker = await prisma.user.findUnique({
     where: { id: brokerId },
-    select: { name: true, accountId: true, slackMemberId: true },
+    select: { name: true, accountId: true, slackWebhookUrl: true },
   })
 
   // Lê mensagem de primeiro contato configurada pelo usuário
@@ -194,7 +194,7 @@ export async function ingestLead(
       phone,
       email,
       brokerName: broker?.name ?? 'Corretor',
-      brokerSlackMemberId: broker?.slackMemberId,
+      brokerWebhookUrl: broker?.slackWebhookUrl,
       campaignSource: campaign,
       hasSdrAgent,
       firstMessage,

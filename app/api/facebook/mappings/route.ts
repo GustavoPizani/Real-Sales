@@ -28,7 +28,19 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
   })
 
-  return NextResponse.json({ mappings })
+  // roletaId não tem relação declarada no schema (é uma referência solta) — busca os nomes à parte
+  const roletaIds = Array.from(new Set(mappings.map((m) => m.roletaId).filter((id): id is string => !!id)))
+  const roulettes = roletaIds.length
+    ? await prisma.leadRoulette.findMany({ where: { id: { in: roletaIds } }, select: { id: true, name: true } })
+    : []
+  const rouletteById = new Map(roulettes.map((r) => [r.id, r]))
+
+  const mappingsWithRoulette = mappings.map((m) => ({
+    ...m,
+    roulette: m.roletaId ? rouletteById.get(m.roletaId) ?? null : null,
+  }))
+
+  return NextResponse.json({ mappings: mappingsWithRoulette })
 }
 
 export async function POST(request: NextRequest) {

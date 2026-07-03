@@ -14,7 +14,7 @@ interface SlackUser {
   name: string
   email: string
   role: string
-  slackMemberId: string | null
+  slackWebhookUrl: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -29,13 +29,13 @@ const DEFAULT_MESSAGE = "Olá {{nome}}! 👋 Sou {{corretor}} da Nordic.\nVi que
 export default function SlackConfigPage() {
   const { toast } = useToast()
   const [users, setUsers] = useState<SlackUser[]>([])
-  const [slackIds, setSlackIds] = useState<Record<string, string>>({})
+  const [slackWebhooks, setSlackWebhooks] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [firstMessage, setFirstMessage] = useState("")
   const [savingMsg, setSavingMsg] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
-  const [slackStatus, setSlackStatus] = useState({ webhookConfigured: false, botTokenConfigured: false })
+  const [slackStatus, setSlackStatus] = useState({ webhookConfigured: false })
   const msgRef = useRef<HTMLTextAreaElement>(null)
 
   const insertVariable = (variable: string) => {
@@ -59,9 +59,11 @@ export default function SlackConfigPage() {
       if (!res.ok) throw new Error("Falha ao carregar usuários")
       const { users: data } = await res.json()
       setUsers(data)
-      const ids: Record<string, string> = {}
-      data.forEach((u: SlackUser) => { ids[u.id] = u.slackMemberId ?? "" })
-      setSlackIds(ids)
+      const webhooks: Record<string, string> = {}
+      data.forEach((u: SlackUser) => {
+        webhooks[u.id] = u.slackWebhookUrl ?? ""
+      })
+      setSlackWebhooks(webhooks)
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" })
     } finally {
@@ -122,10 +124,13 @@ export default function SlackConfigPage() {
       const res = await fetch("/api/users/slack", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, slackMemberId: slackIds[userId] || null }),
+        body: JSON.stringify({
+          userId,
+          slackWebhookUrl: slackWebhooks[userId] || null,
+        }),
       })
       if (!res.ok) throw new Error("Falha ao salvar")
-      toast({ title: "Salvo", description: "Slack Member ID atualizado." })
+      toast({ title: "Salvo", description: "Canal do Slack atualizado." })
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" })
     } finally {
@@ -159,14 +164,6 @@ export default function SlackConfigPage() {
             ok={slackStatus.webhookConfigured}
             okText="Configurado"
             failText="Adicionar na Vercel → SLACK_LEAD_WEBHOOK_URL"
-          />
-          <StatusRow
-            label="Bot Token (SLACK_BOT_TOKEN)"
-            description="Necessário para enviar DMs diretas aos corretores"
-            ok={slackStatus.botTokenConfigured}
-            okText="Configurado"
-            failText="Adicionar na Vercel → SLACK_BOT_TOKEN (scope: chat:write)"
-            warn
           />
         </CardContent>
       </Card>
@@ -229,13 +226,13 @@ export default function SlackConfigPage() {
         </CardContent>
       </Card>
 
-      {/* Slack Member ID por corretor */}
+      {/* Canal por corretor */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Slack Member ID por Corretor</CardTitle>
+          <CardTitle className="text-base">Canal do Slack por Corretor</CardTitle>
           <CardDescription>
-            Quando um lead é atribuído, o corretor recebe uma DM direta no Slack além do canal geral.
-            Para encontrar o Member ID: clique no perfil do usuário no Slack → <code className="text-xs bg-muted px-1 rounded">···</code> → <strong>Copy member ID</strong>.
+            Quando um lead é atribuído a este corretor, a notificação vai para o <strong>canal dele</strong> (Webhook URL),
+            além do canal geral.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -257,26 +254,24 @@ export default function SlackConfigPage() {
                     </span>
                   </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{u.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                  {/* Info + Input */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{u.name}</p>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
                         {ROLE_LABELS[u.role] ?? u.role}
                       </Badge>
-                      {u.slackMemberId && (
+                      {u.slackWebhookUrl && (
                         <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                       )}
                     </div>
+                    <Input
+                      value={slackWebhooks[u.id] ?? ""}
+                      onChange={(e) => setSlackWebhooks((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                      placeholder="https://hooks.slack.com/services/..."
+                      className="h-9 font-mono text-xs"
+                    />
                   </div>
-
-                  {/* Input */}
-                  <Input
-                    value={slackIds[u.id] ?? ""}
-                    onChange={(e) => setSlackIds((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                    placeholder="U0123456789"
-                    className="w-40 h-9 font-mono text-sm"
-                  />
 
                   {/* Save */}
                   <Button
@@ -300,14 +295,15 @@ export default function SlackConfigPage() {
       {/* Instruções */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Como configurar o Bot Token</CardTitle>
+          <CardTitle className="text-base">Como criar o canal e o Webhook de cada corretor</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>1. Acesse <strong>api.slack.com/apps</strong> → selecione o app Nordic CRM</p>
-          <p>2. Em <strong>OAuth & Permissions</strong>, adicione o scope <code className="bg-muted px-1 rounded">chat:write</code></p>
-          <p>3. Clique em <strong>Install to Workspace</strong> e autorize</p>
-          <p>4. Copie o <strong>Bot User OAuth Token</strong> (começa com <code className="bg-muted px-1 rounded">xoxb-</code>)</p>
-          <p>5. Adicione na Vercel como variável de ambiente <code className="bg-muted px-1 rounded">SLACK_BOT_TOKEN</code></p>
+          <p>1. No Slack, crie um canal para o corretor (ex: <code className="bg-muted px-1 rounded">#leads-joao</code>)</p>
+          <p>2. Acesse <strong>api.slack.com/apps</strong> → selecione (ou crie) o app do CRM</p>
+          <p>3. Em <strong>Incoming Webhooks</strong>, ative a opção e clique em <strong>Add New Webhook to Workspace</strong></p>
+          <p>4. Escolha o canal criado no passo 1 e autorize</p>
+          <p>5. Copie a URL gerada (começa com <code className="bg-muted px-1 rounded">https://hooks.slack.com/services/...</code>) e cole no campo acima, no corretor correspondente</p>
+          <p>6. Repita para cada corretor — cada um pode ter seu próprio canal e Webhook</p>
         </CardContent>
       </Card>
     </div>

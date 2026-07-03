@@ -94,7 +94,7 @@ export async function sendSlackLeadNotification({
   phone,
   email,
   brokerName,
-  brokerSlackMemberId,
+  brokerWebhookUrl,
   campaignSource,
   hasSdrAgent = false,
   firstMessage,
@@ -104,13 +104,12 @@ export async function sendSlackLeadNotification({
   phone?: string | null
   email?: string | null
   brokerName: string
-  brokerSlackMemberId?: string | null
+  brokerWebhookUrl?: string | null
   campaignSource?: string | null
   hasSdrAgent?: boolean
   firstMessage?: string | null
 }) {
   const webhookUrl = process.env.SLACK_LEAD_WEBHOOK_URL
-  const botToken = process.env.SLACK_BOT_TOKEN
   const appUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
     process.env.NEXT_PUBLIC_APP_URL ??
@@ -136,12 +135,9 @@ export async function sendSlackLeadNotification({
     await post(webhookUrl, { blocks })
   }
 
-  if (botToken && brokerSlackMemberId) {
-    await post('https://slack.com/api/chat.postMessage', {
-      channel: brokerSlackMemberId,
-      blocks,
-      text: `🔔 Novo lead: ${clientName}`,
-    }, botToken)
+  // Canal próprio do corretor (Incoming Webhook configurado nas suas configurações)
+  if (brokerWebhookUrl) {
+    await post(brokerWebhookUrl, { blocks })
   }
 }
 
