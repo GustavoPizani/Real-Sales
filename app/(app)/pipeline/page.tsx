@@ -29,6 +29,7 @@ import { cachedFetch } from "@/lib/api-cache";
 import { DateRange } from "react-day-picker";
 import { useMobileHeader } from "@/contexts/mobile-header-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // --- Tipos ---
 interface Funnel {
@@ -202,6 +203,40 @@ function FunnelColumn({ stage, clients }: { stage: FunnelStage; clients: Cliente
 
 const LAST_FUNNEL_STORAGE_KEY = 'pipeline:lastFunnelId';
 
+function PipelineSkeleton() {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="p-4 border-b bg-card flex-shrink-0 flex items-center justify-between">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-9 w-32" />
+      </div>
+      {/* Barra de filtros */}
+      <div className="p-4 border-b bg-card flex-shrink-0 flex gap-3">
+        <Skeleton className="h-9 w-56" />
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="h-9 w-32" />
+      </div>
+      {/* Colunas do funil */}
+      <div className="flex-1 overflow-x-auto p-4 flex gap-4">
+        {Array.from({ length: 4 }).map((_, colIdx) => (
+          <div key={colIdx} className="flex flex-col w-72 flex-shrink-0 gap-3">
+            <Skeleton className="h-6 w-32" />
+            {Array.from({ length: 3 }).map((_, cardIdx) => (
+              <div key={cardIdx} className="p-3 rounded-lg border border-border bg-card space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // --- Componente Principal da Página ---
 export default function PipelinePage() {
   const { user } = useAuth();
@@ -328,7 +363,11 @@ export default function PipelinePage() {
     return setting ? setting.isActive : true;
   }, [roleSettings]);
 
-  const managers = useMemo(() => brokers.filter(b => b.role === Role.MANAGER), [brokers]);
+  // "Gerente" não é mais um cargo — um corretor entra na lista de equipes se supervisiona outros corretores
+  const managers = useMemo(() => {
+    const supervisorIds = new Set(brokers.map(b => b.supervisorId).filter((id): id is string => !!id));
+    return brokers.filter(b => supervisorIds.has(b.id));
+  }, [brokers]);
 
   const filteredClients = useMemo(() => {
     // Brokers da equipe do gerente selecionado
@@ -530,7 +569,7 @@ export default function PipelinePage() {
     }
   };
 
-  if (loading) return <p className="p-6">Carregando pipeline...</p>;
+  if (loading) return <PipelineSkeleton />;
 
   const DateFilter = ({ inModal = false }: { inModal?: boolean }) => {
     const activeRange = inModal ? pendingDateRange : filters.dateRange;
@@ -660,7 +699,7 @@ export default function PipelinePage() {
         </SelectContent>
       </Select>
       <DateFilter inModal={inModal} />
-      {isRoleActive('MANAGER') && managers.length > 0 && (
+      {managers.length > 0 && (
         <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
           <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
           <SelectContent>
@@ -774,7 +813,7 @@ export default function PipelinePage() {
                             </div>
                           ) : null;
                         })()}
-                        {isRoleActive('BROKER') && user && ['MARKETING_ADMIN', 'DIRECTOR', 'MANAGER'].includes(user.role as Role) && (
+                        {isRoleActive('BROKER') && user && user.role === Role.MARKETING_ADMIN && (
                           <div>
                             <Label htmlFor="broker">Corretor Responsável</Label>
                             <Select

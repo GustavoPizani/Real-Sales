@@ -23,16 +23,10 @@ export async function GET(request: NextRequest) {
     };
 
     // Lógica de permissão por cargo (mantida)
-    if (user.role === Role.MANAGER) {
-      const subordinateIds = (await prisma.user.findMany({
-        where: { supervisorId: user.id },
-        select: { id: true }
-      })).map(u => u.id);
-      where.brokerId = { in: [user.id, ...subordinateIds] };
-    } else if (user.role === Role.BROKER) {
+    if (user.role === Role.BROKER) {
       where.brokerId = user.id;
     }
-    // Super Admins e outros cargos sem filtro específico veem todos os clientes DENTRO DO SEU TENANT.
+    // Marketing Admins veem todos os clientes DENTRO DO SEU TENANT.
 
     const clients = await prisma.client.findMany({
       where,

@@ -6,24 +6,6 @@ import { subDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
-async function getSubordinateIds(userId: string): Promise<string[]> {
-  let idsToProcess = [userId];
-  const allSubordinateIds = new Set<string>();
-
-  while (idsToProcess.length > 0) {
-    const currentLevelIds = await prisma.user.findMany({
-      where: { supervisorId: { in: idsToProcess } },
-      select: { id: true },
-    });
-    const newIds = currentLevelIds.map(u => u.id);
-    if (newIds.length === 0) break;
-    newIds.forEach(id => allSubordinateIds.add(id));
-    idsToProcess = newIds;
-  }
-
-  return Array.from(allSubordinateIds);
-}
-
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromToken(request);
@@ -31,11 +13,7 @@ export async function GET(request: NextRequest) {
 
     let userIdsForFilter: string[] = [];
     if (user.role !== Role.MARKETING_ADMIN) {
-      if (user.role === Role.DIRECTOR || user.role === Role.MANAGER) {
-        userIdsForFilter = [user.id, ...(await getSubordinateIds(user.id))];
-      } else {
-        userIdsForFilter = [user.id];
-      }
+      userIdsForFilter = [user.id];
     }
 
     const tenantWhere: Prisma.ClientWhereInput = {

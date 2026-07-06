@@ -28,21 +28,8 @@ export async function GET(request: NextRequest) {
           some: { assignedToId: user.id },
         },
       };
-    } else if (user.role === Role.MANAGER) {
-      // Gerentes veem campanhas que eles criaram ou que foram atribuídas à sua equipe
-      const subordinateIds = (await prisma.user.findMany({
-        where: { superiorId: user.id },
-        select: { id: true },
-      })).map(u => u.id);
-
-      whereClause = {
-        OR: [
-          { createdById: user.id },
-          { clients: { some: { assignedToId: { in: [user.id, ...subordinateIds] } } } },
-        ],
-      };
     }
-    // Diretores e Admins veem tudo
+    // Admins veem tudo
 
     const activeOffers = await prisma.activeOffer.findMany({
       where: whereClause,
@@ -137,10 +124,10 @@ export async function POST(request: NextRequest) {
 
         if (source === 'meus_clientes') {
             clientWhereClause.proprietarioId = user.id;
-        } else if (source === 'equipe' && [Role.MANAGER, Role.DIRECTOR, Role.MARKETING_ADMIN].includes(user.role)) {
+        } else if (source === 'equipe' && user.role === Role.MARKETING_ADMIN) {
             const subordinateIds = (await prisma.user.findMany({ where: { superiorId: user.id }, select: { id: true } })).map(u => u.id);
             clientWhereClause.proprietarioId = { in: [user.id, ...subordinateIds] };
-        } else if (source === 'sem_proprietario' && [Role.DIRECTOR, Role.MARKETING_ADMIN].includes(user.role)) {
+        } else if (source === 'sem_proprietario' && user.role === Role.MARKETING_ADMIN) {
             clientWhereClause.proprietarioId = null;
         } else {
             return NextResponse.json({ error: 'Permissão negada para esta fonte de clientes.' }, { status: 403 });

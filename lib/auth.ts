@@ -51,7 +51,7 @@ export async function getUserFromToken(request?: NextRequest): Promise<UserPaylo
     // 4. Retornar o Payload consolidado
     return {
       ...userProfile,
-      isSuperAdmin: userProfile.role === Role.MARKETING_ADMIN || userProfile.role === Role.DIRECTOR,
+      isSuperAdmin: userProfile.role === Role.MARKETING_ADMIN,
     };
   } catch (error: any) {
     console.error(`[AUTH] Unexpected error: ${error.message}`);

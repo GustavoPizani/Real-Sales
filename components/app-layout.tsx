@@ -1,12 +1,12 @@
 // components/app-layout.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Navigation } from "./navigation";
 import { MobileHeader } from "./mobile-header";
 import { NotificationBell } from "./notification-bell";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMobileHeader } from "@/contexts/mobile-header-context";
 
 interface AppLayoutProps {
@@ -16,25 +16,27 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { actionButton } = useMobileHeader();
+
+  // Sem sessão ativa — manda direto pro login em vez de deixar a tela em branco
+  useEffect(() => {
+    if (pathname !== "/login" && !isLoading && !user) {
+      router.replace("/login");
+    }
+  }, [pathname, isLoading, user, router]);
 
   if (pathname === "/login") {
     return <>{children}</>;
   }
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-custom"></div>
       </div>
     );
-  }
-
-  if (!user) {
-    // Idealmente, isto seria tratado por um redirect no auth-context ou middleware
-    // Mas, por segurança, retornamos null para não mostrar o layout
-    return null;
   }
 
   return (

@@ -38,11 +38,7 @@ export default function CreateOfferDialog({ open, onOpenChange, onOfferCreated }
       const response = await fetch('/api/users', { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
-        // Filtra para mostrar apenas corretores, ou a equipe do gerente
-        let userList = data.users || [];
-        if (user.role === Role.MANAGER) {
-            userList = userList.filter((u: any) => u.superiorId === user.id || u.id === user.id);
-        }
+        const userList = data.users || [];
         setBrokers(userList);
       }
     } catch (error) {
@@ -106,8 +102,8 @@ export default function CreateOfferDialog({ open, onOpenChange, onOfferCreated }
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="meus_clientes">Meus Clientes Descartados</SelectItem>
-                {(user.role === Role.MANAGER || user.role === Role.DIRECTOR || user.role === Role.MARKETING_ADMIN) && <SelectItem value="equipe">Clientes da Minha Equipe</SelectItem>}
-                {(user.role === Role.MANAGER || user.role === Role.DIRECTOR || user.role === Role.MARKETING_ADMIN) && <SelectItem value="sem_corretor">Clientes Sem Corretor</SelectItem>}
+                {user.role === Role.MARKETING_ADMIN && <SelectItem value="equipe">Clientes da Minha Equipe</SelectItem>}
+                {user.role === Role.MARKETING_ADMIN && <SelectItem value="sem_corretor">Clientes Sem Corretor</SelectItem>}
               </SelectContent>
             </Select>
           </div>

@@ -486,8 +486,6 @@ enum ContactStatus {
 
 enum Role {
   MARKETING_ADMIN
-  DIRECTOR
-  MANAGER
   BROKER
 }
 

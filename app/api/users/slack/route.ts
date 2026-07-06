@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 // Retorna todos os usuários da conta com seus slackWebhookUrl
 export async function GET() {
   const user = await getUserFromToken()
-  if (!user || !['MARKETING_ADMIN', 'DIRECTOR'].includes(user.role)) {
+  if (!user || !['MARKETING_ADMIN'].includes(user.role)) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
@@ -22,7 +22,7 @@ export async function GET() {
 // Atualiza o slackWebhookUrl (canal próprio) de um usuário
 export async function PATCH(request: NextRequest) {
   const user = await getUserFromToken()
-  if (!user || !['MARKETING_ADMIN', 'DIRECTOR'].includes(user.role)) {
+  if (!user || !['MARKETING_ADMIN'].includes(user.role)) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 

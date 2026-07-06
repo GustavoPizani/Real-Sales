@@ -19,8 +19,6 @@ interface SlackUser {
 
 const ROLE_LABELS: Record<string, string> = {
   MARKETING_ADMIN: "Marketing / Admin",
-  DIRECTOR: "Diretor",
-  MANAGER: "Gerente",
   BROKER: "Corretor",
 }
 

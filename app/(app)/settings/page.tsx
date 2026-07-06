@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Crown, Star, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -162,9 +162,6 @@ function TeamManagementTab() {
     const [loading, setLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
-    
-    // State for hierarchy form
-    const [selectedDirectorId, setSelectedDirectorId] = useState<string>('');
 
     interface UserFormData { name: string; email: string; password?: string; role: Role; supervisorId?: string | null; }
     const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.BROKER, supervisorId: null });
@@ -196,11 +193,6 @@ function TeamManagementTab() {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    const directors = users.filter(u => u.role === Role.DIRECTOR);
-    const managers = users.filter(u =>
-        u.role === Role.MANAGER &&
-        (!selectedDirectorId || u.supervisorId === selectedDirectorId)
-    );
 
 
     const openDialog = (user: User | null = null) => {
@@ -218,7 +210,6 @@ function TeamManagementTab() {
         } else {
             // Reset for new user
             setEditingUser(null);
-            setSelectedDirectorId('');
             setUserForm({ name: '', email: '', password: '', role: Role.BROKER, supervisorId: null });
         }
         setIsDialogOpen(true);
@@ -242,7 +233,6 @@ function TeamManagementTab() {
 
     const resetForm = () => {
         setUserForm({ name: '', email: '', password: '', role: Role.BROKER, supervisorId: null });
-        setSelectedDirectorId('');
         setEditingUser(null);
         setIsDialogOpen(false);
     };
@@ -253,12 +243,7 @@ function TeamManagementTab() {
         const method = editingUser ? 'PATCH' : 'POST';
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
         
-        let finalSuperiorId = null;
-        if (userForm.role === Role.BROKER) {
-            finalSuperiorId = userForm.supervisorId; // This will be the manager's ID
-        } else if (userForm.role === Role.MANAGER) {
-            finalSuperiorId = selectedDirectorId;
-        }
+        const finalSuperiorId = userForm.role === Role.BROKER ? userForm.supervisorId : null;
 
         const body = { 
             name: userForm.name,
@@ -297,8 +282,6 @@ function TeamManagementTab() {
     const getRoleIcon = (role: Role) => {
         const icons: Partial<Record<Role, React.ReactNode>> = {
             [Role.MARKETING_ADMIN]: <Shield className="h-4 w-4 text-red-600" />,
-            [Role.DIRECTOR]: <Crown className="h-4 w-4 text-purple-600" />,
-            [Role.MANAGER]: <Star className="h-4 w-4 text-blue-600" />,
             [Role.BROKER]: <UserIcon className="h-4 w-4 text-green-600" />,
         };
         return icons[role] || null;
@@ -313,7 +296,7 @@ function TeamManagementTab() {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
@@ -327,13 +310,6 @@ function TeamManagementTab() {
                         <Shield className="h-4 w-4 text-red-500" />
                     </CardHeader>
                     <CardContent><div className="text-2xl font-bold">{stats[Role.MARKETING_ADMIN] || 0}</div></CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Gerentes</CardTitle>
-                        <Star className="h-4 w-4 text-blue-500" />
-                    </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats[Role.MANAGER] || 0}</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -426,7 +402,6 @@ function TeamManagementTab() {
                             <Label htmlFor="role">Cargo</Label>
                             <Select value={userForm.role} onValueChange={(value: Role) => {
                                 setUserForm(p => ({...p, role: value, supervisorId: null}));
-                                setSelectedDirectorId('');
                             }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -442,36 +417,21 @@ function TeamManagementTab() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        
-                        {(userForm.role === Role.MANAGER || userForm.role === Role.BROKER) && roleSettings.find(r => r.roleName === 'DIRECTOR')?.isActive !== false && (
-                            <div className="space-y-2">
-                                <Label htmlFor="directorId">Diretor Responsável</Label>
-                                <Select value={selectedDirectorId} onValueChange={(value) => {
-                                    setSelectedDirectorId(value);
-                                    setUserForm(p => ({...p, supervisorId: null}));
-                                }}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione um diretor" /></SelectTrigger>
-                                    <SelectContent>
-                                        {directors.map(dir => (
-                                            <SelectItem key={dir.id} value={dir.id}>{dir.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
 
-                        {userForm.role === Role.BROKER && roleSettings.find(r => r.roleName === 'MANAGER')?.isActive !== false && (
+                        {userForm.role === Role.BROKER && (
                              <div className="space-y-2">
-                                <Label htmlFor="supervisorId">Gerente Responsável</Label>
-                                <Select 
-                                    value={userForm.supervisorId || ''} 
-                                    onValueChange={(value) => setUserForm(p => ({...p, supervisorId: value}))}
-                                    disabled={!selectedDirectorId || managers.length === 0}
+                                <Label htmlFor="supervisorId">Supervisor (opcional)</Label>
+                                <Select
+                                    value={userForm.supervisorId || '__none__'}
+                                    onValueChange={(value) => setUserForm(p => ({...p, supervisorId: value === '__none__' ? null : value}))}
                                 >
-                                    <SelectTrigger><SelectValue placeholder={!selectedDirectorId ? "Selecione um diretor primeiro" : "Selecione um gerente"} /></SelectTrigger>
+                                    <SelectTrigger><SelectValue placeholder="Selecione um supervisor" /></SelectTrigger>
                                     <SelectContent>
-                                        {managers.map(manager => (
-                                            <SelectItem key={manager.id} value={manager.id}>{manager.name}</SelectItem>
+                                        <SelectItem value="__none__">Nenhum</SelectItem>
+                                        {users
+                                            .filter(u => u.id !== editingUser?.id)
+                                            .map(u => (
+                                                <SelectItem key={u.id} value={u.id}>{u.name}{u.role === Role.MARKETING_ADMIN ? ' (Admin)' : ''}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     const where: any = {};
 
-    if (user.role === Role.BROKER || user.role === Role.MANAGER) {
+    if (user.role === Role.BROKER) {
       where.userId = user.id;
     } else if (userIdFilter) {
       where.userId = userIdFilter;
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     // Se um userId for fornecido e o usuário for admin, use esse ID.
     if (body.userId && user.role === Role.MARKETING_ADMIN) {
       targetUserId = body.userId;
-    } else if (![Role.BROKER, Role.MANAGER, Role.MARKETING_ADMIN].includes(user.role)) {
+    } else if (![Role.BROKER, Role.MARKETING_ADMIN].includes(user.role)) {
       return NextResponse.json({ error: 'Não autorizado para registar frequência' }, { status: 403 });
     }
 

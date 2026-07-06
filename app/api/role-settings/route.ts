@@ -5,8 +5,6 @@ import { getUserFromToken } from "@/lib/auth";
 const SETTING_KEY = 'ROLE_SETTINGS';
 
 const DEFAULT_SETTINGS = [
-  { roleName: 'DIRECTOR', isActive: true },
-  { roleName: 'MANAGER', isActive: true },
   { roleName: 'BROKER', isActive: true },
 ];
 

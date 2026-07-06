@@ -9,29 +9,6 @@ import { Role, ClientOverallStatus, Prisma } from '@prisma/client'
 // Força a rota a ser sempre dinâmica, resolvendo o erro de build da Vercel.
 export const dynamic = 'force-dynamic';
 
-async function getSubordinateIds(userId: string): Promise<string[]> {
-  let idsToProcess = [userId];
-  const allSubordinateIds = new Set<string>();
-
-  while (idsToProcess.length > 0) {
-    const currentLevelIds = await prisma.user.findMany({
-      // Corrected field name from 'superiorId' to 'supervisorId'
-      where: { supervisorId: { in: idsToProcess } },
-      select: { id: true },
-    });
-
-    const newIds = currentLevelIds.map(u => u.id);
-    if (newIds.length === 0) {
-      break;
-    }
-
-    newIds.forEach(id => allSubordinateIds.add(id));
-    idsToProcess = newIds;
-  }
-
-  return Array.from(allSubordinateIds);
-}
-
 export async function GET(request: NextRequest) {
   try {
     // TODO: Replace with Supabase session logic
@@ -44,9 +21,7 @@ export async function GET(request: NextRequest) {
 
     if (user.role === Role.MARKETING_ADMIN) {
       // Admin sees all. An empty userIdsForFilter array means no filter by brokerId will be applied.
-    } else if (user.role === Role.DIRECTOR || user.role === Role.MANAGER) {
-      userIdsForFilter = [user.id, ...(await getSubordinateIds(user.id))];
-    } else { // For BROKER and other roles
+    } else {
       userIdsForFilter = [user.id];
     }
 

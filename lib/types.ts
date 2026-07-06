@@ -148,7 +148,5 @@ export { Role, PropertyStatus, ClientOverallStatus, TaskType, Priority };
 // Corrigindo o mapeamento de labels para os novos Enums
 export const USER_ROLE_LABELS: Partial<Record<Role, string>> = {
   [Role.MARKETING_ADMIN]: "Marketing / Admin",
-  [Role.DIRECTOR]: "Diretor",
-  [Role.MANAGER]: "Gerente",
   [Role.BROKER]: "Corretor",
 };

@@ -57,8 +57,6 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
   const getRoleLabel = (role: Role | string) => {
     const labels: Record<Role | string, string> = {
       [Role.MARKETING_ADMIN]: 'Administrador',
-      [Role.DIRECTOR]: 'Diretor',
-      [Role.MANAGER]: 'Gerente',
       [Role.BROKER]: 'Corretor',
       'ADMIN': 'Super Admin',
     };

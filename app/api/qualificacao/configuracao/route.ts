@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     await prisma.leadPool.upsert({ where: { name: 'Geral' }, update: {}, create: { name: 'Geral' } });
 
     const users = await prisma.user.findMany({
-      where: { role: { in: [Role.BROKER, Role.MANAGER] } },
+      where: { role: Role.BROKER },
       select: { id: true, name: true },
     });
 
