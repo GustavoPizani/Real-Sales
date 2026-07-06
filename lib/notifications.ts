@@ -52,7 +52,12 @@ export async function notifyNewLead({
   // Push para admins/marketing da mesma conta
   if (accountId) {
     const admins = await prisma.user.findMany({
-      where: { accountId, role: { in: ['MARKETING_ADMIN', 'DIRECTOR'] } },
+      where: {
+        role: { in: ['MARKETING_ADMIN', 'DIRECTOR'] },
+        // O admin raiz da conta tem accountId nulo (seu próprio id É a conta) —
+        // por isso precisa do OR com id, senão ele nunca aparece na lista.
+        OR: [{ id: accountId }, { accountId }],
+      },
       select: { id: true },
     })
 

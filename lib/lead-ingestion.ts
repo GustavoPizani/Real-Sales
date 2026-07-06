@@ -105,7 +105,8 @@ export async function ingestLead(
     const rouletteUsers = await prisma.leadRouletteUser.findMany({
       where: { rouletteId: mapping.roletaId },
       include: { user: { select: { id: true, name: true } } },
-      orderBy: { lastAssignedAt: 'asc' },
+      // nulls: 'first' é essencial — sem isso o Postgres joga quem nunca recebeu lead (lastAssignedAt null) pro final da fila, quebrando o round-robin
+      orderBy: { lastAssignedAt: { sort: 'asc', nulls: 'first' } },
     })
 
     const activeUser = rouletteUsers[0]
