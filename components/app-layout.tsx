@@ -27,7 +27,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [pathname, isLoading, user, router]);
 
-  if (pathname === "/login") {
+  // Senha temporária pendente de troca — bloqueia o app até o usuário definir uma nova
+  useEffect(() => {
+    if (pathname !== "/change-password" && !isLoading && user?.mustChangePassword) {
+      router.replace("/change-password");
+    }
+  }, [pathname, isLoading, user, router]);
+
+  if (pathname === "/login" || pathname === "/change-password") {
     return <>{children}</>;
   }
 

@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff, KeyRound, Copy } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -167,6 +167,10 @@ function TeamManagementTab() {
     const [userForm, setUserForm] = useState<UserFormData>({ name: '', email: '', role: Role.BROKER, supervisorId: null });
     const [showUserPassword, setShowUserPassword] = useState(false);
 
+    const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+    const [resetMessage, setResetMessage] = useState<string | null>(null);
+    const [isResetting, setIsResetting] = useState(false);
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
@@ -279,6 +283,35 @@ function TeamManagementTab() {
         }
     };
 
+    const handleResetPassword = async (user: User) => {
+        if (!window.confirm(`Gerar uma nova senha temporária para ${user.name}? A senha atual deixará de funcionar.`)) return;
+        setResetPasswordUser(user);
+        setResetMessage(null);
+        setIsResetting(true);
+        try {
+            const response = await fetch(`/api/users/${user.id}/reset-password`, { method: 'POST' });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Falha ao gerar nova senha.');
+            setResetMessage(data.message);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Erro', description: error.message });
+            setResetPasswordUser(null);
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
+    const handleCopyResetMessage = () => {
+        if (!resetMessage) return;
+        navigator.clipboard.writeText(resetMessage);
+        toast({ title: 'Mensagem copiada!' });
+    };
+
+    const closeResetDialog = () => {
+        setResetPasswordUser(null);
+        setResetMessage(null);
+    };
+
     const getRoleIcon = (role: Role) => {
         const icons: Partial<Record<Role, React.ReactNode>> = {
             [Role.MARKETING_ADMIN]: <Shield className="h-4 w-4 text-red-600" />,
@@ -362,6 +395,9 @@ function TeamManagementTab() {
                                 <TableCell>{user.createdAt ? format(new Date(user.createdAt), 'dd/MM/yyyy') : '-'}</TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={() => openDialog(user)}><Edit className="h-4 w-4" /></Button>
+                                    {currentUser?.role === 'MARKETING_ADMIN' && (
+                                        <Button variant="ghost" size="icon" title="Gerar nova senha" onClick={() => handleResetPassword(user)}><KeyRound className="h-4 w-4" /></Button>
+                                    )}
                                     {currentUser?.id !== user.id && (
                                         <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                                     )}
@@ -443,6 +479,36 @@ function TeamManagementTab() {
                             <Button type="submit">Salvar</Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={!!resetPasswordUser} onOpenChange={(open) => { if (!open) closeResetDialog(); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Nova senha gerada</DialogTitle>
+                        <DialogDescription>
+                            {resetPasswordUser && `Copie a mensagem abaixo e envie para ${resetPasswordUser.name} pelo WhatsApp.`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {isResetting ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                        </div>
+                    ) : resetMessage ? (
+                        <div className="space-y-4 pt-2">
+                            <textarea
+                                readOnly
+                                value={resetMessage}
+                                rows={7}
+                                className="w-full rounded-md border border-input bg-background p-3 text-sm resize-none"
+                            />
+                            <Button type="button" className="w-full" onClick={handleCopyResetMessage}>
+                                <Copy className="h-4 w-4 mr-2" /> Copiar mensagem
+                            </Button>
+                        </div>
+                    ) : null}
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={closeResetDialog}>Fechar</Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

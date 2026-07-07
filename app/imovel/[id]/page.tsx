@@ -239,14 +239,14 @@ function PropertyPage() {
             <h2 className="text-3xl sm:text-4xl font-bold mb-10 text-foreground">
               Infraestrutura completa<br />para o seu estilo de vida
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-stretch">
               {property.features.map((feature, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:border-secondary-custom/40 transition-colors"
+                  className="flex items-start gap-3 bg-card border border-border rounded-xl px-4 py-3 h-full hover:border-secondary-custom/40 transition-colors"
                 >
-                  <CheckCircle2 className="h-4 w-4 text-secondary-custom flex-shrink-0" />
-                  <span className="text-sm text-muted-foreground">{feature}</span>
+                  <CheckCircle2 className="h-4 w-4 text-secondary-custom flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground leading-snug">{feature}</span>
                 </div>
               ))}
             </div>

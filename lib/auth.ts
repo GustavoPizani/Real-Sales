@@ -12,6 +12,7 @@ export interface UserPayload {
   role: Role;
   accountId: string | null;
   isSuperAdmin: boolean;
+  mustChangePassword: boolean;
 }
 
 /**
@@ -34,12 +35,13 @@ export async function getUserFromToken(request?: NextRequest): Promise<UserPaylo
     // 3. Buscar o perfil complementar no banco via Prisma (Schema em Inglês)
     const userProfile = await prisma.user.findUnique({
       where: { id: supabaseUser.id },
-      select: { 
-        id: true, 
-        name: true, 
-        email: true, 
-        role: true, 
-        accountId: true 
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        accountId: true,
+        mustChangePassword: true,
       },
     });
 

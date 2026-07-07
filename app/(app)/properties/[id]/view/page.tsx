@@ -65,6 +65,7 @@ export default function PropertyViewPage() {
 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [shareableLink, setShareableLink] = useState("")
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false)
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState(false)
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const [fullScreenIndex, setFullScreenIndex] = useState(0)
@@ -121,11 +122,27 @@ export default function PropertyViewPage() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
 
-  const handleShareClick = () => {
-    if (user && propertyId) {
-      const link = `${window.location.origin}/imovel/${propertyId}?brokerId=${user.id}`
-      setShareableLink(link)
-      setIsShareModalOpen(true)
+  const handleShareClick = async () => {
+    if (!user || !propertyId) return
+
+    const fullLink = `${window.location.origin}/imovel/${propertyId}?brokerId=${user.id}`
+    setShareableLink(fullLink)
+    setIsShareModalOpen(true)
+    setIsGeneratingLink(true)
+
+    try {
+      const response = await fetch('/api/short-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUrl: fullLink }),
+      })
+      if (!response.ok) throw new Error('Falha ao gerar link curto.')
+      const data = await response.json()
+      setShareableLink(data.url)
+    } catch {
+      // Mantém o link completo como fallback caso o encurtamento falhe
+    } finally {
+      setIsGeneratingLink(false)
     }
   }
 
@@ -391,9 +408,9 @@ export default function PropertyViewPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center space-x-2 mt-4">
-            <Input value={shareableLink} readOnly />
-            <Button type="button" size="sm" onClick={copyToClipboard}>
-              <Copy className="h-4 w-4" />
+            <Input value={isGeneratingLink ? "Gerando link..." : shareableLink} readOnly />
+            <Button type="button" size="sm" onClick={copyToClipboard} disabled={isGeneratingLink}>
+              {isGeneratingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
           <DialogFooter>

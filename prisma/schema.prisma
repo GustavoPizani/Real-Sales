@@ -20,6 +20,7 @@ model User {
   supervisorId         String?
   slackWebhookUrl      String?               @map("slack_webhook_url")
   taskReminderMinutes  Int                   @default(30)
+  mustChangePassword   Boolean               @default(false) @map("must_change_password")
   assignedCalls        ActiveOfferClient[]   @relation("AssignedCalls")
   createdOffers        ActiveOffer[]         @relation("CreatedOffers")
   attendanceRecords    AttendanceRecord[]
@@ -175,6 +176,15 @@ model PropertyType {
 
   @@index([propertyId])
   @@map("property_types")
+}
+
+model ShortLink {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  targetUrl String
+  createdAt DateTime @default(now())
+
+  @@map("short_links")
 }
 
 model PropertyImage {
