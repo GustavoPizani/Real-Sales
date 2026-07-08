@@ -1036,7 +1036,17 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                                   <User className="h-4 w-4 text-slate-600" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <CardTitle className="text-sm font-semibold">Anotação</CardTitle>
+                                  <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                                    {note.author?.name ? (
+                                      note.author.name
+                                    ) : note.authorName ? (
+                                      <span className="line-through text-muted-foreground" title="Utilizador removido">
+                                        {note.authorName}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">Autor desconhecido</span>
+                                    )}
+                                  </CardTitle>
                                   <p className="text-xs text-muted-foreground">
                                     {note.createdAt ? format(new Date(note.createdAt), "dd/MM/yyyy 'às' HH:mm") : ''}
                                   </p>

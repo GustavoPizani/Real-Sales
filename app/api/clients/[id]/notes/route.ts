@@ -116,6 +116,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         data: {
           content,
           authorId: user.id,
+          authorName: user.name,
           clientId: clientId,
         },
       }),

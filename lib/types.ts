@@ -30,7 +30,9 @@ export interface ClientDocument {
 export interface Note {
   id: string;
   clientId: string;
-  authorId: string;
+  authorId: string | null;
+  authorName?: string | null;
+  author?: { id: string; name: string } | null;
   content: string;
   createdAt: string;
 }

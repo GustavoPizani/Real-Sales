@@ -292,13 +292,14 @@ model Task {
 }
 
 model Note {
-  id        String   @id @default(uuid())
-  content   String
-  authorId  String
-  clientId  String
-  createdAt DateTime @default(now())
-  author    User     @relation(fields: [authorId], references: [id])
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  content    String
+  authorId   String?
+  authorName String?
+  clientId   String
+  createdAt  DateTime @default(now())
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@map("notes")

@@ -44,6 +44,9 @@ async function getClientWithDetails(id: string) {
             documents: true,
             notes: {
                 orderBy: { createdAt: 'desc' },
+                include: {
+                    author: { select: { id: true, name: true } },
+                },
             },
             tasks: {
                 orderBy: {

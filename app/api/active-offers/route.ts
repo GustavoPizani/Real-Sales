@@ -11,15 +11,12 @@ export const dynamic = 'force-dynamic';
 // GET: Lista as campanhas de Oferta Ativa
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    let whereClause: Prisma.ActiveOfferWhereInput = {
-      account: { id: user.isSuperAdmin ? undefined : user.accountId }
-    };
+    let whereClause: Prisma.ActiveOfferWhereInput = {};
 
     if (user.role === Role.BROKER) {
       // Corretores veem apenas as campanhas atribuídas a eles
@@ -39,7 +36,6 @@ export async function GET(request: NextRequest) {
           select: { clients: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(activeOffers);

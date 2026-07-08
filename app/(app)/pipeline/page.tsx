@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter } from "lucide-react";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Send, Users as UsersIcon } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
@@ -52,8 +53,22 @@ interface Tag {
   color: string;
 }
 
+interface ActiveOfferSummary {
+  id: string;
+  name: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  createdBy?: { name: string };
+  _count?: { clients: number };
+}
+
 // --- Conteúdo compartilhado do card ---
-function ClientCardContent({ client, onClientClick, isDragging = false }: { client: Cliente; onClientClick: () => void; isDragging?: boolean }) {
+function ClientCardContent({
+  client, onClientClick, isDragging = false,
+  selectionMode = false, isSelected = false, onToggleSelect,
+}: {
+  client: Cliente; onClientClick: () => void; isDragging?: boolean;
+  selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
+}) {
   const openWhatsApp = (phone: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const cleanPhone = phone.replace(/\D/g, "");
@@ -78,12 +93,20 @@ function ClientCardContent({ client, onClientClick, isDragging = false }: { clie
         marginBottom: '10px',
         opacity: isDragging ? 0.5 : 1,
       }}
-      onClick={onClientClick}
+      onClick={selectionMode ? onToggleSelect : onClientClick}
       className="group cursor-pointer"
     >
       <div className="h-1 w-full bg-gradient-to-r from-secondary-custom via-secondary-custom/60 to-transparent" />
       <div className="p-3.5 space-y-3">
         <div className="flex items-center gap-2.5">
+          {selectionMode && (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect?.()}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0"
+            />
+          )}
           <div
             className="h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
             style={{ background: 'linear-gradient(135deg, var(--secondary-custom), #6b5a2a)' }}
@@ -158,9 +181,11 @@ function ClientCardContent({ client, onClientClick, isDragging = false }: { clie
 }
 
 // --- Card arrastável para desktop ---
-function DraggableClientCard({ client }: { client: Cliente }) {
+function DraggableClientCard({ client, selectionMode, isSelected, onToggleSelect }: {
+  client: Cliente; selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
+}) {
   const router = useRouter();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stageId: client.funnelStageId } });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stageId: client.funnelStageId }, disabled: selectionMode });
 
   return (
     <div
@@ -170,29 +195,65 @@ function DraggableClientCard({ client }: { client: Cliente }) {
       {...listeners}
       className="cursor-grab active:cursor-grabbing touch-none"
     >
-      <ClientCardContent client={client} onClientClick={() => router.push(`/client/${client.id}`)} isDragging={isDragging} />
+      <ClientCardContent
+        client={client}
+        onClientClick={() => router.push(`/client/${client.id}`)}
+        isDragging={isDragging}
+        selectionMode={selectionMode}
+        isSelected={isSelected}
+        onToggleSelect={onToggleSelect}
+      />
     </div>
   );
 }
 
 // --- Card simples para mobile (sem DnD, permite scroll) ---
-function MobileClientCard({ client }: { client: Cliente }) {
+function MobileClientCard({ client, selectionMode, isSelected, onToggleSelect }: {
+  client: Cliente; selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
+}) {
   const router = useRouter();
-  return <ClientCardContent client={client} onClientClick={() => router.push(`/client/${client.id}`)} />;
+  return (
+    <ClientCardContent
+      client={client}
+      onClientClick={() => router.push(`/client/${client.id}`)}
+      selectionMode={selectionMode}
+      isSelected={isSelected}
+      onToggleSelect={onToggleSelect}
+    />
+  );
 }
 
 // --- Componente da Coluna do Funil ---
-function FunnelColumn({ stage, clients }: { stage: FunnelStage; clients: Cliente[] }) {
+function FunnelColumn({ stage, clients, selectionMode, selectedClientIds, onToggleSelect, onToggleSelectAll }: {
+  stage: FunnelStage; clients: Cliente[]; selectionMode?: boolean;
+  selectedClientIds?: Set<string>; onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: (clientIds: string[], select: boolean) => void;
+}) {
     const { setNodeRef } = useSortable({ id: stage.id, data: { isContainer: true } });
+    const columnClientIds = useMemo(() => clients.map(c => c.id), [clients]);
+    const allSelected = selectionMode && columnClientIds.length > 0 && columnClientIds.every(id => selectedClientIds?.has(id));
     return (
         <div ref={setNodeRef} className="flex flex-col bg-card/50 border border-border rounded-lg h-full w-[300px] flex-shrink-0">
-            <div className="p-3 font-semibold text-center text-white rounded-t-lg sticky top-0 z-10" style={{ backgroundColor: stage.color }}>
+            <div className="p-3 font-semibold text-center text-white rounded-t-lg sticky top-0 z-10 flex items-center justify-center gap-2" style={{ backgroundColor: stage.color }}>
+                {selectionMode && (
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(checked) => onToggleSelectAll?.(columnClientIds, !!checked)}
+                    disabled={columnClientIds.length === 0}
+                  />
+                )}
                 {stage.name} ({clients.length})
             </div>
             <div className="p-2 flex-1 overflow-y-auto space-y-2">
                 <SortableContext items={clients.map(c => c.id)} strategy={verticalListSortingStrategy}>
                     {clients.map(client => (
-                        <DraggableClientCard key={client.id} client={client} />
+                        <DraggableClientCard
+                          key={client.id}
+                          client={client}
+                          selectionMode={selectionMode}
+                          isSelected={selectedClientIds?.has(client.id)}
+                          onToggleSelect={() => onToggleSelect?.(client.id)}
+                        />
                     ))}
                 </SortableContext>
             </div>
@@ -281,6 +342,55 @@ export default function PipelinePage() {
     managerId: 'all',
     tagId: 'all',
   });
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [transferBrokerId, setTransferBrokerId] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [isOfferDialogOpen, setIsOfferDialogOpen] = useState(false);
+  const [activeOffers, setActiveOffers] = useState<ActiveOfferSummary[]>([]);
+  const [loadingActiveOffers, setLoadingActiveOffers] = useState(false);
+  const [selectedOfferId, setSelectedOfferId] = useState("");
+  const [isSendingToOffer, setIsSendingToOffer] = useState(false);
+
+  const isMarketingAdmin = user?.role === Role.MARKETING_ADMIN;
+
+  const toggleClientSelection = useCallback((clientId: string) => {
+    setSelectedClientIds(prev => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId); else next.add(clientId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllInGroup = useCallback((clientIds: string[], select: boolean) => {
+    setSelectedClientIds(prev => {
+      const next = new Set(prev);
+      clientIds.forEach(id => select ? next.add(id) : next.delete(id));
+      return next;
+    });
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedClientIds(new Set());
+  }, []);
+
+  const fetchActiveOffers = useCallback(async () => {
+    setLoadingActiveOffers(true);
+    try {
+      const res = await fetch('/api/active-offers');
+      if (!res.ok) throw new Error('Falha ao carregar ofertas ativas.');
+      const data = await res.json();
+      const list: ActiveOfferSummary[] = Array.isArray(data) ? data : [];
+      setActiveOffers(list.filter(o => o.status !== 'COMPLETED'));
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setLoadingActiveOffers(false);
+    }
+  }, [toast]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const { setActionButton } = useMobileHeader();
@@ -398,6 +508,69 @@ export default function PipelinePage() {
       return matchesSearch && matchesStatus && matchesBroker && matchesManager && matchesDate && matchesTag;
     });
   }, [allClients, filters, brokers]);
+
+  const selectedClients = useMemo(
+    () => allClients.filter(c => selectedClientIds.has(c.id)),
+    [allClients, selectedClientIds]
+  );
+  const selectedLostClients = useMemo(
+    () => selectedClients.filter(c => c.overallStatus === ClientOverallStatus.LOST),
+    [selectedClients]
+  );
+
+  const handleConfirmTransfer = async () => {
+    if (!transferBrokerId) {
+      toast({ variant: 'destructive', title: 'Selecione um corretor' });
+      return;
+    }
+    setIsTransferring(true);
+    try {
+      const res = await fetch('/api/clients/bulk-transfer', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientIds: Array.from(selectedClientIds), brokerId: transferBrokerId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao transferir clientes.');
+      toast({ title: 'Sucesso!', description: `${data.updatedCount} cliente(s) transferido(s).` });
+      setIsTransferDialogOpen(false);
+      setTransferBrokerId("");
+      exitSelectionMode();
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleConfirmSendToOffer = async () => {
+    if (!selectedOfferId) {
+      toast({ variant: 'destructive', title: 'Selecione uma oferta ativa' });
+      return;
+    }
+    setIsSendingToOffer(true);
+    try {
+      const res = await fetch(`/api/active-offers/${selectedOfferId}/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientIds: selectedLostClients.map(c => c.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao enviar clientes para a oferta ativa.');
+      const parts = [`${data.linkedCount} enviado(s).`];
+      if (data.alreadyLinkedCount) parts.push(`${data.alreadyLinkedCount} já vinculado(s).`);
+      if (data.skippedCount) parts.push(`${data.skippedCount} ignorado(s) (não perdidos).`);
+      toast({ title: 'Sucesso!', description: parts.join(' ') });
+      setIsOfferDialogOpen(false);
+      setSelectedOfferId("");
+      exitSelectionMode();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setIsSendingToOffer(false);
+    }
+  };
 
   const handleDragStart = (event: DragEndEvent) => {
     const { active } = event;
@@ -694,8 +867,8 @@ export default function PipelinePage() {
         <SelectContent>
           <SelectItem value="all">Todos os Status</SelectItem>
           <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
-          <SelectItem value={ClientOverallStatus.Ganho}>Ganho</SelectItem>
-          <SelectItem value={ClientOverallStatus.Perdido}>Perdido</SelectItem>
+          <SelectItem value={ClientOverallStatus.WON}>Ganho</SelectItem>
+          <SelectItem value={ClientOverallStatus.LOST}>Perdido</SelectItem>
         </SelectContent>
       </Select>
       <DateFilter inModal={inModal} />
@@ -714,8 +887,8 @@ export default function PipelinePage() {
           <SelectContent>
             <SelectItem value="all">Todos os corretores</SelectItem>
             {(filters.managerId !== 'all'
-              ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId)
-              : brokers.filter(b => b.role === 'BROKER')
+              ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId || b.id === user?.id)
+              : brokers
             ).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -753,6 +926,16 @@ export default function PipelinePage() {
               </Button>
             </Link>
           )}
+          {isMarketingAdmin && (
+            <Button
+              variant={selectionMode ? "secondary" : "outline"}
+              size="icon"
+              className="h-9 w-9 flex-shrink-0"
+              onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+            >
+              <UsersIcon className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
 
         {/* Desktop header */}
@@ -774,6 +957,16 @@ export default function PipelinePage() {
                           Gerenciar Funis
                       </Button>
                   </Link>
+                )}
+                {isMarketingAdmin && (
+                  <Button
+                    variant={selectionMode ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+                  >
+                    <UsersIcon className="h-3 w-3 mr-2" />
+                    {selectionMode ? "Sair da seleção" : "Selecionar em massa"}
+                  </Button>
                 )}
             </div>
             <div>
@@ -849,7 +1042,15 @@ export default function PipelinePage() {
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 h-full">
             {funnelStages.map((stage) => (
-              <FunnelColumn key={stage.id} stage={stage} clients={filteredClients.filter(c => c.funnelStageId === stage.id)} />
+              <FunnelColumn
+                key={stage.id}
+                stage={stage}
+                clients={filteredClients.filter(c => c.funnelStageId === stage.id)}
+                selectionMode={selectionMode}
+                selectedClientIds={selectedClientIds}
+                onToggleSelect={toggleClientSelection}
+                onToggleSelectAll={toggleSelectAllInGroup}
+              />
             ))}
           </div>
           <DragOverlay>
@@ -901,9 +1102,24 @@ export default function PipelinePage() {
                   className="h-full mt-0 data-[state=inactive]:hidden"
                 >
                   <div className="h-full overflow-y-auto p-3 space-y-2 pb-24">
+                    {selectionMode && stageClients.length > 0 && (
+                      <div className="flex items-center gap-2 px-1 pb-1 text-sm text-muted-foreground">
+                        <Checkbox
+                          checked={stageClients.every(c => selectedClientIds.has(c.id))}
+                          onCheckedChange={(checked) => toggleSelectAllInGroup(stageClients.map(c => c.id), !!checked)}
+                        />
+                        Selecionar todos
+                      </div>
+                    )}
                     {stageClients.length > 0
                       ? stageClients.map(client => (
-                          <MobileClientCard key={client.id} client={client} />
+                          <MobileClientCard
+                            key={client.id}
+                            client={client}
+                            selectionMode={selectionMode}
+                            isSelected={selectedClientIds.has(client.id)}
+                            onToggleSelect={() => toggleClientSelection(client.id)}
+                          />
                         ))
                       : (
                         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -938,6 +1154,27 @@ export default function PipelinePage() {
           <span className="sr-only">Novo Cliente</span>
         </Button>
       </div>
+
+      {/* Barra de ação em massa */}
+      {selectionMode && selectedClientIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-2xl p-3 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm font-medium">{selectedClientIds.size} selecionado(s)</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={exitSelectionMode}>Cancelar</Button>
+            <Button size="sm" onClick={() => setIsTransferDialogOpen(true)}>Transferir para corretor</Button>
+            <Button
+              size="sm"
+              variant={selectedLostClients.length > 0 ? "default" : "outline"}
+              disabled={selectedLostClients.length === 0}
+              onClick={() => { setIsOfferDialogOpen(true); fetchActiveOffers(); }}
+              title={selectedLostClients.length === 0 ? "Nenhum dos selecionados está marcado como Perdido" : undefined}
+            >
+              <Send className="h-3.5 w-3.5 mr-1.5" />
+              Enviar para oferta ativa ({selectedLostClients.length})
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
           <DialogContent className="max-w-2xl">
@@ -988,6 +1225,57 @@ export default function PipelinePage() {
               className="w-full"
             >
               Aplicar filtros
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Transferir {selectedClientIds.size} cliente(s) para outro corretor</DialogTitle></DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="transferBroker">Corretor de destino</Label>
+            <Select value={transferBrokerId} onValueChange={setTransferBrokerId}>
+              <SelectTrigger id="transferBroker"><SelectValue placeholder="Selecione um corretor" /></SelectTrigger>
+              <SelectContent>
+                {brokers.map(b => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTransferDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmTransfer} disabled={isTransferring || !transferBrokerId}>
+              {isTransferring ? "Transferindo..." : "Confirmar transferência"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Enviar {selectedLostClients.length} cliente(s) perdido(s) para Oferta Ativa</DialogTitle></DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="targetOffer">Oferta ativa</Label>
+            <Select value={selectedOfferId} onValueChange={setSelectedOfferId} disabled={loadingActiveOffers}>
+              <SelectTrigger id="targetOffer"><SelectValue placeholder={loadingActiveOffers ? "Carregando..." : "Selecione uma oferta ativa"} /></SelectTrigger>
+              <SelectContent>
+                {activeOffers.map(o => (
+                  <SelectItem key={o.id} value={o.id}>{o.name} ({o._count?.clients ?? 0})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedClientIds.size !== selectedLostClients.length && (
+              <p className="text-xs text-muted-foreground mt-2">
+                {selectedClientIds.size - selectedLostClients.length} dos selecionados não estão marcados como "Perdido" e serão ignorados.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOfferDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmSendToOffer} disabled={isSendingToOffer || !selectedOfferId}>
+              {isSendingToOffer ? "Enviando..." : "Confirmar envio"}
             </Button>
           </DialogFooter>
         </DialogContent>

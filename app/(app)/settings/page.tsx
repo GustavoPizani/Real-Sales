@@ -171,6 +171,16 @@ function TeamManagementTab() {
     const [resetMessage, setResetMessage] = useState<string | null>(null);
     const [isResetting, setIsResetting] = useState(false);
 
+    interface ClientsByFunnel { funnelId: string; funnelName: string; count: number; }
+    const [transferDialogUser, setTransferDialogUser] = useState<User | null>(null);
+    const [transferClientCount, setTransferClientCount] = useState(0);
+    const [transferNoteCount, setTransferNoteCount] = useState(0);
+    const [transferTaskCount, setTransferTaskCount] = useState(0);
+    const [transferClientsByFunnel, setTransferClientsByFunnel] = useState<ClientsByFunnel[]>([]);
+    const [transferTargetUserId, setTransferTargetUserId] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
@@ -219,20 +229,53 @@ function TeamManagementTab() {
         setIsDialogOpen(true);
     };
 
-    const handleDelete = async (userId: string) => {
-        if (!window.confirm('Tem a certeza que deseja excluir este utilizador? Esta ação é irreversível.')) return;
+    const handleDelete = async (userId: string, transferToUserId?: string) => {
+        if (!transferToUserId && !window.confirm('Tem a certeza que deseja excluir este utilizador? Esta ação é irreversível.')) return;
         const token = localStorage.getItem('authToken');
+        setIsDeleting(true);
+        setDeletingUserId(userId);
         try {
-            const response = await fetch(`/api/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`/api/users/${userId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(transferToUserId ? { transferToUserId } : {}),
+            });
+
+            if (response.status === 404) {
+                // Já foi excluído (ex.: outra aba/clique duplicado) — apenas remove da lista local.
+                setUsers(prev => prev.filter(u => u.id !== userId));
+                setTransferDialogUser(null);
+                return;
+            }
+
+            const data = await response.json();
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Falha ao excluir utilizador.');
+                if (data.requiresTransfer) {
+                    const targetUser = users.find(u => u.id === userId) || null;
+                    setTransferDialogUser(targetUser);
+                    setTransferClientCount(data.clientCount || 0);
+                    setTransferNoteCount(data.noteCount || 0);
+                    setTransferTaskCount(data.taskCount || 0);
+                    setTransferClientsByFunnel(data.clientsByFunnel || []);
+                    setTransferTargetUserId("");
+                    return;
+                }
+                throw new Error(data.error || 'Falha ao excluir utilizador.');
             }
             toast({ title: 'Sucesso!', description: 'Usuário deletado.' });
-            fetchData();
+            setTransferDialogUser(null);
+            setUsers(prev => prev.filter(u => u.id !== userId));
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Erro', description: error.message });
+        } finally {
+            setIsDeleting(false);
+            setDeletingUserId(null);
         }
+    };
+
+    const handleConfirmTransferAndDelete = async () => {
+        if (!transferDialogUser || !transferTargetUserId) return;
+        await handleDelete(transferDialogUser.id, transferTargetUserId);
     };
 
     const resetForm = () => {
@@ -399,7 +442,16 @@ function TeamManagementTab() {
                                         <Button variant="ghost" size="icon" title="Gerar nova senha" onClick={() => handleResetPassword(user)}><KeyRound className="h-4 w-4" /></Button>
                                     )}
                                     {currentUser?.id !== user.id && (
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={deletingUserId === user.id}
+                                            onClick={() => handleDelete(user.id)}
+                                        >
+                                            {deletingUserId === user.id
+                                                ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                : <Trash2 className="h-4 w-4 text-red-500" />}
+                                        </Button>
                                     )}
                                 </TableCell>
                             </TableRow>
@@ -508,6 +560,51 @@ function TeamManagementTab() {
                     ) : null}
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={closeResetDialog}>Fechar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={!!transferDialogUser} onOpenChange={(open) => { if (!open) setTransferDialogUser(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Transferir clientes antes de excluir</DialogTitle>
+                        <DialogDescription>
+                            {transferDialogUser && `${transferDialogUser.name} possui ${transferClientCount} cliente(s), ${transferNoteCount} nota(s) e ${transferTaskCount} tarefa(s) associados. Selecione um corretor de destino para transferir tudo antes de excluir o utilizador.`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {transferClientsByFunnel.length > 0 && (
+                        <div className="rounded-md border border-border bg-muted/30 px-3 py-2 space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground">Clientes por funil</p>
+                            {transferClientsByFunnel.map(f => (
+                                <div key={f.funnelId} className="flex items-center justify-between text-sm">
+                                    <span>{f.funnelName}</span>
+                                    <span className="text-muted-foreground">{f.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="py-2">
+                        <Label htmlFor="transferTargetUser">Corretor de destino</Label>
+                        <Select value={transferTargetUserId} onValueChange={setTransferTargetUserId}>
+                            <SelectTrigger id="transferTargetUser"><SelectValue placeholder="Selecione um corretor" /></SelectTrigger>
+                            <SelectContent>
+                                {users
+                                    .filter(u => u.id !== transferDialogUser?.id)
+                                    .map(u => (
+                                        <SelectItem key={u.id} value={u.id}>{u.name}{u.role === Role.MARKETING_ADMIN ? ' (Admin)' : ''}</SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={() => setTransferDialogUser(null)}>Cancelar</Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={!transferTargetUserId || isDeleting}
+                            onClick={handleConfirmTransferAndDelete}
+                        >
+                            {isDeleting ? "Transferindo e excluindo..." : "Transferir e excluir"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
