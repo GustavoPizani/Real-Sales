@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Save, Plus, Trash2, Upload, X, Loader2, ClipboardPaste } from "lucide-react";
 import { PropertyStatus } from "@prisma/client";
+import { compressImage } from "@/lib/image-compress";
 
 type Typology = {
   name: string;
@@ -180,22 +181,25 @@ function NewPropertyForm() {
         setTypologies(typologies.filter((_, i) => i !== index));
     };
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const filesArray = Array.from(e.target.files);
-            setImages(prev => [...prev, ...filesArray]);
-
             const previewsArray = filesArray.map(file => URL.createObjectURL(file));
             setImagePreviews(prev => [...prev, ...previewsArray]);
+
+            const compressed = await Promise.all(filesArray.map(file => compressImage(file)));
+            setImages(prev => [...prev, ...compressed]);
         }
     };
 
-    const handlePlantaImageChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePlantaImageChange = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
+            const rawFile = e.target.files[0];
+            const preview = URL.createObjectURL(rawFile);
+            const file = await compressImage(rawFile);
             const newTypologies = [...typologies] as TypologyWithFiles[];
             newTypologies[index].plantaFile = file;
-            newTypologies[index].plantaPreview = URL.createObjectURL(file);
+            newTypologies[index].plantaPreview = preview;
             setTypologies(newTypologies);
         }
     };
