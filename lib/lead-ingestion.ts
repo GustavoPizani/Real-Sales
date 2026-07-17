@@ -17,6 +17,23 @@ function formatDateBR(date: Date): string {
   return `${d}/${mo}/${y} às ${h}:${min}`
 }
 
+// Repasse fire-and-forget para o Leadflow (sistema irmão de distribuição de leads via
+// roleta, app/api/meta/ingest lá). Nunca lança para fora — se LEADFLOW_META_FORWARD_URL não
+// estiver configurada, é um no-op silencioso.
+async function forwardToLeadflow(payload: { leadgen_id: string; form_id: string }) {
+  const url = process.env.LEADFLOW_META_FORWARD_URL
+  if (!url) return
+
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-secret': process.env.LEADFLOW_INTERNAL_SECRET ?? '',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function ingestLead(
   lead: FbLead,
   mapping: any
@@ -26,6 +43,15 @@ export async function ingestLead(
     where: { facebookLeadId: lead.id },
   })
   if (existing) return { status: 'skipped', reason: 'duplicate_lead_id' }
+
+  // Repasse incondicional para o Leadflow — roda exatamente uma vez por lead novo do Meta
+  // (garantido pelo dedup por facebookLeadId acima), não importa se ele foi descoberto pelo
+  // webhook em tempo real ou pelo cron de fallback (/api/cron/sync-leads), já que os dois
+  // caminhos chamam ingestLead(). Independe do que acontece depois aqui (mesmo se o Real-Sales
+  // pular por e-mail/telefone duplicado na própria base, o Leadflow decide sozinho).
+  forwardToLeadflow({ leadgen_id: lead.id, form_id: mapping.formId }).catch(err =>
+    console.error('[LEAD_INGEST] Falha ao repassar para o Leadflow:', err)
+  )
 
   // Monta mapa de campos do formulário
   const fieldValues: Record<string, string> = {}
