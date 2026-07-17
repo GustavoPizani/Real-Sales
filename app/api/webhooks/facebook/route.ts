@@ -46,6 +46,15 @@ async function processWebhookPayload(body: any) {
 
       const { leadgen_id, form_id } = change.value
 
+      // Repasse incondicional para o Leadflow (sistema irmão de distribuição de leads via
+      // roleta). Roda para TODO evento de leadgen, tenha ou não FacebookFormMapping aqui —
+      // isso permite mapear o mesmo formulário do Meta nos dois sistemas ao mesmo tempo. O
+      // Leadflow decide sozinho, pela própria tabela dele, se aquele form_id é relevante;
+      // nunca bloqueia nem afeta o processamento abaixo.
+      forwardToLeadflow({ leadgen_id, form_id }).catch(err =>
+        console.error('[FB_WEBHOOK] Falha ao repassar para o Leadflow:', err)
+      )
+
       const mapping = await prisma.facebookFormMapping.findUnique({
         where: { formId: String(form_id) },
         include: { connection: true, property: { select: { title: true } } },
@@ -70,4 +79,20 @@ async function processWebhookPayload(body: any) {
       }
     }
   }
+}
+
+// Repasse fire-and-forget para o Leadflow (app/api/meta/ingest lá). Nunca lança para fora —
+// se LEADFLOW_META_FORWARD_URL não estiver configurada, é um no-op silencioso.
+async function forwardToLeadflow(payload: { leadgen_id: string; form_id: string }) {
+  const url = process.env.LEADFLOW_META_FORWARD_URL
+  if (!url) return
+
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-secret': process.env.LEADFLOW_INTERNAL_SECRET ?? '',
+    },
+    body: JSON.stringify(payload),
+  })
 }
