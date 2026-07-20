@@ -347,6 +347,214 @@ function PipelineSkeleton() {
   );
 }
 
+function getDatePresetRange(preset: 'today' | 'week' | 'month' | 'last_month'): DateRange {
+  const today = startOfToday();
+  switch (preset) {
+    case 'today':
+      return { from: today, to: endOfToday() };
+    case 'week':
+      return { from: startOfWeek(today), to: endOfWeek(today) };
+    case 'month':
+      return { from: startOfMonth(today), to: endOfMonth(today) };
+    case 'last_month':
+      return { from: startOfMonth(subMonths(today, 1)), to: endOfMonth(subMonths(today, 1)) };
+  }
+}
+
+// --- Filtro de data (componente estável — não deve ser recriado a cada render) ---
+function DateFilter({
+  inModal = false,
+  filters,
+  setFilters,
+  pendingDateRange,
+  setPendingDateRange,
+}: {
+  inModal?: boolean;
+  filters: PipelineFilters;
+  setFilters: React.Dispatch<React.SetStateAction<PipelineFilters>>;
+  pendingDateRange: DateRange | undefined;
+  setPendingDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
+}) {
+  const activeRange = inModal ? pendingDateRange : filters.dateRange;
+  const label = filters.dateRange?.from
+    ? `${format(filters.dateRange.from, "dd/MM/yy")}${filters.dateRange.to ? ` → ${format(filters.dateRange.to, "dd/MM/yy")}` : ' → ...'}`
+    : "Data de criação";
+
+  const presets = [
+    { key: 'today', label: 'Hoje' },
+    { key: 'week', label: 'Esta semana' },
+    { key: 'month', label: 'Este mês' },
+    { key: 'last_month', label: 'Mês passado' },
+  ] as const;
+
+  if (inModal) {
+    const applyPreset = (preset: typeof presets[number]['key']) => {
+      setPendingDateRange(getDatePresetRange(preset));
+    };
+
+    const rangeLabel = activeRange?.from
+      ? activeRange.to
+        ? `${format(activeRange.from, "dd/MM/yyyy")} → ${format(activeRange.to, "dd/MM/yyyy")}`
+        : `${format(activeRange.from, "dd/MM/yyyy")} → toque na data final`
+      : null;
+
+    return (
+      <div className="w-full space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Data de criação</p>
+          {activeRange?.from && (
+            <button
+              onClick={() => setPendingDateRange(undefined)}
+              className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1"
+            >
+              <X className="h-3 w-3" /> Limpar
+            </button>
+          )}
+        </div>
+
+        {/* Atalhos */}
+        <div className="grid grid-cols-2 gap-2">
+          {presets.map(p => (
+            <Button
+              key={p.key}
+              variant={
+                activeRange?.from && activeRange?.to &&
+                format(activeRange.from, 'dd/MM') === format(startOfToday(), 'dd/MM') && p.key === 'today'
+                  ? 'default' : 'outline'
+              }
+              size="sm"
+              onClick={() => applyPreset(p.key)}
+              className="w-full text-xs"
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+
+        {/* Indicador de seleção */}
+        {rangeLabel ? (
+          <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-center font-medium">
+            {rangeLabel}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground text-center py-1">
+            Toque na data inicial, depois na final
+          </p>
+        )}
+
+        {/* Calendário */}
+        <Calendar
+          mode="range"
+          selected={activeRange}
+          onSelect={setPendingDateRange}
+          locale={ptBR}
+          className="rounded-md border w-full mx-auto"
+          numberOfMonths={1}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
+          {filters.dateRange?.from && <X className="h-3 w-3 mr-1 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setFilters(f => ({ ...f, dateRange: undefined })); }} />}
+          {label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 flex" align="start">
+        <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
+          {presets.map(p => (
+            <Button key={p.key} variant="ghost" size="sm" className="justify-start" onClick={() => setFilters(f => ({ ...f, dateRange: getDatePresetRange(p.key) }))}>{p.label}</Button>
+          ))}
+          {filters.dateRange?.from && (
+            <Button variant="ghost" size="sm" className="justify-start text-destructive" onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}>
+              <X className="h-3 w-3 mr-1" /> Limpar
+            </Button>
+          )}
+        </div>
+        <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({ ...f, dateRange: date }))} locale={ptBR} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// --- Controles de filtro (componente estável — não deve ser recriado a cada render, senão o Input perde o foco a cada tecla) ---
+function FilterControls({
+  inModal = false,
+  filters,
+  setFilters,
+  pendingDateRange,
+  setPendingDateRange,
+  managers,
+  isRoleActive,
+  brokers,
+  currentUserId,
+  tags,
+}: {
+  inModal?: boolean;
+  filters: PipelineFilters;
+  setFilters: React.Dispatch<React.SetStateAction<PipelineFilters>>;
+  pendingDateRange: DateRange | undefined;
+  setPendingDateRange: React.Dispatch<React.SetStateAction<DateRange | undefined>>;
+  managers: Broker[];
+  isRoleActive: (roleName: string) => boolean;
+  brokers: Broker[];
+  currentUserId?: string;
+  tags: Tag[];
+}) {
+  return (
+    <div className={`flex ${inModal ? 'flex-col' : 'flex-wrap items-center'} gap-2`}>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
+      </div>
+      <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
+        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os Status</SelectItem>
+          <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
+          <SelectItem value={ClientOverallStatus.WON}>Ganho</SelectItem>
+          <SelectItem value={ClientOverallStatus.LOST}>Perdido</SelectItem>
+        </SelectContent>
+      </Select>
+      <DateFilter inModal={inModal} filters={filters} setFilters={setFilters} pendingDateRange={pendingDateRange} setPendingDateRange={setPendingDateRange} />
+      {managers.length > 0 && (
+        <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
+          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as equipes</SelectItem>
+            {managers.map(m => <SelectItem key={m.id} value={m.id}>Equipe {m.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      {isRoleActive('BROKER') && (
+        <Select value={filters.brokerId} onValueChange={value => setFilters(f => ({ ...f, brokerId: value }))}>
+          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os corretores</SelectItem>
+            {(filters.managerId !== 'all'
+              ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId || b.id === currentUserId)
+              : brokers
+            ).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      <Select value={filters.tagId} onValueChange={value => setFilters(f => ({ ...f, tagId: value }))}>
+        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas as etiquetas</SelectItem>
+          {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Button variant="ghost" className={inModal ? 'w-full' : ''} onClick={() => setFilters(defaultFilters)}>
+        <X className="h-4 w-4 mr-2" />Limpar filtros
+      </Button>
+    </div>
+  );
+}
+
 // --- Componente Principal da Página ---
 export default function PipelinePage() {
   const { user } = useAuth();
@@ -701,26 +909,6 @@ export default function PipelinePage() {
     }
   };
 
-  const handleDatePreset = (preset: 'today' | 'week' | 'month' | 'last_month') => {
-    const today = startOfToday();
-    let dateRange: DateRange | undefined;
-    switch (preset) {
-      case 'today':
-        dateRange = { from: today, to: endOfToday() };
-        break;
-      case 'week':
-        dateRange = { from: startOfWeek(today), to: endOfWeek(today) };
-        break;
-      case 'month':
-        dateRange = { from: startOfMonth(today), to: endOfMonth(today) };
-        break;
-      case 'last_month':
-        dateRange = { from: startOfMonth(subMonths(today, 1)), to: endOfMonth(subMonths(today, 1)) };
-        break;
-    }
-    setFilters(f => ({ ...f, dateRange }));
-  };
-
   const handleStageUpdate = async (stage: FunnelStage) => {
     const token = localStorage.getItem('authToken');
     const response = await fetch(`/api/funnel-stages/${stage.id}`, {
@@ -789,168 +977,6 @@ export default function PipelinePage() {
   };
 
   if (loading) return <PipelineSkeleton />;
-
-  const DateFilter = ({ inModal = false }: { inModal?: boolean }) => {
-    const activeRange = inModal ? pendingDateRange : filters.dateRange;
-    const label = filters.dateRange?.from
-      ? `${format(filters.dateRange.from, "dd/MM/yy")}${filters.dateRange.to ? ` → ${format(filters.dateRange.to, "dd/MM/yy")}` : ' → ...'}`
-      : "Data de criação";
-
-    const presets = [
-      { key: 'today', label: 'Hoje' },
-      { key: 'week', label: 'Esta semana' },
-      { key: 'month', label: 'Este mês' },
-      { key: 'last_month', label: 'Mês passado' },
-    ] as const;
-
-    if (inModal) {
-      const applyPreset = (preset: typeof presets[number]['key']) => {
-        const today = startOfToday();
-        let range: DateRange | undefined;
-        if (preset === 'today') range = { from: today, to: endOfToday() };
-        else if (preset === 'week') range = { from: startOfWeek(today), to: endOfWeek(today) };
-        else if (preset === 'month') range = { from: startOfMonth(today), to: endOfMonth(today) };
-        else range = { from: startOfMonth(subMonths(today, 1)), to: endOfMonth(subMonths(today, 1)) };
-        setPendingDateRange(range);
-      };
-
-      const rangeLabel = activeRange?.from
-        ? activeRange.to
-          ? `${format(activeRange.from, "dd/MM/yyyy")} → ${format(activeRange.to, "dd/MM/yyyy")}`
-          : `${format(activeRange.from, "dd/MM/yyyy")} → toque na data final`
-        : null;
-
-      return (
-        <div className="w-full space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Data de criação</p>
-            {activeRange?.from && (
-              <button
-                onClick={() => setPendingDateRange(undefined)}
-                className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1"
-              >
-                <X className="h-3 w-3" /> Limpar
-              </button>
-            )}
-          </div>
-
-          {/* Atalhos */}
-          <div className="grid grid-cols-2 gap-2">
-            {presets.map(p => (
-              <Button
-                key={p.key}
-                variant={
-                  activeRange?.from && activeRange?.to &&
-                  format(activeRange.from, 'dd/MM') === format(startOfToday(), 'dd/MM') && p.key === 'today'
-                    ? 'default' : 'outline'
-                }
-                size="sm"
-                onClick={() => applyPreset(p.key)}
-                className="w-full text-xs"
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
-
-          {/* Indicador de seleção */}
-          {rangeLabel ? (
-            <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-center font-medium">
-              {rangeLabel}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-1">
-              Toque na data inicial, depois na final
-            </p>
-          )}
-
-          {/* Calendário */}
-          <Calendar
-            mode="range"
-            selected={activeRange}
-            onSelect={setPendingDateRange}
-            locale={ptBR}
-            className="rounded-md border w-full mx-auto"
-            numberOfMonths={1}
-          />
-        </div>
-      );
-    }
-
-    return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
-            {filters.dateRange?.from && <X className="h-3 w-3 mr-1 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setFilters(f => ({ ...f, dateRange: undefined })); }} />}
-            {label}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 flex" align="start">
-          <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
-            {presets.map(p => (
-              <Button key={p.key} variant="ghost" size="sm" className="justify-start" onClick={() => handleDatePreset(p.key)}>{p.label}</Button>
-            ))}
-            {filters.dateRange?.from && (
-              <Button variant="ghost" size="sm" className="justify-start text-destructive" onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}>
-                <X className="h-3 w-3 mr-1" /> Limpar
-              </Button>
-            )}
-          </div>
-          <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({ ...f, dateRange: date }))} locale={ptBR} />
-        </PopoverContent>
-      </Popover>
-    );
-  };
-
-  const FilterControls = ({ inModal = false }: { inModal?: boolean }) => (
-    <div className={`flex ${inModal ? 'flex-col' : 'flex-wrap items-center'} gap-2`}>
-      <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
-      </div>
-      <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
-        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os Status</SelectItem>
-          <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
-          <SelectItem value={ClientOverallStatus.WON}>Ganho</SelectItem>
-          <SelectItem value={ClientOverallStatus.LOST}>Perdido</SelectItem>
-        </SelectContent>
-      </Select>
-      <DateFilter inModal={inModal} />
-      {managers.length > 0 && (
-        <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
-          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as equipes</SelectItem>
-            {managers.map(m => <SelectItem key={m.id} value={m.id}>Equipe {m.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      )}
-      {isRoleActive('BROKER') && (
-        <Select value={filters.brokerId} onValueChange={value => setFilters(f => ({ ...f, brokerId: value }))}>
-          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os corretores</SelectItem>
-            {(filters.managerId !== 'all'
-              ? brokers.filter(b => b.role === 'BROKER' && b.supervisorId === filters.managerId || b.id === user?.id)
-              : brokers
-            ).map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      )}
-      <Select value={filters.tagId} onValueChange={value => setFilters(f => ({ ...f, tagId: value }))}>
-        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todas as etiquetas</SelectItem>
-          {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Button variant="ghost" className={inModal ? 'w-full' : ''} onClick={() => setFilters(defaultFilters)}>
-        <X className="h-4 w-4 mr-2" />Limpar filtros
-      </Button>
-    </div>
-  );
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -1080,7 +1106,17 @@ export default function PipelinePage() {
       
       {/* Filtros para Desktop */}
       <div className="p-4 border-b bg-card flex-shrink-0 hidden lg:flex">
-        <FilterControls />
+        <FilterControls
+          filters={filters}
+          setFilters={setFilters}
+          pendingDateRange={pendingDateRange}
+          setPendingDateRange={setPendingDateRange}
+          managers={managers}
+          isRoleActive={isRoleActive}
+          brokers={brokers}
+          currentUserId={user?.id}
+          tags={tags}
+        />
       </div>
       
       {/* Layout Desktop: Colunas do Funil */}
@@ -1260,7 +1296,18 @@ export default function PipelinePage() {
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto py-2 pr-1">
-            <FilterControls inModal={true} />
+            <FilterControls
+              inModal={true}
+              filters={filters}
+              setFilters={setFilters}
+              pendingDateRange={pendingDateRange}
+              setPendingDateRange={setPendingDateRange}
+              managers={managers}
+              isRoleActive={isRoleActive}
+              brokers={brokers}
+              currentUserId={user?.id}
+              tags={tags}
+            />
           </div>
           <DialogFooter className="flex-shrink-0 pt-2">
             <Button
