@@ -31,11 +31,23 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Único ponto que valida o JWT contra o Supabase Auth (round-trip de rede).
-  // Isso também refresca a sessão automaticamente quando necessário.
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) {
-    requestHeaders.set(TRUSTED_USER_HEADER, user.id)
+  // Caminho rápido: verifica a assinatura do JWT localmente contra o JWKS do
+  // projeto (cacheado), sem round-trip de rede — só funciona porque o projeto
+  // usa uma chave de assinatura assimétrica (ECC), confirmado em
+  // Project Settings > API > JWT Keys. Se o token estiver expirado (ou em
+  // qualquer outro caso em que a verificação local não resolva), cai pro
+  // getUser(), que bate no Supabase Auth e sabe renovar a sessão via
+  // refresh token (atualizando os cookies pelo bridge acima).
+  const { data: claimsData } = await supabase.auth.getClaims()
+  let userId = claimsData?.claims.sub ?? null
+
+  if (!userId) {
+    const { data: { user } } = await supabase.auth.getUser()
+    userId = user?.id ?? null
+  }
+
+  if (userId) {
+    requestHeaders.set(TRUSTED_USER_HEADER, userId)
   }
 
   const supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
