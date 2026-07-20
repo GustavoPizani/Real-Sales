@@ -63,14 +63,15 @@ interface ActiveOfferSummary {
 
 // --- Conteúdo compartilhado do card ---
 function ClientCardContent({
-  client, onClientClick, isDragging = false,
+  client, isDragging = false,
   selectionMode = false, isSelected = false, onToggleSelect,
 }: {
-  client: Cliente; onClientClick: () => void; isDragging?: boolean;
+  client: Cliente; isDragging?: boolean;
   selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
 }) {
   const openWhatsApp = (phone: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     const cleanPhone = phone.replace(/\D/g, "");
     window.open(`https://wa.me/55${cleanPhone}`, "_blank");
   };
@@ -82,20 +83,18 @@ function ClientCardContent({
     .join('')
     .toUpperCase();
 
-  return (
-    <div
-      style={{
-        background: 'hsl(var(--card))',
-        border: '1px solid hsl(var(--border) / 0.5)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        borderRadius: '14px',
-        overflow: 'hidden',
-        marginBottom: '10px',
-        opacity: isDragging ? 0.5 : 1,
-      }}
-      onClick={selectionMode ? onToggleSelect : onClientClick}
-      className="group cursor-pointer"
-    >
+  const cardStyle: React.CSSProperties = {
+    background: 'hsl(var(--card))',
+    border: '1px solid hsl(var(--border) / 0.5)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+    borderRadius: '14px',
+    overflow: 'hidden',
+    marginBottom: '10px',
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const cardBody = (
+    <>
       <div className="h-1 w-full bg-gradient-to-r from-secondary-custom via-secondary-custom/60 to-transparent" />
       <div className="p-3.5 space-y-3">
         <div className="flex items-center gap-2.5">
@@ -176,7 +175,21 @@ function ClientCardContent({
           )}
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  if (selectionMode) {
+    return (
+      <div style={cardStyle} onClick={onToggleSelect} className="group cursor-pointer">
+        {cardBody}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/client/${client.id}`} style={cardStyle} className="group cursor-pointer block">
+      {cardBody}
+    </Link>
   );
 }
 
@@ -184,7 +197,6 @@ function ClientCardContent({
 function DraggableClientCard({ client, selectionMode, isSelected, onToggleSelect }: {
   client: Cliente; selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
 }) {
-  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: client.id, data: { stageId: client.funnelStageId }, disabled: selectionMode });
 
   return (
@@ -197,7 +209,6 @@ function DraggableClientCard({ client, selectionMode, isSelected, onToggleSelect
     >
       <ClientCardContent
         client={client}
-        onClientClick={() => router.push(`/client/${client.id}`)}
         isDragging={isDragging}
         selectionMode={selectionMode}
         isSelected={isSelected}
@@ -211,11 +222,9 @@ function DraggableClientCard({ client, selectionMode, isSelected, onToggleSelect
 function MobileClientCard({ client, selectionMode, isSelected, onToggleSelect }: {
   client: Cliente; selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
 }) {
-  const router = useRouter();
   return (
     <ClientCardContent
       client={client}
-      onClientClick={() => router.push(`/client/${client.id}`)}
       selectionMode={selectionMode}
       isSelected={isSelected}
       onToggleSelect={onToggleSelect}
@@ -263,6 +272,46 @@ function FunnelColumn({ stage, clients, selectionMode, selectedClientIds, onTogg
 
 
 const LAST_FUNNEL_STORAGE_KEY = 'pipeline:lastFunnelId';
+const FILTERS_STORAGE_KEY = 'pipeline:filters';
+
+interface PipelineFilters {
+  searchTerm: string;
+  status: ClientOverallStatus | 'all';
+  dateRange: DateRange | undefined;
+  brokerId: string;
+  managerId: string;
+  tagId: string;
+}
+
+const defaultFilters: PipelineFilters = {
+  searchTerm: '',
+  status: ClientOverallStatus.ACTIVE,
+  dateRange: undefined,
+  brokerId: 'all',
+  managerId: 'all',
+  tagId: 'all',
+};
+
+function loadCachedFilters(): PipelineFilters {
+  if (typeof window === 'undefined') return defaultFilters;
+  try {
+    const raw = window.sessionStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return defaultFilters;
+    const parsed = JSON.parse(raw);
+    return {
+      ...defaultFilters,
+      ...parsed,
+      dateRange: parsed.dateRange
+        ? {
+            from: parsed.dateRange.from ? new Date(parsed.dateRange.from) : undefined,
+            to: parsed.dateRange.to ? new Date(parsed.dateRange.to) : undefined,
+          }
+        : undefined,
+    };
+  } catch {
+    return defaultFilters;
+  }
+}
 
 function PipelineSkeleton() {
   return (
@@ -327,21 +376,12 @@ export default function PipelinePage() {
   const [newStageForm, setNewStageForm] = useState({ name: "", color: "#010f27" });
   const [editingStages, setEditingStages] = useState<FunnelStage[]>([]);
 
-  const [filters, setFilters] = useState<{
-    searchTerm: string;
-    status: ClientOverallStatus | 'all';
-    dateRange: DateRange | undefined;
-    brokerId: string;
-    managerId: string;
-    tagId: string;
-  }>({
-    searchTerm: '',
-    status: ClientOverallStatus.ACTIVE,
-    dateRange: undefined as DateRange | undefined,
-    brokerId: 'all',
-    managerId: 'all',
-    tagId: 'all',
-  });
+  const [filters, setFilters] = useState<PipelineFilters>(() => loadCachedFilters());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
@@ -906,7 +946,7 @@ export default function PipelinePage() {
           {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button variant="ghost" className={inModal ? 'w-full' : ''} onClick={() => setFilters({ searchTerm: '', status: ClientOverallStatus.ACTIVE, dateRange: undefined, brokerId: 'all', managerId: 'all', tagId: 'all' })}>
+      <Button variant="ghost" className={inModal ? 'w-full' : ''} onClick={() => setFilters(defaultFilters)}>
         <X className="h-4 w-4 mr-2" />Limpar filtros
       </Button>
     </div>
