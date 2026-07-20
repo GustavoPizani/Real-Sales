@@ -1,6 +1,5 @@
 // app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
@@ -9,10 +8,11 @@ import { notifyNewLead } from "@/lib/notifications";
 
 export const dynamic = 'force-dynamic';
 
+const STATUS_FILTER_VALUES = new Set(['ACTIVE', 'WON', 'LOST']);
+
 export async function GET(request: NextRequest) {
   try {
-    const token = cookies().get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
@@ -21,6 +21,14 @@ export async function GET(request: NextRequest) {
       // Filtro de Tenant: Garante que a query só retorne dados da conta do usuário
       accountId: user.isSuperAdmin ? undefined : user.accountId,
     };
+
+    // Filtro opcional de status (ex.: Pipeline pede só os ACTIVE por padrão,
+    // pra não trazer o histórico de Ganhos/Perdidos no carregamento inicial).
+    // Sem o parâmetro, o comportamento é o mesmo de antes (traz tudo).
+    const statusParam = request.nextUrl.searchParams.get('status');
+    if (statusParam && STATUS_FILTER_VALUES.has(statusParam)) {
+      where.overallStatus = statusParam as Prisma.ClientWhereInput['overallStatus'];
+    }
 
     // Lógica de permissão por cargo (mantida)
     if (user.role === Role.BROKER) {
@@ -69,12 +77,11 @@ const createClientSchema = z.object({
 
 export async function POST(request: NextRequest) {
     try {
-        const token = cookies().get('authToken')?.value;
-        const user = await getUserFromToken(token);
+        const user = await getUserFromToken();
         if (!user) {
             return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
         }
-        
+
         const body = await request.json();
 
         // Valida os dados recebidos com o schema do Zod

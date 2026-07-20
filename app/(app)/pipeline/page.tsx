@@ -25,7 +25,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
 import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { type Cliente, type User as Broker, Role, ClientOverallStatus } from "@/lib/types";
+import { type Client as Cliente, type User as Broker, Role, ClientOverallStatus } from "@/lib/types";
 import { cachedFetch } from "@/lib/api-cache";
 import { DateRange } from "react-day-picker";
 import { useMobileHeader } from "@/contexts/mobile-header-context";
@@ -413,8 +413,14 @@ export default function PipelinePage() {
       // REMOVIDO: Não precisamos mais de localStorage nem headers manuais
       // O Middleware do Supabase cuida dos cookies automaticamente.
 
+      // Status vai pro servidor: evita trazer o histórico de Ganhos/Perdidos
+      // quando o filtro padrão (Em andamento) é o que está selecionado.
+      const clientsUrl = filters.status !== 'all'
+        ? `/api/clients?status=${filters.status}`
+        : '/api/clients';
+
       const [clientsRes, funnelsRes, brokersRes, tagsRes, rolesRes] = await Promise.all([
-        fetch('/api/clients'),
+        fetch(clientsUrl),
         cachedFetch('/api/funnels'),
         cachedFetch('/api/users'),
         cachedFetch('/api/tags'),
@@ -457,7 +463,7 @@ export default function PipelinePage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, selectedFunnelId]);
+  }, [toast, selectedFunnelId, filters.status]);
 
   const selectedFunnel = useMemo(() => {
     if (!selectedFunnelId) return null;
@@ -492,7 +498,7 @@ export default function PipelinePage() {
         (client.email && client.email.toLowerCase().includes(searchTermLower)) ||
         (client.phone && client.phone.includes(filters.searchTerm));
 
-      const matchesStatus = filters.status.toString() === 'all' || client.overallStatus === filters.status;
+      // Status já vem filtrado do servidor (ver fetchData) — não repetir aqui.
 
       const matchesBroker = filters.brokerId === 'all' || client.brokerId === filters.brokerId;
 
@@ -505,7 +511,7 @@ export default function PipelinePage() {
 
       const matchesTag = filters.tagId === 'all' || client.tags?.some(tag => tag.id === filters.tagId);
 
-      return matchesSearch && matchesStatus && matchesBroker && matchesManager && matchesDate && matchesTag;
+      return matchesSearch && matchesBroker && matchesManager && matchesDate && matchesTag;
     });
   }, [allClients, filters, brokers]);
 

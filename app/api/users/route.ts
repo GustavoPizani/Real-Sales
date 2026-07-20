@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { type NextRequest } from "next/server";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,13 @@ export async function GET() {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    const where: Prisma.UserWhereInput = {
+      // Filtro de Tenant: mesma regra usada em /api/clients
+      accountId: user.isSuperAdmin ? undefined : user.accountId,
+    };
+
     const users = await prisma.user.findMany({
+      where,
       include: {
         supervisor: { select: { name: true } },
       },

@@ -22,13 +22,15 @@ export async function GET() {
     where: { setting_key: SETTING_KEY, user_id: accountId },
   }).catch(() => null);
 
+  const cacheHeaders = { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' };
+
   if (saved) {
     try {
-      return NextResponse.json({ settings: JSON.parse(saved.encrypted_value) });
+      return NextResponse.json({ settings: JSON.parse(saved.encrypted_value) }, { headers: cacheHeaders });
     } catch {}
   }
 
-  return NextResponse.json({ settings: DEFAULT_SETTINGS });
+  return NextResponse.json({ settings: DEFAULT_SETTINGS }, { headers: cacheHeaders });
 }
 
 export async function POST(request: Request) {
