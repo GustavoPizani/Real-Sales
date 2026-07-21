@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Calendar, Clock, User, AlertCircle, MoreHorizontal, Trash2, Edit, CheckCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
+import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
 
 interface Task {
   id: string;
@@ -23,6 +25,8 @@ interface Task {
   dateTime: string;
   clientId: string;
   client?: { fullName: string };
+  reminderMinutesBefore?: number | null;
+  overdueRepeatMinutes?: number | null;
 }
 
 interface Client {
@@ -41,7 +45,7 @@ export default function TasksPage() {
   const [isCompleteTaskDialogOpen, setIsCompleteTaskDialogOpen] = useState(false);
   const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
   const [completionComment, setCompletionComment] = useState("");
-  const [createForm, setCreateForm] = useState({ title: "", description: "", dateTime: "", clientId: "" });
+  const [createForm, setCreateForm] = useState<{ title: string; description: string; dateTime: string; clientId: string; reminderMinutesBefore: number | null; overdueRepeatMinutes: number | null }>({ title: "", description: "", dateTime: "", clientId: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
   const { toast } = useToast();
 
   const fetchTasks = async () => {
@@ -71,6 +75,10 @@ export default function TasksPage() {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!createForm.dateTime) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione a data e hora da tarefa." });
+      return;
+    }
     try {
       const token = localStorage.getItem("authToken");
       const res = await fetch("/api/tasks", {
@@ -81,11 +89,13 @@ export default function TasksPage() {
           description: createForm.description,
           dateTime: createForm.dateTime,
           clientId: createForm.clientId,
+          reminderMinutesBefore: createForm.reminderMinutesBefore,
+          overdueRepeatMinutes: createForm.overdueRepeatMinutes,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Erro ao criar tarefa");
       setIsCreateModalOpen(false);
-      setCreateForm({ title: "", description: "", dateTime: "", clientId: "" });
+      setCreateForm({ title: "", description: "", dateTime: "", clientId: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
       fetchTasks();
       toast({ title: "Sucesso!", description: "Tarefa criada com sucesso." });
     } catch (error: any) {
@@ -106,6 +116,8 @@ export default function TasksPage() {
           description: editingTask.description,
           dateTime: editingTask.dateTime,
           clientId: editingTask.clientId,
+          reminderMinutesBefore: editingTask.reminderMinutesBefore ?? null,
+          overdueRepeatMinutes: editingTask.overdueRepeatMinutes ?? null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Erro ao atualizar tarefa");
@@ -199,12 +211,18 @@ export default function TasksPage() {
               </div>
               <div>
                 <Label htmlFor="dateTime">Data e Hora *</Label>
-                <Input id="dateTime" type="datetime-local" value={createForm.dateTime} onChange={(e) => setCreateForm({ ...createForm, dateTime: e.target.value })} required />
+                <DateTimePicker value={createForm.dateTime} onChange={(v) => setCreateForm({ ...createForm, dateTime: v })} />
               </div>
               <div>
                 <Label htmlFor="description">Descrição</Label>
                 <Textarea id="description" value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} />
               </div>
+              <TaskReminderFields
+                reminderMinutesBefore={createForm.reminderMinutesBefore}
+                onReminderMinutesBeforeChange={(v) => setCreateForm({ ...createForm, reminderMinutesBefore: v })}
+                overdueRepeatMinutes={createForm.overdueRepeatMinutes}
+                onOverdueRepeatMinutesChange={(v) => setCreateForm({ ...createForm, overdueRepeatMinutes: v })}
+              />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>Cancelar</Button>
                 <Button type="submit">Criar Tarefa</Button>
@@ -294,12 +312,18 @@ export default function TasksPage() {
               </div>
               <div>
                 <Label>Data e Hora *</Label>
-                <Input type="datetime-local" value={editingTask.dateTime.substring(0, 16)} onChange={(e) => setEditingTask({ ...editingTask, dateTime: e.target.value })} required />
+                <DateTimePicker value={editingTask.dateTime.substring(0, 16)} onChange={(v) => setEditingTask({ ...editingTask, dateTime: v })} />
               </div>
               <div>
                 <Label>Descrição</Label>
                 <Textarea value={editingTask.description ?? ""} onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })} />
               </div>
+              <TaskReminderFields
+                reminderMinutesBefore={editingTask.reminderMinutesBefore ?? null}
+                onReminderMinutesBeforeChange={(v) => setEditingTask({ ...editingTask, reminderMinutesBefore: v })}
+                overdueRepeatMinutes={editingTask.overdueRepeatMinutes ?? null}
+                onOverdueRepeatMinutesChange={(v) => setEditingTask({ ...editingTask, overdueRepeatMinutes: v })}
+              />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
                 <Button type="submit">Salvar Alterações</Button>

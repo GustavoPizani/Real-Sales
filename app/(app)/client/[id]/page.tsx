@@ -29,6 +29,8 @@ import { cachedFetch, invalidateCache } from '@/lib/api-cache';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
+import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
 
 // --- Tipos e Constantes ---
 
@@ -173,7 +175,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const [lostDetails, setLostDetails] = useState({ reason: "", feedback: "" });
   const [newFunnelStageId, setNewFunnelStageId] = useState(""); // Alterado de newFunnelStatus para newFunnelStageId
   const [newNote, setNewNote] = useState("");
-  const [taskForm, setTaskForm] = useState({ title: "", description: "", dateTime: "" });
+  const [taskForm, setTaskForm] = useState<{ title: string; description: string; dateTime: string; reminderMinutesBefore: number | null; overdueRepeatMinutes: number | null }>({ title: "", description: "", dateTime: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
   const [editClientForm, setEditClientForm] = useState({ fullName: "", email: "", phone: "" });
   const [newPropertyId, setNewPropertyId] = useState("");
   const [transferToUserId, setTransferToUserId] = useState("");
@@ -674,17 +676,28 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!taskForm.dateTime) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione a data e hora da tarefa." });
+      return;
+    }
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dateTime: new Date(taskForm.dateTime), clientId: clientId }),
+        body: JSON.stringify({
+          title: taskForm.title,
+          description: taskForm.description,
+          dateTime: new Date(taskForm.dateTime),
+          clientId: clientId,
+          reminderMinutesBefore: taskForm.reminderMinutesBefore,
+          overdueRepeatMinutes: taskForm.overdueRepeatMinutes,
+        }),
       });
       if (!response.ok) throw new Error("Falha ao criar tarefa.");
       toast({ title: "Sucesso!", description: "Tarefa criada." });
       setIsTaskDialogOpen(false);
-      setTaskForm({ title: "", description: "", dateTime: "" });
+      setTaskForm({ title: "", description: "", dateTime: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
       refreshClient();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -1252,7 +1265,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
           <Label>Descrição</Label>
           <Textarea value={taskForm.description || ''} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} />
           <Label>Data e Hora</Label>
-          <Input type="datetime-local" value={taskForm.dateTime} onChange={e => setTaskForm({ ...taskForm, dateTime: e.target.value })} required />
+          <DateTimePicker value={taskForm.dateTime} onChange={v => setTaskForm({ ...taskForm, dateTime: v })} />
+          <TaskReminderFields
+            reminderMinutesBefore={taskForm.reminderMinutesBefore}
+            onReminderMinutesBeforeChange={v => setTaskForm({ ...taskForm, reminderMinutesBefore: v })}
+            overdueRepeatMinutes={taskForm.overdueRepeatMinutes}
+            onOverdueRepeatMinutesChange={v => setTaskForm({ ...taskForm, overdueRepeatMinutes: v })}
+          />
           <DialogFooter className="pt-4"><Button variant="outline" type="button" onClick={() => setIsTaskDialogOpen(false)}>Cancelar</Button><Button type="submit">Criar Tarefa</Button></DialogFooter>
         </form>
       </DialogContent></Dialog>

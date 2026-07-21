@@ -51,6 +51,15 @@ export async function POST(request: NextRequest) {
       select: { fullName: true },
     });
 
+    const reminderMinutesBefore: number | null =
+      body.reminderMinutesBefore === undefined || body.reminderMinutesBefore === null
+        ? null
+        : Number(body.reminderMinutesBefore);
+    const overdueRepeatMinutes: number | null =
+      body.overdueRepeatMinutes === undefined || body.overdueRepeatMinutes === null || Number(body.overdueRepeatMinutes) <= 0
+        ? null
+        : Number(body.overdueRepeatMinutes);
+
     const newTask = await prisma.task.create({
       data: {
         title,
@@ -60,6 +69,8 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         type: body.type ?? 'OTHER',
         priority: body.priority ?? 'MEDIUM',
+        reminderMinutesBefore,
+        overdueRepeatMinutes,
       },
     });
 

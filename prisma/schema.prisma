@@ -275,18 +275,23 @@ model AttendanceRecord {
 }
 
 model Task {
-  id             String    @id @default(uuid())
-  title          String
-  dateTime       DateTime
-  isCompleted    Boolean   @default(false)
-  clientId       String
-  userId         String
-  type           TaskType  @default(OTHER)
-  priority       Priority  @default(MEDIUM)
-  description    String?
-  reminderSentAt DateTime?
-  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String    @id @default(uuid())
+  title                  String
+  dateTime               DateTime
+  isCompleted            Boolean   @default(false)
+  clientId               String
+  userId                 String
+  type                   TaskType  @default(OTHER)
+  priority               Priority  @default(MEDIUM)
+  description            String?
+  reminderSentAt         DateTime?
+  // Minutos de antecedência para o aviso desta tarefa. null = usa o padrão do usuário (User.taskReminderMinutes).
+  reminderMinutesBefore  Int?
+  // Intervalo (em minutos) para repetir o aviso enquanto a tarefa estiver atrasada. null/0 = não repete.
+  overdueRepeatMinutes   Int?
+  lastOverdueNotifiedAt  DateTime?
+  client                 Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("tasks")
 }

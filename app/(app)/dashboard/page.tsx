@@ -17,6 +17,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
+import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
 
 interface DashboardStats {
   hierarchicalTotalClients: number;
@@ -98,7 +100,7 @@ export default function DashboardPage() {
 
   const [clientForm, setClientForm] = useState({ fullName: "", email: "", phone: "", selectedbrokerId: "" });
   const [propertyForm, setPropertyForm] = useState({ title: "", endereco: "", price: "" });
-  const [taskForm, setTaskForm] = useState({ title: "", description: "", dueDate: "", clientId: "" });
+  const [taskForm, setTaskForm] = useState<{ title: string; description: string; dueDate: string; clientId: string; reminderMinutesBefore: number | null; overdueRepeatMinutes: number | null }>({ title: "", description: "", dueDate: "", clientId: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
 
   // Modal de conclusão de tarefa
   const [isCompleteTaskOpen, setIsCompleteTaskOpen] = useState(false);
@@ -196,17 +198,28 @@ export default function DashboardPage() {
 
   const handleTaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!taskForm.dueDate) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione a data e hora da tarefa." });
+      return;
+    }
     try {
       const token = localStorage.getItem("authToken");
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: taskForm.title, description: taskForm.description, dateTime: taskForm.dueDate, clientId: taskForm.clientId }),
+        body: JSON.stringify({
+          title: taskForm.title,
+          description: taskForm.description,
+          dateTime: taskForm.dueDate,
+          clientId: taskForm.clientId,
+          reminderMinutesBefore: taskForm.reminderMinutesBefore,
+          overdueRepeatMinutes: taskForm.overdueRepeatMinutes,
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Erro ao criar tarefa");
       toast({ title: "Sucesso!", description: "Tarefa criada com sucesso." });
       setIsTaskModalOpen(false);
-      setTaskForm({ title: "", description: "", dueDate: "", clientId: "" });
+      setTaskForm({ title: "", description: "", dueDate: "", clientId: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
       fetchDashboardData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -389,8 +402,14 @@ export default function DashboardPage() {
                     <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.fullName}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2"><Label>Data e Hora *</Label><Input type="datetime-local" value={taskForm.dueDate} onChange={e => setTaskForm({ ...taskForm, dueDate: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Data e Hora *</Label><DateTimePicker value={taskForm.dueDate} onChange={v => setTaskForm({ ...taskForm, dueDate: v })} /></div>
                 <div className="space-y-2"><Label>Descrição</Label><Textarea value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} /></div>
+                <TaskReminderFields
+                  reminderMinutesBefore={taskForm.reminderMinutesBefore}
+                  onReminderMinutesBeforeChange={v => setTaskForm({ ...taskForm, reminderMinutesBefore: v })}
+                  overdueRepeatMinutes={taskForm.overdueRepeatMinutes}
+                  onOverdueRepeatMinutesChange={v => setTaskForm({ ...taskForm, overdueRepeatMinutes: v })}
+                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Cancelar</Button>
                   <Button type="submit">Criar Tarefa</Button>

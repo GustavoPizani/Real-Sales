@@ -43,6 +43,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const dateTime: string | undefined = body.dateTime ?? body.due_date;
     const clientId: string | undefined = body.clientId ?? body.clienteId ?? body.client_id;
     const isCompleted: boolean | undefined = body.isCompleted ?? body.concluida;
+    const reminderMinutesBefore: number | null | undefined =
+      body.reminderMinutesBefore === undefined
+        ? undefined
+        : body.reminderMinutesBefore === null ? null : Number(body.reminderMinutesBefore);
+    const overdueRepeatMinutes: number | null | undefined =
+      body.overdueRepeatMinutes === undefined
+        ? undefined
+        : (body.overdueRepeatMinutes === null || Number(body.overdueRepeatMinutes) <= 0) ? null : Number(body.overdueRepeatMinutes);
 
     if (!title) return NextResponse.json({ error: 'Título é obrigatório' }, { status: 400 });
 
@@ -54,6 +62,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         dateTime: dateTime ? new Date(dateTime) : undefined,
         clientId: clientId ?? undefined,
         isCompleted: isCompleted !== undefined ? isCompleted : undefined,
+        reminderMinutesBefore,
+        overdueRepeatMinutes,
+        // Se a data mudou ou o intervalo de repetição mudou, reseta os contadores de aviso.
+        reminderSentAt: dateTime ? null : undefined,
+        lastOverdueNotifiedAt: dateTime ? null : undefined,
       },
     });
 
@@ -78,14 +91,22 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     if (body.title !== undefined) data.title = body.title;
     if (body.description !== undefined) data.description = body.description;
-    if (body.dateTime !== undefined) data.dateTime = new Date(body.dateTime);
-    if (body.due_date !== undefined) data.dateTime = new Date(body.due_date);
+    if (body.dateTime !== undefined) { data.dateTime = new Date(body.dateTime); data.reminderSentAt = null; data.lastOverdueNotifiedAt = null; }
+    if (body.due_date !== undefined) { data.dateTime = new Date(body.due_date); data.reminderSentAt = null; data.lastOverdueNotifiedAt = null; }
     if (body.clientId !== undefined) data.clientId = body.clientId;
     if (body.clienteId !== undefined) data.clientId = body.clienteId;
     if (body.client_id !== undefined) data.clientId = body.client_id;
     // Aceita tanto isCompleted quanto o legado concluida
     if (body.isCompleted !== undefined) data.isCompleted = body.isCompleted;
     if (body.concluida !== undefined) data.isCompleted = body.concluida;
+    if (body.reminderMinutesBefore !== undefined) {
+      data.reminderMinutesBefore = body.reminderMinutesBefore === null ? null : Number(body.reminderMinutesBefore);
+    }
+    if (body.overdueRepeatMinutes !== undefined) {
+      data.overdueRepeatMinutes = (body.overdueRepeatMinutes === null || Number(body.overdueRepeatMinutes) <= 0)
+        ? null
+        : Number(body.overdueRepeatMinutes);
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'Nenhum campo para atualizar.' }, { status: 400 });
