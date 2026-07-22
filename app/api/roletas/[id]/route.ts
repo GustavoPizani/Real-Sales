@@ -8,13 +8,13 @@ import { Role } from '@prisma/client';
 export const dynamic = 'force-dynamic';
 
 async function formatRoleta(roleta: any) {
-  const leadCounts = roleta.funnelId
-    ? await prisma.client.groupBy({
-        by: ['brokerId'],
-        where: { funnelId: roleta.funnelId, brokerId: { in: roleta.users.map((u: any) => u.user.id) } },
-        _count: { _all: true },
-      })
-    : [];
+  // Conta leads efetivamente atribuídos por esta roleta — não pelo funil, que pode
+  // ter clientes que entraram por outro caminho (criação manual, outro formulário).
+  const leadCounts = await prisma.client.groupBy({
+    by: ['brokerId'],
+    where: { roletaId: roleta.id, brokerId: { in: roleta.users.map((u: any) => u.user.id) } },
+    _count: { _all: true },
+  });
   const leadCountMap = new Map(leadCounts.map((c) => [c.brokerId, c._count._all]));
 
   return {

@@ -93,6 +93,10 @@ export async function POST(request: NextRequest) {
         
         const { fullName, email, phone, brokerId, funnelId, funnelStageId } = validation.data;
 
+        // Admin raiz não tem accountId preenchido (o próprio id É a conta) — sem esse
+        // fallback, clientes criados por ele ficavam sem tenant e somem para os corretores.
+        const creatorAccountId = user.accountId ?? user.id;
+
         const newClient = await prisma.client.create({
             data: {
                 fullName,
@@ -102,7 +106,7 @@ export async function POST(request: NextRequest) {
                 funnelStageId,
                 brokerId,
                 createdById: user.id,
-                accountId: user.accountId,
+                accountId: creatorAccountId,
             }
         });
 
@@ -117,7 +121,7 @@ export async function POST(request: NextRequest) {
                 clientName: fullName,
                 brokerId,
                 brokerName: broker?.name ?? 'Corretor',
-                accountId: user.accountId,
+                accountId: creatorAccountId,
             }).catch(() => null);
         }
 

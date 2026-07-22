@@ -126,6 +126,8 @@ export async function ingestLead(
 
   // Determina corretor — roleta ou padrão do mapeamento
   let brokerId: string | null = mapping.defaultBrokerId ?? null
+  // Só marcamos roletaId quando o corretor realmente veio da roleta (não do defaultBrokerId).
+  let assignedRoletaId: string | null = null
 
   if (!brokerId && mapping.roletaId) {
     const rouletteUsers = await prisma.leadRouletteUser.findMany({
@@ -138,6 +140,7 @@ export async function ingestLead(
     const activeUser = rouletteUsers[0]
     if (activeUser) {
       brokerId = activeUser.userId
+      assignedRoletaId = mapping.roletaId
       await prisma.leadRouletteUser.update({
         where: { rouletteId_userId: { rouletteId: activeUser.rouletteId, userId: activeUser.userId } },
         data: { lastAssignedAt: new Date() },
@@ -150,6 +153,14 @@ export async function ingestLead(
     return { status: 'error', reason: 'no_broker' }
   }
 
+  const broker = await prisma.user.findUnique({
+    where: { id: brokerId },
+    select: { name: true, accountId: true, slackWebhookUrl: true },
+  })
+  // Admin raiz não tem accountId preenchido (o próprio id É a conta) — sem esse
+  // fallback, leads atribuídos a ele ficavam sem tenant e sumiam do pipeline.
+  const clientAccountId = broker?.accountId ?? brokerId
+
   const client = await prisma.client.create({
     data: {
       fullName,
@@ -161,6 +172,8 @@ export async function ingestLead(
       createdAt: leadDate,
       brokerId,
       createdById: brokerId,
+      accountId: clientAccountId,
+      roletaId: assignedRoletaId,
       funnelId: mapping.funnelId!,
       funnelStageId: mapping.funnelStageId!,
       propertyOfInterestId: mapping.propertyId ?? undefined,
@@ -179,11 +192,6 @@ export async function ingestLead(
   await prisma.facebookFormMapping.update({
     where: { id: mapping.id },
     data: { leadCount: { increment: 1 }, lastSyncedAt: new Date() },
-  })
-
-  const broker = await prisma.user.findUnique({
-    where: { id: brokerId },
-    select: { name: true, accountId: true, slackWebhookUrl: true },
   })
 
   // Lê mensagem de primeiro contato configurada pelo usuário
@@ -213,7 +221,7 @@ export async function ingestLead(
       brokerId,
       brokerName: broker?.name ?? 'Corretor',
       campaignSource: campaign,
-      accountId: broker?.accountId,
+      accountId: clientAccountId,
     }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err)),
     sendSlackLeadNotification({
       clientId: client.id,

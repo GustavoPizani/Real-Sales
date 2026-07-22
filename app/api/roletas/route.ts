@@ -39,16 +39,17 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // Conta quantos leads cada corretor recebeu através do funil desta roleta
+    // Conta quantos leads cada corretor efetivamente recebeu através desta roleta
+    // (não pelo funil — um funil pode ter clientes que não vieram da roleta).
     const leadCounts = await prisma.client.groupBy({
-      by: ['brokerId', 'funnelId'],
+      by: ['brokerId', 'roletaId'],
       where: {
-        funnelId: { in: roletas.map((r) => r.funnelId).filter((id): id is string => !!id) },
+        roletaId: { in: roletas.map((r) => r.id) },
       },
       _count: { _all: true },
     });
-    const leadCountKey = (brokerId: string, funnelId: string) => `${brokerId}::${funnelId}`;
-    const leadCountMap = new Map(leadCounts.map((c) => [leadCountKey(c.brokerId, c.funnelId!), c._count._all]));
+    const leadCountKey = (brokerId: string, roletaId: string) => `${brokerId}::${roletaId}`;
+    const leadCountMap = new Map(leadCounts.map((c) => [leadCountKey(c.brokerId, c.roletaId!), c._count._all]));
 
     // Formata os dados no formato que a tela espera
     const formattedRoletas = roletas.map((roleta) => ({
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
         email: u.user.email,
         role: u.user.role,
         lastAssignedAt: u.lastAssignedAt,
-        leadCount: roleta.funnelId ? leadCountMap.get(leadCountKey(u.user.id, roleta.funnelId)) ?? 0 : 0,
+        leadCount: leadCountMap.get(leadCountKey(u.user.id, roleta.id)) ?? 0,
       })),
     }));
 
