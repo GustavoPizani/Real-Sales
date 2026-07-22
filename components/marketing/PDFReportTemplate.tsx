@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { DollarSign, MousePointer, Hash, Percent, Users, Target, Eye, MousePointerClick, Globe, Activity, Bot, Calendar } from "lucide-react";
+import { DollarSign, MousePointer, Hash, Percent, Users, Target, Eye, MousePointerClick, Globe, Activity, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -11,31 +11,6 @@ interface PDFReportTemplateProps {
   data: any[];
   dateRange: { from: Date; to: Date } | undefined;
 }
-
-const getSmartAnalysis = (metrics: any) => {
-  const { cpl, ctr, spend, leads } = metrics;
-  const analysis = [];
-  if (leads === 0 && spend > 100) {
-    analysis.push("⚠️ PROBLEMA CRÍTICO: Campanha consumindo verba sem conversões. Revisar Landing Page e Pixel.");
-    analysis.push("👉 AÇÃO: Pausar e verificar funil.");
-  } else if (cpl > 50) {
-    analysis.push(`⚠️ ALERTA DE CUSTO: CPL de R$ ${cpl.toFixed(2)} está alto.`);
-    if (ctr < 1) {
-      analysis.push(`📉 DIAGNÓSTICO: CTR baixo (${ctr.toFixed(2)}%). Criativos não estão conectando.`);
-      analysis.push("👉 AÇÃO: Testar novos criativos imediatamente.");
-    } else {
-      analysis.push(`✅ DIAGNÓSTICO: Tráfego qualificado (CTR ${ctr.toFixed(2)}%), mas baixa conversão.`);
-      analysis.push("👉 AÇÃO: Otimizar oferta e velocidade do site.");
-    }
-  } else if (cpl > 0 && cpl <= 20) {
-    analysis.push(`🚀 OPORTUNIDADE: CPL excelente (R$ ${cpl.toFixed(2)}).`);
-    analysis.push("👉 AÇÃO: Escalar orçamento em 20% mantendo o criativo campeão.");
-  } else {
-    analysis.push("ℹ️ ESTABILIDADE: Performance dentro do esperado.");
-    analysis.push("👉 AÇÃO: Manter e iniciar testes A/B secundários.");
-  }
-  return analysis;
-};
 
 const fmt = {
   currency: (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0),
@@ -67,7 +42,6 @@ const FunnelBar = ({ label, value, max, color }: any) => (
 );
 
 const ReportPage = ({ title, subTitle, metrics, dateRange, isLast }: any) => {
-  const analysis = getSmartAnalysis(metrics);
   const cplHealth = metrics.cpl > 0 ? Math.min((metrics.cpl / 80) * 100, 100) : 0;
 
   return (
@@ -113,21 +87,6 @@ const ReportPage = ({ title, subTitle, metrics, dateRange, isLast }: any) => {
         <KpiCard title="Cliques" value={fmt.number(metrics.clicks)} icon={MousePointerClick} />
         <KpiCard title="CPC" value={fmt.currency(metrics.cpc)} icon={MousePointer} />
         <KpiCard title="Alcance" value={fmt.number(metrics.reach)} icon={Globe} />
-      </div>
-
-      {/* Análise */}
-      <div style={{ backgroundColor: "#fffbeb", border: `1px solid ${GOLD}33`, borderLeft: `3px solid ${GOLD}` }}
-        className="rounded-lg p-4 mb-5">
-        <h3 className="text-sm font-bold mb-2 flex items-center gap-2" style={{ color: GOLD }}>
-          <Bot className="w-4 h-4" /> Insights e Recomendações
-        </h3>
-        <div className="space-y-1">
-          {analysis.map((line, i) => (
-            <p key={i} className="text-xs text-slate-700 leading-relaxed pl-2" style={{ borderLeft: `2px solid ${GOLD}66` }}>
-              {line}
-            </p>
-          ))}
-        </div>
       </div>
 
       {/* Funil */}
