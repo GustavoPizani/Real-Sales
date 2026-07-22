@@ -29,8 +29,8 @@ export default function LoginPage() {
 
   if (isAuthLoading || user) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: 'var(--accent-primary)' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#07090D' }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#D9B779' }} />
       </div>
     );
   }
@@ -61,7 +61,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row relative overflow-hidden" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <div className="min-h-screen flex flex-col lg:flex-row relative overflow-hidden" style={{ background: '#07090D', color: '#EDE9E0' }}>
 
       {/* Background Gradients */}
       <div className="absolute inset-0 z-0">
@@ -80,15 +80,15 @@ export default function LoginPage() {
                 alt="Nordic CRM"
                 className="h-20 w-auto object-contain self-start"
               />
-              <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>
+              <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight" style={{ color: '#EDE9E0', letterSpacing: '-0.025em' }}>
                 Nordic
               </h1>
-              <div className="h-1.5 w-20 rounded-full" style={{ background: 'var(--accent-primary)' }} />
+              <div className="h-1.5 w-20 rounded-full" style={{ background: '#D9B779' }} />
             </div>
           </div>
 
-          <p className="text-2xl max-w-md leading-relaxed font-light" style={{ color: 'var(--text-secondary)' }}>
-            O ecossistema definitivo para <span className="font-medium" style={{ color: 'var(--text-primary)' }}>corretores de elite</span>.
+          <p className="text-2xl max-w-md leading-relaxed font-light" style={{ color: '#70778C' }}>
+            O ecossistema definitivo para <span className="font-medium" style={{ color: '#EDE9E0' }}>corretores de elite</span>.
             Transforme leads em contratos com inteligência.
           </p>
         </div>
@@ -98,15 +98,15 @@ export default function LoginPage() {
           <div className="glass-card w-full max-w-md space-y-8 p-8 lg:p-10">
 
             <div className="text-left space-y-2">
-              <h2 className="text-4xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>Acessar conta</h2>
-              <p style={{ color: 'var(--text-muted)' }}>
+              <h2 className="text-4xl font-semibold tracking-tight" style={{ color: '#EDE9E0', letterSpacing: '-0.025em' }}>Acessar conta</h2>
+              <p style={{ color: '#3A3F4D' }}>
                 Insira suas credenciais para entrar no CRM
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                <Label htmlFor="email" className="text-sm font-medium" style={{ color: '#70778C' }}>
                   E-mail
                 </Label>
                 <Input
@@ -117,17 +117,17 @@ export default function LoginPage() {
                   placeholder="seu@email.com"
                   className="h-12 transition-all outline-none"
                   style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: 'var(--text-primary)',
+                    background: '#171C26',
+                    border: '1px solid rgba(112, 119, 140, 0.15)',
+                    borderRadius: '5px',
+                    color: '#EDE9E0',
                   }}
                   required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Senha</Label>
+                <Label htmlFor="password" className="text-sm font-medium" style={{ color: '#70778C' }}>Senha</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -137,10 +137,10 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     className="h-12 transition-all pr-12 outline-none"
                     style={{
-                      background: 'var(--bg-secondary)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
+                      background: '#171C26',
+                      border: '1px solid rgba(112, 119, 140, 0.15)',
+                      borderRadius: '5px',
+                      color: '#EDE9E0',
                     }}
                     required
                   />
@@ -148,7 +148,7 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: 'var(--text-muted)' }}
+                    style={{ color: '#3A3F4D' }}
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -167,10 +167,10 @@ export default function LoginPage() {
                 size="lg"
                 className="w-full font-semibold h-13 text-lg transition-all active:scale-[0.98]"
                 style={{
-                  background: 'var(--accent-primary)',
+                  background: '#D9B779',
                   color: '#07090D',
-                  borderRadius: 'var(--radius-sm)',
-                  boxShadow: 'var(--shadow-glow)',
+                  borderRadius: '5px',
+                  boxShadow: '0 0 20px rgba(217, 183, 121, 0.12)',
                 }}
                 disabled={isLoading}
               >
@@ -187,20 +187,20 @@ export default function LoginPage() {
 
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
-                  <input type="checkbox" className="rounded" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }} />
+                <label className="flex items-center gap-2 cursor-pointer" style={{ color: '#70778C' }}>
+                  <input type="checkbox" className="rounded" style={{ background: '#171C26', borderColor: 'rgba(112, 119, 140, 0.15)' }} />
                   Lembrar acesso
                 </label>
-                <a href="#" className="font-medium transition-colors" style={{ color: 'var(--accent-primary)' }}>
+                <a href="#" className="font-medium transition-colors" style={{ color: '#D9B779' }}>
                   Esqueceu a senha?
                 </a>
               </div>
 
               <div className="pt-8">
-                <div className="p-5 rounded-2xl flex items-start gap-3" style={{ background: 'var(--accent-glow)', border: '1px solid var(--border-accent)' }}>
-                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: 'var(--accent-primary)' }} />
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                    <span className="font-bold uppercase tracking-wider" style={{ color: 'var(--accent-primary)' }}>Suporte:</span><br />
+                <div className="p-5 rounded-2xl flex items-start gap-3" style={{ background: 'rgba(217, 183, 121, 0.10)', border: '1px solid rgba(217, 183, 121, 0.30)' }}>
+                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: '#D9B779' }} />
+                  <p className="text-xs leading-relaxed" style={{ color: '#70778C' }}>
+                    <span className="font-bold uppercase tracking-wider" style={{ color: '#D9B779' }}>Suporte:</span><br />
                     Caso não tenha suas credenciais, solicite ao seu gestor imediato.
                   </p>
                 </div>

@@ -30,8 +30,8 @@ export default function ChangePasswordPage() {
 
   if (isAuthLoading || !user || !user.mustChangePassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: 'var(--accent-primary)' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#07090D' }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#D9B779' }} />
       </div>
     );
   }
@@ -73,20 +73,20 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: '#07090D', color: '#EDE9E0' }}>
       <div className="glass-card w-full max-w-md space-y-8 p-8 lg:p-10">
         <div className="text-left space-y-2">
-          <h2 className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>
+          <h2 className="text-3xl font-semibold tracking-tight" style={{ color: '#EDE9E0', letterSpacing: '-0.025em' }}>
             Defina sua nova senha
           </h2>
-          <p style={{ color: 'var(--text-muted)' }}>
+          <p style={{ color: '#3A3F4D' }}>
             Como este é o seu primeiro acesso com a senha temporária, por segurança você precisa criar uma nova senha antes de continuar.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Nova senha</Label>
+            <Label htmlFor="password" className="text-sm font-medium" style={{ color: '#70778C' }}>Nova senha</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -96,10 +96,10 @@ export default function ChangePasswordPage() {
                 placeholder="••••••••"
                 className="h-12 transition-all pr-12 outline-none"
                 style={{
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
+                  background: '#171C26',
+                  border: '1px solid rgba(112, 119, 140, 0.15)',
+                  borderRadius: '5px',
+                  color: '#EDE9E0',
                 }}
                 required
                 minLength={6}
@@ -108,7 +108,7 @@ export default function ChangePasswordPage() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
+                style={{ color: '#3A3F4D' }}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -116,7 +116,7 @@ export default function ChangePasswordPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Confirmar nova senha</Label>
+            <Label htmlFor="confirmPassword" className="text-sm font-medium" style={{ color: '#70778C' }}>Confirmar nova senha</Label>
             <Input
               id="confirmPassword"
               type={showPassword ? 'text' : 'password'}
@@ -125,10 +125,10 @@ export default function ChangePasswordPage() {
               placeholder="••••••••"
               className="h-12 transition-all outline-none"
               style={{
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
+                background: '#171C26',
+                border: '1px solid rgba(112, 119, 140, 0.15)',
+                borderRadius: '5px',
+                color: '#EDE9E0',
               }}
               required
               minLength={6}
@@ -147,10 +147,10 @@ export default function ChangePasswordPage() {
             size="lg"
             className="w-full font-semibold h-13 text-lg transition-all active:scale-[0.98]"
             style={{
-              background: 'var(--accent-primary)',
+              background: '#D9B779',
               color: '#07090D',
-              borderRadius: 'var(--radius-sm)',
-              boxShadow: 'var(--shadow-glow)',
+              borderRadius: '5px',
+              boxShadow: '0 0 20px rgba(217, 183, 121, 0.12)',
             }}
             disabled={isLoading}
           >

@@ -2,9 +2,11 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { LogIn, Target, BarChart2, Briefcase } from 'lucide-react'
 
+// Página pública (landing) — identidade sempre escura, independente do
+// tema claro/escuro escolhido dentro do app (que só afeta telas logadas).
 export default function LandingPage() {
   return (
-    <div className="flex flex-col min-h-screen text-white relative overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+    <div className="flex flex-col min-h-screen text-white relative overflow-hidden" style={{ background: '#07090D' }}>
 
       {/* Background glows */}
       <div className="absolute inset-0 z-0 pointer-events-none">
@@ -13,10 +15,10 @@ export default function LandingPage() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 px-4 lg:px-6 h-16 flex items-center justify-center border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+      <header className="relative z-10 px-4 lg:px-6 h-16 flex items-center justify-center border-b" style={{ borderColor: 'rgba(112, 119, 140, 0.15)' }}>
         <Link href="/" className="flex items-center gap-3">
           <img src="/nordic-logo.svg" alt="Nordic CRM" className="w-8 h-8" />
-          <span className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>Nordic CRM</span>
+          <span className="text-xl font-semibold" style={{ color: '#EDE9E0' }}>Nordic CRM</span>
         </Link>
       </header>
 
@@ -26,25 +28,25 @@ export default function LandingPage() {
           <div className="container px-4 md:px-6 mx-auto">
             <div className="flex flex-col items-center justify-center space-y-8 text-center">
               <div className="space-y-4">
-                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl" style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>
+                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl" style={{ color: '#EDE9E0', letterSpacing: '-0.025em' }}>
                   O CRM definitivo para o{' '}
-                  <span style={{ color: 'var(--accent-primary)' }}>mercado imobiliário</span>
+                  <span style={{ color: '#D9B779' }}>mercado imobiliário</span>
                 </h1>
-                <div className="h-1 w-24 rounded-full mx-auto" style={{ background: 'var(--accent-primary)' }} />
+                <div className="h-1 w-24 rounded-full mx-auto" style={{ background: '#D9B779' }} />
               </div>
-              <p className="mx-auto max-w-[700px] md:text-xl font-light leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              <p className="mx-auto max-w-[700px] md:text-xl font-light leading-relaxed" style={{ color: '#70778C' }}>
                 Organize seus leads, gerencie seu pipeline de vendas e feche mais negócios com uma ferramenta pensada para{' '}
-                <span className="font-medium" style={{ color: 'var(--text-primary)' }}>corretores de elite</span>.
+                <span className="font-medium" style={{ color: '#EDE9E0' }}>corretores de elite</span>.
               </p>
               <Link href="/login">
                 <Button
                   size="lg"
                   className="font-semibold px-10 py-6 text-lg transition-all active:scale-[0.98]"
                   style={{
-                    background: 'var(--accent-primary)',
+                    background: '#D9B779',
                     color: '#07090D',
-                    boxShadow: 'var(--shadow-glow)',
-                    borderRadius: 'var(--radius-sm)',
+                    boxShadow: '0 0 20px rgba(217, 183, 121, 0.12)',
+                    borderRadius: '5px',
                   }}
                 >
                   <LogIn className="h-5 w-5 mr-2" />
@@ -57,7 +59,7 @@ export default function LandingPage() {
       </main>
 
       {/* Features */}
-      <section className="relative z-10 w-full py-16 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+      <section className="relative z-10 w-full py-16 border-t" style={{ borderColor: 'rgba(112, 119, 140, 0.15)' }}>
         <div className="container mx-auto px-4 md:px-6">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-12">
             {[
@@ -80,12 +82,12 @@ export default function LandingPage() {
               <div key={title} className="glass-card flex flex-col items-center text-center p-8 gap-4">
                 <div
                   className="flex h-14 w-14 items-center justify-center rounded-full"
-                  style={{ background: 'var(--accent-glow)', border: '1px solid var(--border-accent)' }}
+                  style={{ background: 'rgba(217, 183, 121, 0.10)', border: '1px solid rgba(217, 183, 121, 0.30)' }}
                 >
-                  <Icon className="h-7 w-7" style={{ color: 'var(--accent-primary)' }} />
+                  <Icon className="h-7 w-7" style={{ color: '#D9B779' }} />
                 </div>
-                <h3 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{desc}</p>
+                <h3 className="text-xl font-semibold" style={{ color: '#EDE9E0' }}>{title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: '#70778C' }}>{desc}</p>
               </div>
             ))}
           </div>
@@ -93,8 +95,8 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 flex py-6 items-center justify-center border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>&copy; {new Date().getFullYear()} Nordic CRM. Todos os direitos reservados.</p>
+      <footer className="relative z-10 flex py-6 items-center justify-center border-t" style={{ borderColor: 'rgba(112, 119, 140, 0.15)' }}>
+        <p className="text-xs" style={{ color: '#3A3F4D' }}>&copy; {new Date().getFullYear()} Nordic CRM. Todos os direitos reservados.</p>
       </footer>
     </div>
   )
