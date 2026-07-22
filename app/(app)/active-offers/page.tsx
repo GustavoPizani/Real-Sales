@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,10 +28,17 @@ interface ActiveOffer {
 
 export default function ActiveOffersPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [offers, setOffers] = useState<ActiveOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role === 'BROKER') {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
 
   const fetchOffers = useCallback(async () => {
     setLoading(true);
@@ -61,6 +69,10 @@ export default function ActiveOffersPage() {
     };
     return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>;
   };
+
+  if (!user || user.role === 'BROKER') {
+    return null;
+  }
 
   return (
     <div className="p-6 space-y-6">

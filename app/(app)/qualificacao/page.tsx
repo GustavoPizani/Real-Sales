@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -184,6 +185,17 @@ function ConfiguracaoTab() {
 
 export default function QualificacaoPage() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user && user.role === 'BROKER') {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
+
+  if (!user || user.role === 'BROKER') {
+    return null;
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
