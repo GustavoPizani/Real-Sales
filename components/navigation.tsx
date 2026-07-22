@@ -33,7 +33,7 @@ const navigationLinks: NavItem[] = [
   { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Imóveis', href: '/properties', icon: Building, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
-  { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente'] },
+  { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
 ];
 
 interface NavigationProps {
@@ -79,7 +79,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
 
       <aside
         className={cn(
-          "sidebar-custom text-[var(--text-secondary)] h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
+          "sidebar-custom text-[var(--sidebar-nav-text)] h-screen flex flex-col fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out",
           isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full w-64",
           "lg:translate-x-0",
           "overflow-y-auto overflow-x-hidden",
@@ -88,18 +88,18 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
         onMouseEnter={() => !isMobileOpen && setIsDesktopExpanded(true)}
         onMouseLeave={() => !isMobileOpen && setIsDesktopExpanded(false)}
       >
-        <div className="p-4 flex-shrink-0 border-b border-[var(--border-subtle)] flex items-center justify-between">
+        <div className="p-4 flex-shrink-0 border-b border-[var(--sidebar-nav-border)] flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center justify-start gap-3">
             <img src="/nordic-logo.svg" alt="Nordic CRM" className="w-8 h-8" />
             <div className={cn(
               "flex flex-col transition-opacity duration-200 whitespace-nowrap",
               isExpanded ? "opacity-100" : "opacity-0"
             )}>
-              <span className="text-lg font-semibold leading-tight text-[var(--text-primary)]">Nordic</span>
-              <span className="text-xs text-[var(--text-muted)] font-normal">CRM</span>
+              <span className="text-lg font-semibold leading-tight text-[var(--sidebar-nav-text-strong)]">Nordic</span>
+              <span className="text-xs text-[var(--sidebar-nav-text-muted)] font-normal">CRM</span>
             </div>
           </Link>
-          <Button variant="ghost" size="icon" className="lg:hidden text-[var(--text-secondary)]" onClick={() => setIsMobileOpen(false)}>
+          <Button variant="ghost" size="icon" className="lg:hidden text-[var(--sidebar-nav-text)]" onClick={() => setIsMobileOpen(false)}>
             <X className="h-6 w-6" />
           </Button>
         </div>
@@ -114,10 +114,10 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                     href={item.href}
                     onClick={() => isMobileOpen && setIsMobileOpen(false)}
                     className={cn(
-                      "flex items-center py-[10px] px-4 text-sm font-medium rounded-md transition-all duration-200 group relative border-l-2",
+                      "flex items-center py-[10px] px-4 text-sm font-medium rounded-md transition-all duration-200 group relative",
                       pathname.startsWith(item.href)
-                        ? "text-[var(--accent-primary)] border-[var(--accent-primary)] bg-[var(--accent-glow)]"
-                        : "text-[var(--text-secondary)] border-transparent hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
+                        ? "text-[var(--sidebar-nav-active-text)] bg-[var(--sidebar-nav-active-bg)] font-semibold"
+                        : "text-[var(--sidebar-nav-text)] hover:bg-[var(--sidebar-nav-hover-bg)] hover:text-[var(--sidebar-nav-text-strong)]"
                     )}
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />
@@ -134,7 +134,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
           </ul>
         </nav>
 
-        <div className="p-3 border-t border-[var(--border-subtle)] flex-shrink-0">
+        <div className="p-3 border-t border-[var(--sidebar-nav-border)] flex-shrink-0">
           <div className="flex items-center min-w-0 mb-3">
               <div className="w-10 h-10 bg-[var(--accent-glow)] rounded-full flex items-center justify-center flex-shrink-0 border border-[var(--border-accent)]">
                 <span className="text-md font-medium text-[var(--accent-primary)]">
@@ -145,8 +145,8 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
                 "ml-3 min-w-0 flex-1 transition-opacity whitespace-nowrap",
                 isExpanded ? "opacity-100" : "opacity-0"
               )}>
-                <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{user?.name}</p>
-                <p className="text-xs text-[var(--text-muted)] truncate">
+                <p className="text-sm font-semibold truncate text-[var(--sidebar-nav-text-strong)]">{user?.name}</p>
+                <p className="text-xs text-[var(--sidebar-nav-text-muted)] truncate">
                   {getRoleLabel(user?.role || '')}
                 </p>
               </div>
@@ -156,7 +156,7 @@ export function Navigation({ isMobileOpen, setIsMobileOpen }: NavigationProps) {
             onClick={handleLogout}
             variant="ghost"
             className={cn(
-              "w-full text-[var(--text-secondary)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)] transition-colors duration-200",
+              "w-full text-[var(--sidebar-nav-text)] hover:bg-[var(--sidebar-nav-hover-bg)] hover:text-[var(--sidebar-nav-text-strong)] transition-colors duration-200",
               isExpanded ? "justify-start" : "justify-center"
             )}
           >

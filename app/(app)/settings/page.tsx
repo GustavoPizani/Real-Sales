@@ -11,8 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
-import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff, KeyRound, Copy } from "lucide-react";
+import { User as UserIcon, Bell, Shield, Users, Plus, Trash2, Edit, Upload, Download, FileText, Loader2, CheckCircle, XCircle, ListX, Eye, EyeOff, KeyRound, Copy, Sun } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { type User, USER_ROLE_LABELS, Role } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -154,6 +155,20 @@ function ProfileTab() {
   );
 }
 
+function AppearanceTab() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Aparência</CardTitle>
+        <CardDescription>Escolha o tema padrão do sistema.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ThemeToggle />
+      </CardContent>
+    </Card>
+  );
+}
+
 function TeamManagementTab() {
     const { user: currentUser } = useAuth();
     const { toast } = useToast();
@@ -289,23 +304,20 @@ function TeamManagementTab() {
         const token = localStorage.getItem('authToken');
         const method = editingUser ? 'PATCH' : 'POST';
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
-        
+
         const finalSuperiorId = userForm.role === Role.BROKER ? userForm.supervisorId : null;
 
-        const body = { 
+        const body: Record<string, any> = {
             name: userForm.name,
             email: userForm.email,
-            password: userForm.password,
             role: userForm.role,
             supervisorId: finalSuperiorId
         };
 
-        if (!editingUser && !body.password) {
-            toast({ variant: 'destructive', title: 'Erro', description: 'A senha é obrigatória para novos usuários.' });
-            return;
-        }
-        if (editingUser && !body.password) {
-            delete body.password;
+        // Na edição, senha é opcional (só sobrescreve se preenchida).
+        // Na criação, a senha temporária é sempre gerada pelo servidor.
+        if (editingUser && userForm.password) {
+            body.password = userForm.password;
         }
 
         try {
@@ -314,11 +326,18 @@ function TeamManagementTab() {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(body),
             });
+            const data = await response.json();
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Falha ao salvar usuário.');
+                throw new Error(data.error || 'Falha ao salvar usuário.');
             }
-            toast({ title: 'Sucesso!', description: `Usuário ${editingUser ? 'atualizado' : 'criado'}.` });
+
+            if (!editingUser) {
+                // Usuário criado: mostra a senha temporária + mensagem pronta para WhatsApp.
+                setResetPasswordUser(data as User);
+                setResetMessage(data.message);
+            } else {
+                toast({ title: 'Sucesso!', description: 'Usuário atualizado.' });
+            }
             resetForm();
             fetchData();
         } catch (error: any) {
@@ -477,15 +496,21 @@ function TeamManagementTab() {
                             <Label htmlFor="email">Email</Label>
                             <Input id="email" type="email" value={userForm.email} onChange={(e) => setUserForm({...userForm, email: e.target.value})} required />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Senha {editingUser && "(Opcional)"}</Label>
-                            <div className="relative">
-                                <Input id="password" type={showUserPassword ? 'text' : 'password'} placeholder={editingUser ? "Deixe em branco para não alterar" : ""} onChange={(e) => setUserForm({...userForm, password: e.target.value})} required={!editingUser} className="pr-10" />
-                                <button type="button" onClick={() => setShowUserPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                                    {showUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
+                        {editingUser ? (
+                            <div className="space-y-2">
+                                <Label htmlFor="password">Senha (Opcional)</Label>
+                                <div className="relative">
+                                    <Input id="password" type={showUserPassword ? 'text' : 'password'} placeholder="Deixe em branco para não alterar" onChange={(e) => setUserForm({...userForm, password: e.target.value})} className="pr-10" />
+                                    <button type="button" onClick={() => setShowUserPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                                        {showUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Uma senha temporária será gerada automaticamente. Você poderá copiá-la e enviar por WhatsApp na próxima tela.
+                            </p>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="role">Cargo</Label>
                             <Select value={userForm.role} onValueChange={(value: Role) => {
@@ -536,7 +561,7 @@ function TeamManagementTab() {
             <Dialog open={!!resetPasswordUser} onOpenChange={(open) => { if (!open) closeResetDialog(); }}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Nova senha gerada</DialogTitle>
+                        <DialogTitle>Credenciais geradas</DialogTitle>
                         <DialogDescription>
                             {resetPasswordUser && `Copie a mensagem abaixo e envie para ${resetPasswordUser.name} pelo WhatsApp.`}
                         </DialogDescription>
@@ -1168,9 +1193,10 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-6' : 'grid-cols-3'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-7' : 'grid-cols-4'}`}>
           <TabsTrigger value="profile"><UserIcon className="h-4 w-4 mr-2" />Perfil</TabsTrigger>
           {isAdmin && <TabsTrigger value="team"><Users className="h-4 w-4 mr-2" />Equipe</TabsTrigger>}
+          <TabsTrigger value="appearance"><Sun className="h-4 w-4 mr-2" />Aparência</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notificações</TabsTrigger>
           <TabsTrigger value="security"><Shield className="h-4 w-4 mr-2" />Segurança</TabsTrigger>
           {isAdmin && <TabsTrigger value="import"><Upload className="h-4 w-4 mr-2" />Importação</TabsTrigger>}
@@ -1178,6 +1204,7 @@ export default function SettingsPage() {
         </TabsList>
         <TabsContent value="profile"><ProfileTab /></TabsContent>
         {isAdmin && <TabsContent value="team"><TeamManagementTab /></TabsContent>}
+        <TabsContent value="appearance"><AppearanceTab /></TabsContent>
         <TabsContent value="notifications"><NotificationsTab /></TabsContent>
         <TabsContent value="security"><SecurityTab /></TabsContent>
         {isAdmin && <TabsContent value="import"><DataImportTab /></TabsContent>}

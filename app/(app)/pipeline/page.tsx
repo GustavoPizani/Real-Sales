@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Send, Users as UsersIcon } from "lucide-react";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Send, Users as UsersIcon, Lock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/contexts/auth-context";
@@ -977,6 +977,20 @@ export default function PipelinePage() {
   };
 
   if (loading) return <PipelineSkeleton />;
+
+  if (funnels.length === 0) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-background text-center p-6">
+        <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Lock className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <h2 className="text-lg font-semibold text-foreground">Nenhum funil liberado</h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+          Você ainda não tem acesso a nenhum funil de vendas. Peça a um administrador para liberar o acesso em Configurações → Gerenciar Funis.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">

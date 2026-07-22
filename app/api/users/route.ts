@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generateTempPassword } from "@/lib/generate-temp-password";
 import { type NextRequest } from "next/server";
 import { Prisma, Role } from "@prisma/client";
 
@@ -45,17 +46,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, email, password, role, supervisorId } = body;
+    const { name, email, role, supervisorId } = body;
 
-    if (!name || !email || !password || !role) {
-      return NextResponse.json({ error: "Nome, email, senha e cargo são obrigatórios." }, { status: 400 });
+    if (!name || !email || !role) {
+      return NextResponse.json({ error: "Nome, email e cargo são obrigatórios." }, { status: 400 });
     }
+
+    // Senha temporária gerada automaticamente — o usuário troca no primeiro acesso.
+    const tempPassword = generateTempPassword();
 
     // 1. Cria o usuário no Supabase Auth (precisa da service role key)
     const adminSupabase = createAdminClient();
     const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
       email,
-      password,
+      password: tempPassword,
       email_confirm: true,
     });
 
@@ -75,10 +79,14 @@ export async function POST(request: NextRequest) {
         role: role as Role,
         accountId: creatorAccountId,
         supervisor: supervisorId ? { connect: { id: supervisorId } } : undefined,
+        mustChangePassword: true,
       },
     });
 
-    return NextResponse.json(newUser, { status: 201 });
+    const loginUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/login`;
+    const message = `Olá ${name}! Seu acesso ao Nordic CRM foi criado.\n\nAcesso: ${loginUrl}\nE-mail: ${email}\nSenha temporária: ${tempPassword}\n\nAo entrar, você será solicitado(a) a criar uma nova senha.`;
+
+    return NextResponse.json({ ...newUser, tempPassword, message }, { status: 201 });
   } catch (error) {
     console.error("Erro ao criar utilizador:", error);
     return NextResponse.json({ error: "Erro interno ao criar utilizador" }, { status: 500 });

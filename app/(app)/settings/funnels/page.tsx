@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus, Trash2, Loader2, Edit } from "lucide-react";
 
@@ -26,6 +27,12 @@ interface Stage {
     funnelId: string;
 }
 
+interface TeamUser {
+    id: string;
+    name: string;
+    role: string;
+}
+
 export default function FunnelsSettingsPage() {
     const [funnels, setFunnels] = useState<Funnel[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,6 +42,10 @@ export default function FunnelsSettingsPage() {
     const [editingFunnel, setEditingFunnel] = useState<Funnel | null>(null);
     const [isEditFunnelDialogOpen, setIsEditFunnelDialogOpen] = useState(false);
     const [stagesToUpdate, setStagesToUpdate] = useState<Stage[]>([]);
+    const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
+    const [accessUserIds, setAccessUserIds] = useState<Set<string>>(new Set());
+    const [isLoadingAccess, setIsLoadingAccess] = useState(false);
+    const [isSavingChanges, setIsSavingChanges] = useState(false);
     const { toast } = useToast();
 
     const fetchFunnels = useCallback(async () => {
@@ -51,7 +62,19 @@ export default function FunnelsSettingsPage() {
         }
     }, [toast]);
 
-    useEffect(() => { fetchFunnels(); }, [fetchFunnels]);
+    const fetchTeamUsers = useCallback(async () => {
+        try {
+            const response = await fetch('/api/users');
+            if (!response.ok) return;
+            const data = await response.json();
+            const users: TeamUser[] = (data.users || []).filter((u: TeamUser) => u.role !== 'MARKETING_ADMIN');
+            setTeamUsers(users);
+        } catch {
+            // Silencioso: a lista de acesso só não aparece se isso falhar.
+        }
+    }, []);
+
+    useEffect(() => { fetchFunnels(); fetchTeamUsers(); }, [fetchFunnels, fetchTeamUsers]);
 
     const handleCreateFunnel = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -89,11 +112,31 @@ export default function FunnelsSettingsPage() {
         }
     };
 
-    const openEditDialog = (funnel: Funnel) => {
+    const openEditDialog = async (funnel: Funnel) => {
         setEditingFunnel(funnel);
         setEditingFunnelData({ name: funnel.name, isDefaultEntry: funnel.isDefaultEntry });
         setStagesToUpdate([...funnel.stages]);
+        setAccessUserIds(new Set());
         setIsEditFunnelDialogOpen(true);
+
+        setIsLoadingAccess(true);
+        try {
+            const response = await fetch(`/api/funnels/${funnel.id}/access`);
+            if (response.ok) {
+                const data = await response.json();
+                setAccessUserIds(new Set(data.userIds || []));
+            }
+        } finally {
+            setIsLoadingAccess(false);
+        }
+    };
+
+    const toggleUserAccess = (userId: string) => {
+        setAccessUserIds(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) next.delete(userId); else next.add(userId);
+            return next;
+        });
     };
 
     const handleStageChange = (stageId: string, field: 'name' | 'color' | 'order', value: string | number) => {
@@ -117,6 +160,7 @@ export default function FunnelsSettingsPage() {
 
     const handleSaveChanges = async () => {
         if (!editingFunnel) return;
+        setIsSavingChanges(true);
         try {
             const response = await fetch(`/api/funnels/${editingFunnel.id}`, {
                 method: 'PUT',
@@ -133,12 +177,22 @@ export default function FunnelsSettingsPage() {
                 }),
             });
             if (!response.ok) throw new Error('Falha ao salvar as alterações.');
+
+            const accessResponse = await fetch(`/api/funnels/${editingFunnel.id}/access`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userIds: Array.from(accessUserIds) }),
+            });
+            if (!accessResponse.ok) throw new Error('Funil salvo, mas houve falha ao atualizar o acesso da equipe.');
+
             toast({ title: 'Sucesso!', description: 'Funil atualizado.' });
             setIsEditFunnelDialogOpen(false);
             setEditingFunnel(null);
             fetchFunnels();
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Erro', description: error.message });
+        } finally {
+            setIsSavingChanges(false);
         }
     };
 
@@ -208,9 +262,9 @@ export default function FunnelsSettingsPage() {
             </div>
 
             <Dialog open={isEditFunnelDialogOpen} onOpenChange={setIsEditFunnelDialogOpen}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
                     <DialogHeader><DialogTitle>Editar Funil: {editingFunnel?.name}</DialogTitle></DialogHeader>
-                    <div className="py-4 space-y-4">
+                    <div className="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
                         <div className="space-y-2">
                             <Label htmlFor="editingFunnelName">Nome do Funil</Label>
                             <Input id="editingFunnelName" value={editingFunnelData.name || ''} onChange={e => setEditingFunnelData(prev => ({ ...prev, name: e.target.value }))} />
@@ -228,10 +282,29 @@ export default function FunnelsSettingsPage() {
                         <Button variant="outline" onClick={handleAddStage} className="w-full">
                             <Plus className="h-4 w-4 mr-2" /> Adicionar Nova Etapa
                         </Button>
+                        <Separator />
+                        <div>
+                            <h3 className="font-semibold text-lg">Acesso da equipe</h3>
+                            <p className="text-sm text-muted-foreground mb-3">Marque quem pode ver e movimentar clientes neste funil. Quem não estiver marcado aqui não vê este funil no Pipeline.</p>
+                            {isLoadingAccess ? (
+                                <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                            ) : teamUsers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Nenhum usuário da equipe cadastrado.</p>
+                            ) : (
+                                <div className="space-y-2 max-h-56 overflow-y-auto border rounded-lg p-2">
+                                    {teamUsers.map(u => (
+                                        <label key={u.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-muted/50 cursor-pointer">
+                                            <Checkbox checked={accessUserIds.has(u.id)} onCheckedChange={() => toggleUserAccess(u.id)} />
+                                            <span>{u.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditFunnelDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSaveChanges}>Salvar Alterações</Button>
+                        <Button onClick={handleSaveChanges} disabled={isSavingChanges}>{isSavingChanges ? 'Salvando...' : 'Salvar Alterações'}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

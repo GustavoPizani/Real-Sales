@@ -1,6 +1,6 @@
 // app/api/funnels/route.ts
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { NextResponse, NextRequest } from 'next/server';
 import { getUserFromToken } from '@/lib/auth';
 
@@ -26,7 +26,11 @@ export async function GET() {
     const user = await getUserFromToken();
     if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
+    // Admins veem todos os funis. Os demais só veem os funis liberados explicitamente para eles.
+    const isAdmin = user.role === Role.MARKETING_ADMIN;
+
     const funnels = await prisma.funnel.findMany({
+      where: isAdmin ? undefined : { userAccess: { some: { userId: user.id } } },
       include: { stages: { orderBy: { order: 'asc' } } },
       orderBy: { name: 'asc' },
     });

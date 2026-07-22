@@ -1,13 +1,9 @@
-import { randomInt } from 'crypto';
 import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { generateTempPassword } from '@/lib/generate-temp-password';
 import { Role } from '@prisma/client';
-
-function generateTempPassword() {
-  return `Nordic@${randomInt(100000, 1000000)}`;
-}
 
 // POST: Admin generates a new temporary password for a broker and forces change on next login
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
