@@ -55,6 +55,7 @@ function PropertyPage() {
   const [loading, setLoading] = useState(true)
   const [selectedImage, setSelectedImage] = useState(0) // kept for compat
   const [brokerId, setBrokerId] = useState<string | null>(null)
+  const [roletaId, setRoletaId] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
   const [leadName, setLeadName] = useState("")
@@ -76,6 +77,8 @@ function PropertyPage() {
   useEffect(() => {
     const bId = searchParams.get("brokerId")
     if (bId) setBrokerId(bId)
+    const rId = searchParams.get("roletaId")
+    if (rId) setRoletaId(rId)
   }, [searchParams])
 
   const fetchProperty = useCallback(async () => {
@@ -104,7 +107,7 @@ function PropertyPage() {
       const response = await fetch("/api/public/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: leadName, email: leadEmail, phone: leadPhone, message: leadMessage, propertyId, brokerId }),
+        body: JSON.stringify({ name: leadName, email: leadEmail, phone: leadPhone, message: leadMessage, propertyId, brokerId, roletaId }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -517,7 +520,7 @@ function PropertyPage() {
       {/* ── FOOTER ── */}
       <footer className="px-6 sm:px-12 lg:px-20 py-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2">
         <span className="text-secondary-custom font-bold tracking-widest text-xs uppercase">Nordic CRM</span>
-        <span className="text-muted-foreground/40 text-xs">Este link foi gerado pelo corretor responsável pelo atendimento.</span>
+        <span className="text-muted-foreground/40 text-xs">Este link foi gerado pela nossa equipe de atendimento.</span>
       </footer>
     </div>
   )

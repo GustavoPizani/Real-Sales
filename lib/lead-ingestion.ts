@@ -2,6 +2,8 @@ import { prisma } from './prisma'
 import { graphGet, extractLeadFields, type FbLead } from './facebook-graph'
 import { notifyNewLead } from './notifications'
 import { sendSlackLeadNotification } from './slack'
+import { ClientOverallStatus } from '@prisma/client'
+import { findDuplicateClient, registerRecadastro, reopenLostClient } from './lead-dedup'
 
 export interface IngestResult {
   status: 'created' | 'skipped' | 'error'
@@ -84,44 +86,19 @@ export async function ingestLead(
   const leadDate = lead.created_time ? new Date(lead.created_time) : new Date()
   const campaign = `Facebook Lead Ads - ${mapping.formName}`
 
-  // Dedup por e-mail — registra novo cadastro no histórico do cliente existente
-  if (email) {
-    const byEmail = await prisma.client.findUnique({ where: { email } })
-    if (byEmail) {
-      if (!byEmail.facebookLeadId) {
-        await prisma.client.update({
-          where: { id: byEmail.id },
-          data: { facebookLeadId: lead.id, formResponses },
-        })
-      }
-      if (byEmail.brokerId) {
-        await prisma.note.create({
-          data: {
-            content: `🔄 Novo cadastro no formulário (e-mail já existente)\nCampanha: ${campaign}\nData: ${formatDateBR(leadDate)}`,
-            authorId: byEmail.brokerId,
-            clientId: byEmail.id,
-          },
-        }).catch(() => null)
-      }
-      return { status: 'skipped', reason: 'duplicate_email' }
+  // Dedup — lead já cadastrado (mesmo e-mail ou telefone) não gera cliente novo.
+  // Se ainda estiver ativo com corretor, trava nele (não disputa roleta) e só avisa.
+  // Se estiver marcado como perdido, volta a disputar a distribuição normal abaixo.
+  const duplicate = await findDuplicateClient(email, phone)
+  if (duplicate && duplicate.overallStatus !== ClientOverallStatus.LOST) {
+    if (email && !duplicate.facebookLeadId) {
+      await prisma.client.update({
+        where: { id: duplicate.id },
+        data: { facebookLeadId: lead.id, formResponses },
+      }).catch(() => null)
     }
-  }
-
-  // Dedup por telefone — registra novo cadastro no histórico do cliente existente
-  if (phone) {
-    const byPhone = await prisma.client.findFirst({ where: { phone } })
-    if (byPhone) {
-      if (byPhone.brokerId) {
-        await prisma.note.create({
-          data: {
-            content: `🔄 Novo cadastro no formulário (telefone já existente)\nCampanha: ${campaign}\nData: ${formatDateBR(leadDate)}`,
-            authorId: byPhone.brokerId,
-            clientId: byPhone.id,
-          },
-        }).catch(() => null)
-      }
-      return { status: 'skipped', reason: 'duplicate_phone' }
-    }
+    await registerRecadastro(duplicate, campaign)
+    return { status: 'skipped', reason: 'duplicate_lead' }
   }
 
   // Determina corretor — roleta ou padrão do mapeamento
@@ -161,33 +138,51 @@ export async function ingestLead(
   // fallback, leads atribuídos a ele ficavam sem tenant e sumiam do pipeline.
   const clientAccountId = broker?.accountId ?? brokerId
 
-  const client = await prisma.client.create({
-    data: {
-      fullName,
-      email: email ?? undefined,
-      phone: phone ?? undefined,
-      facebookLeadId: lead.id,
-      formResponses,
-      campaignSource: campaign,
-      createdAt: leadDate,
+  let client
+  if (duplicate) {
+    // Lead perdido recadastrando — reabre o mesmo registro em vez de criar um novo.
+    if (email && !duplicate.facebookLeadId) {
+      await prisma.client.update({
+        where: { id: duplicate.id },
+        data: { facebookLeadId: lead.id, formResponses },
+      }).catch(() => null)
+    }
+    client = await reopenLostClient(duplicate, {
       brokerId,
-      createdById: brokerId,
-      accountId: clientAccountId,
       roletaId: assignedRoletaId,
       funnelId: mapping.funnelId!,
       funnelStageId: mapping.funnelStageId!,
-      propertyOfInterestId: mapping.propertyId ?? undefined,
-    },
-  })
+      source: campaign,
+    })
+  } else {
+    client = await prisma.client.create({
+      data: {
+        fullName,
+        email: email ?? undefined,
+        phone: phone ?? undefined,
+        facebookLeadId: lead.id,
+        formResponses,
+        campaignSource: campaign,
+        createdAt: leadDate,
+        brokerId,
+        createdById: brokerId,
+        accountId: clientAccountId,
+        roletaId: assignedRoletaId,
+        funnelId: mapping.funnelId!,
+        funnelStageId: mapping.funnelStageId!,
+        propertyOfInterestId: mapping.propertyId ?? undefined,
+      },
+    })
 
-  // Log de origem no histórico (sempre criado para novos leads)
-  await prisma.note.create({
-    data: {
-      content: `📋 Cadastro via Facebook Lead Ads\nFormulário: ${mapping.formName}\nData: ${formatDateBR(leadDate)}`,
-      authorId: brokerId,
-      clientId: client.id,
-    },
-  })
+    // Log de origem no histórico (sempre criado para novos leads)
+    await prisma.note.create({
+      data: {
+        content: `📋 Cadastro via Facebook Lead Ads\nFormulário: ${mapping.formName}\nData: ${formatDateBR(leadDate)}`,
+        authorId: brokerId,
+        clientId: client.id,
+      },
+    })
+  }
 
   await prisma.facebookFormMapping.update({
     where: { id: mapping.id },
@@ -215,14 +210,17 @@ export async function ingestLead(
   const hasSdrAgent = !!(mapping as any).agentId
 
   await Promise.allSettled([
-    notifyNewLead({
-      clientId: client.id,
-      clientName: fullName,
-      brokerId,
-      brokerName: broker?.name ?? 'Corretor',
-      campaignSource: campaign,
-      accountId: clientAccountId,
-    }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err)),
+    // Lead recuperado (reopenLostClient) já notificou o corretor — evita duplicar o push.
+    duplicate
+      ? Promise.resolve()
+      : notifyNewLead({
+          clientId: client.id,
+          clientName: fullName,
+          brokerId,
+          brokerName: broker?.name ?? 'Corretor',
+          campaignSource: campaign,
+          accountId: clientAccountId,
+        }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err)),
     sendSlackLeadNotification({
       clientId: client.id,
       clientName: fullName,

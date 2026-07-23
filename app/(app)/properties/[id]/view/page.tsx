@@ -11,8 +11,15 @@ import { ArrowLeft, MapPin, Home, Car, Bath, Bed, Square, Pencil, Loader2, Share
 import { useToast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
 import { PropertyStatus } from "@/lib/types"
+
+interface Roleta {
+  id: string
+  name: string
+}
 
 interface Typology {
   id: string
@@ -66,6 +73,10 @@ export default function PropertyViewPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [shareableLink, setShareableLink] = useState("")
   const [isGeneratingLink, setIsGeneratingLink] = useState(false)
+  const [shareMode, setShareMode] = useState<"direct" | "roleta">("direct")
+  const [roletas, setRoletas] = useState<Roleta[]>([])
+  const [selectedRoletaId, setSelectedRoletaId] = useState("")
+  const isAdmin = user?.role === "MARKETING_ADMIN"
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState(false)
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const [fullScreenIndex, setFullScreenIndex] = useState(0)
@@ -125,10 +136,36 @@ export default function PropertyViewPage() {
   const handleShareClick = async () => {
     if (!user || !propertyId) return
 
-    const fullLink = `${window.location.origin}/imovel/${propertyId}?brokerId=${user.id}`
-    setShareableLink(fullLink)
+    setShareMode("direct")
+    setSelectedRoletaId("")
+    setShareableLink("")
     setIsShareModalOpen(true)
+
+    if (isAdmin) {
+      try {
+        const response = await fetch('/api/roletas?status=active', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setRoletas(data.map((r: any) => ({ id: r.id, name: r.name })))
+        }
+      } catch {
+        // Sem roletas ativas — o modal só mostra a opção de receber diretamente
+      }
+    }
+
+    await generateLink("direct", "")
+  }
+
+  const generateLink = async (mode: "direct" | "roleta", roletaId: string) => {
+    if (!user || !propertyId) return
+    if (mode === "roleta" && !roletaId) return
+
     setIsGeneratingLink(true)
+    const param = mode === "roleta" ? `roletaId=${roletaId}` : `brokerId=${user.id}`
+    const fullLink = `${window.location.origin}/imovel/${propertyId}?${param}`
+    setShareableLink(fullLink)
 
     try {
       const response = await fetch('/api/short-links', {
@@ -144,6 +181,22 @@ export default function PropertyViewPage() {
     } finally {
       setIsGeneratingLink(false)
     }
+  }
+
+  const handleShareModeChange = (mode: "direct" | "roleta") => {
+    setShareMode(mode)
+    if (mode === "direct") {
+      generateLink("direct", "")
+    } else if (selectedRoletaId) {
+      generateLink("roleta", selectedRoletaId)
+    } else {
+      setShareableLink("")
+    }
+  }
+
+  const handleRoletaChange = (roletaId: string) => {
+    setSelectedRoletaId(roletaId)
+    generateLink("roleta", roletaId)
   }
 
   const copyToClipboard = () => {
@@ -407,9 +460,40 @@ export default function PropertyViewPage() {
               Copie o link abaixo e envie para o seu cliente.
             </DialogDescription>
           </DialogHeader>
+
+          {isAdmin && (
+            <div className="space-y-3 mt-2">
+              <div className="space-y-1.5">
+                <Label>Quem deve receber os leads deste link?</Label>
+                <Select value={shareMode} onValueChange={(v) => handleShareModeChange(v as "direct" | "roleta")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">Eu mesmo (receber diretamente)</SelectItem>
+                    <SelectItem value="roleta">Distribuir por roleta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {shareMode === "roleta" && (
+                <div className="space-y-1.5">
+                  <Label>Roleta</Label>
+                  <Select value={selectedRoletaId} onValueChange={handleRoletaChange}>
+                    <SelectTrigger><SelectValue placeholder="Selecione uma roleta" /></SelectTrigger>
+                    <SelectContent>
+                      {roletas.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhuma roleta ativa encontrada</div>
+                      ) : (
+                        roletas.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center space-x-2 mt-4">
             <Input value={isGeneratingLink ? "Gerando link..." : shareableLink} readOnly />
-            <Button type="button" size="sm" onClick={copyToClipboard} disabled={isGeneratingLink}>
+            <Button type="button" size="sm" onClick={copyToClipboard} disabled={isGeneratingLink || !shareableLink}>
               {isGeneratingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
