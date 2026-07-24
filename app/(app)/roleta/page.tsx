@@ -1016,9 +1016,9 @@ export default function RoletaPage() {
         return <div className="p-6"><Alert><AlertDescription>Acesso negado.</AlertDescription></Alert></div>
     }
 
-    const currentActiveRoleta = useMemo(() => {
+    const activeRoletas = useMemo(() => {
         const now = new Date().getTime();
-        return roletas.find(r => {
+        return roletas.filter(r => {
             const isActive = r.ativa;
             const hasStarted = !r.validFrom || new Date(r.validFrom).getTime() <= now;
             const hasNotEnded = !r.validUntil || new Date(r.validUntil).getTime() >= now;
@@ -1050,9 +1050,8 @@ export default function RoletaPage() {
                 </TabsList> 
 
                 <TabsContent value="overview" className="mt-6">
-                    <div className="flex justify-center">
-                        {currentActiveRoleta ? (() => {
-                            const roleta = currentActiveRoleta;
+                    <div className="flex flex-col items-center gap-6">
+                        {activeRoletas.length > 0 ? activeRoletas.map((roleta) => {
                             // "Na vez" é quem tem o lastAssignedAt mais antigo (ou nunca recebeu lead) — mesmo critério usado na atribuição real dos leads.
                             const nextCorretorIndex = roleta.usuarios.reduce((bestIndex, u, index) => {
                                 if (bestIndex === -1) return index;
@@ -1083,7 +1082,7 @@ export default function RoletaPage() {
                                     </CardContent>
                                 </Card>
                             )
-                        })() : <p className="col-span-full text-center text-muted-foreground py-10">Nenhuma roleta programada para estar ativa no momento.</p>}
+                        }) : <p className="col-span-full text-center text-muted-foreground py-10">Nenhuma roleta programada para estar ativa no momento.</p>}
                     </div>
                 </TabsContent>
 
