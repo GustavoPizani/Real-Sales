@@ -310,12 +310,17 @@ export default function IntegrationsPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.connectionId || !formData.formId || !formData.funnelId || !formData.funnelStageId) {
-      toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios", description: "Página, Formulário, Funil e Etapa são obrigatórios." })
+    if (!formData.connectionId || !formData.formId) {
+      toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios", description: "Página e Formulário são obrigatórios." })
       return
     }
     if (!formData.roletaId && !formData.defaultBrokerId) {
       toast({ variant: "destructive", title: "Selecione um Corretor Padrão ou uma Roleta", description: "Sem um dos dois, os leads deste formulário serão rejeitados (sem corretor para atribuir)." })
+      return
+    }
+    // Sem roleta, não tem de onde herdar o funil — Funil e Etapa passam a ser obrigatórios.
+    if (!formData.roletaId && (!formData.funnelId || !formData.funnelStageId)) {
+      toast({ variant: "destructive", title: "Selecione o Funil e a Etapa", description: "Sem uma roleta selecionada, o funil de entrada precisa ser definido manualmente." })
       return
     }
     setSavingMapping(true)
@@ -425,12 +430,13 @@ export default function IntegrationsPage() {
 
   const handleUpdateMapping = async () => {
     if (!editingMappingId) return
-    if (!editFormData.funnelId || !editFormData.funnelStageId) {
-      toast({ variant: "destructive", title: "Funil e Etapa são obrigatórios" })
-      return
-    }
     if (!editFormData.roletaId && !editFormData.defaultBrokerId) {
       toast({ variant: "destructive", title: "Selecione um Corretor Padrão ou uma Roleta", description: "Sem um dos dois, os leads deste formulário serão rejeitados (sem corretor para atribuir)." })
+      return
+    }
+    // Sem roleta, não tem de onde herdar o funil — Funil e Etapa passam a ser obrigatórios.
+    if (!editFormData.roletaId && (!editFormData.funnelId || !editFormData.funnelStageId)) {
+      toast({ variant: "destructive", title: "Selecione o Funil e a Etapa", description: "Sem uma roleta selecionada, o funil de entrada precisa ser definido manualmente." })
       return
     }
     setSavingEdit(true)
@@ -905,17 +911,18 @@ export default function IntegrationsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label>Funil <span className="text-destructive">*</span></Label>
+                <Label>Funil {!formData.roletaId && <span className="text-destructive">*</span>}</Label>
                 <Select value={formData.funnelId} onValueChange={(v) => setFormData((p) => ({ ...p, funnelId: v, funnelStageId: "" }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione um funil" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={formData.roletaId ? "Usar o funil da roleta" : "Selecione um funil"} /></SelectTrigger>
                   <SelectContent>
                     {funnels.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {formData.roletaId && <p className="text-xs text-muted-foreground">Opcional — sem escolher, usa o funil configurado na roleta selecionada.</p>}
               </div>
 
               <div className="space-y-1.5">
-                <Label>Etapa de Entrada <span className="text-destructive">*</span></Label>
+                <Label>Etapa de Entrada {!formData.roletaId && <span className="text-destructive">*</span>}</Label>
                 <Select value={formData.funnelStageId} onValueChange={(v) => setFormData((p) => ({ ...p, funnelStageId: v }))} disabled={!formData.funnelId}>
                   <SelectTrigger>
                     <SelectValue placeholder={!formData.funnelId ? "Selecione um funil primeiro" : "Selecione uma etapa"} />
@@ -1000,17 +1007,18 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Funil <span className="text-destructive">*</span></Label>
+              <Label>Funil {!editFormData.roletaId && <span className="text-destructive">*</span>}</Label>
               <Select value={editFormData.funnelId} onValueChange={(v) => setEditFormData((p) => ({ ...p, funnelId: v, funnelStageId: "" }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione um funil" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={editFormData.roletaId ? "Usar o funil da roleta" : "Selecione um funil"} /></SelectTrigger>
                 <SelectContent>
                   {funnels.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {editFormData.roletaId && <p className="text-xs text-muted-foreground">Opcional — sem escolher, usa o funil configurado na roleta selecionada.</p>}
             </div>
 
             <div className="space-y-1.5">
-              <Label>Etapa de Entrada <span className="text-destructive">*</span></Label>
+              <Label>Etapa de Entrada {!editFormData.roletaId && <span className="text-destructive">*</span>}</Label>
               <Select value={editFormData.funnelStageId} onValueChange={(v) => setEditFormData((p) => ({ ...p, funnelStageId: v }))} disabled={!editFormData.funnelId}>
                 <SelectTrigger>
                   <SelectValue placeholder={!editFormData.funnelId ? "Selecione um funil primeiro" : "Selecione uma etapa"} />

@@ -130,6 +130,27 @@ export async function ingestLead(
     return { status: 'error', reason: 'no_broker' }
   }
 
+  // Funil/etapa: usa o que está configurado no mapeamento, ou — se veio da roleta e
+  // o mapeamento não definiu um — herda o funil próprio da roleta (primeira etapa).
+  let entryFunnelId: string | null = mapping.funnelId ?? null
+  let entryFunnelStageId: string | null = mapping.funnelStageId ?? null
+
+  if ((!entryFunnelId || !entryFunnelStageId) && assignedRoletaId) {
+    const roleta = await prisma.leadRoulette.findUnique({
+      where: { id: assignedRoletaId },
+      include: { funnel: { include: { stages: { orderBy: { order: 'asc' }, take: 1 } } } },
+    })
+    if (roleta?.funnel) {
+      entryFunnelId = roleta.funnel.id
+      entryFunnelStageId = roleta.funnel.stages[0]?.id ?? null
+    }
+  }
+
+  if (!entryFunnelId || !entryFunnelStageId) {
+    console.error(`[LEAD_INGEST] Nenhum funil/etapa disponível para o mapeamento ${mapping.id}`)
+    return { status: 'error', reason: 'no_funnel' }
+  }
+
   const broker = await prisma.user.findUnique({
     where: { id: brokerId },
     select: { name: true, accountId: true, slackWebhookUrl: true },
@@ -150,8 +171,8 @@ export async function ingestLead(
     client = await reopenLostClient(duplicate, {
       brokerId,
       roletaId: assignedRoletaId,
-      funnelId: mapping.funnelId!,
-      funnelStageId: mapping.funnelStageId!,
+      funnelId: entryFunnelId,
+      funnelStageId: entryFunnelStageId,
       source: campaign,
     })
   } else {
@@ -168,8 +189,8 @@ export async function ingestLead(
         createdById: brokerId,
         accountId: clientAccountId,
         roletaId: assignedRoletaId,
-        funnelId: mapping.funnelId!,
-        funnelStageId: mapping.funnelStageId!,
+        funnelId: entryFunnelId,
+        funnelStageId: entryFunnelStageId,
         propertyOfInterestId: mapping.propertyId ?? undefined,
       },
     })

@@ -21,13 +21,21 @@ export async function PUT(
     isActive,
   } = body
 
+  // Funil/Etapa só são obrigatórios sem roleta — com roleta, o lead herda o funil dela.
+  if (!roletaId && (!funnelId || !funnelStageId)) {
+    return NextResponse.json(
+      { error: 'Sem uma roleta selecionada, Funil e Etapa são obrigatórios.' },
+      { status: 400 }
+    )
+  }
+
   const mapping = await prisma.facebookFormMapping.update({
     where: { id: params.id },
     data: {
       propertyId: propertyId ?? null,
       roletaId: roletaId ?? null,
-      funnelId,
-      funnelStageId,
+      funnelId: funnelId || null,
+      funnelStageId: funnelStageId || null,
       agencia: agencia ?? null,
       praca: praca ?? null,
       defaultBrokerId: defaultBrokerId ?? null,

@@ -64,12 +64,17 @@ export async function POST(request: NextRequest) {
     syncLeads,
   } = body
 
-  if (!connectionId || !formId || !formName || !funnelId || !funnelStageId) {
+  if (!connectionId || !formId || !formName) {
     return NextResponse.json(
-      {
-        error:
-          'Campos obrigatórios: connectionId, formId, formName, funnelId, funnelStageId',
-      },
+      { error: 'Campos obrigatórios: connectionId, formId, formName' },
+      { status: 400 }
+    )
+  }
+
+  // Funil/Etapa só são obrigatórios sem roleta — com roleta, o lead herda o funil dela.
+  if (!roletaId && (!funnelId || !funnelStageId)) {
+    return NextResponse.json(
+      { error: 'Sem uma roleta selecionada, Funil e Etapa são obrigatórios.' },
       { status: 400 }
     )
   }
@@ -81,8 +86,8 @@ export async function POST(request: NextRequest) {
       pageId,
       propertyId: propertyId || null,
       roletaId: roletaId || null,
-      funnelId,
-      funnelStageId,
+      funnelId: funnelId || null,
+      funnelStageId: funnelStageId || null,
       agencia: agencia || null,
       praca: praca || null,
       defaultBrokerId: defaultBrokerId || null,
@@ -96,8 +101,8 @@ export async function POST(request: NextRequest) {
       pageId: pageId || '',
       propertyId: propertyId || null,
       roletaId: roletaId || null,
-      funnelId,
-      funnelStageId,
+      funnelId: funnelId || null,
+      funnelStageId: funnelStageId || null,
       agencia: agencia || null,
       praca: praca || null,
       defaultBrokerId: defaultBrokerId || null,
