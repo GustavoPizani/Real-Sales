@@ -17,6 +17,10 @@ export async function findDuplicateClient(email: string | null | undefined, phon
   return null
 }
 
+// Evita flood de notificação quando o mesmo lead recadastra várias vezes seguidas
+// (ex.: cliente reenviando o formulário do Facebook repetidas vezes em poucos minutos).
+const RECADASTRO_NOTIFICATION_COOLDOWN_MS = 15 * 60 * 1000
+
 // Lead ativo com corretor: NÃO deve furar a roleta nem trocar de corretor —
 // só registra o recadastro no histórico e avisa quem já está atendendo.
 export async function registerRecadastro(client: Client, source: string): Promise<void> {
@@ -31,6 +35,19 @@ export async function registerRecadastro(client: Client, source: string): Promis
   }).catch(() => null)
 
   if (!isActiveWithBroker || !client.brokerId) return
+
+  // Se já avisamos o corretor sobre um recadastro desse cliente recentemente, não
+  // manda de novo — a nota acima já guarda o histórico de cada reenvio individual.
+  const recentNotification = await prisma.notification.findFirst({
+    where: {
+      userId: client.brokerId,
+      type: 'RECADASTRO',
+      data: { path: ['clientId'], equals: client.id },
+      createdAt: { gte: new Date(Date.now() - RECADASTRO_NOTIFICATION_COOLDOWN_MS) },
+    },
+    select: { id: true },
+  })
+  if (recentNotification) return
 
   const title = '🔄 Lead recadastrado'
   const body = `${client.fullName} preencheu o formulário de novo — ${source}`

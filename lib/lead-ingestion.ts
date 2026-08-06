@@ -259,13 +259,19 @@ export async function ingestLead(
   return { status: 'created' }
 }
 
+// Margem de segurança sobre o lastSyncedAt, só pra cobrir clock drift/atraso entre
+// execuções — não pode ser grande, senão todo lead da janela é reprocessado por
+// ingestLead em toda chamada (e quem tem mais de um leadgen_id antigo pro mesmo
+// e-mail/telefone acaba levando notificação de recadastro repetida a cada sync).
+const SYNC_OVERLAP_MS = 10 * 60 * 1000
+
 /** Sincroniza um mapeamento buscando leads mais novos que lastSyncedAt.
  *  fullSync=true ignora a janela de tempo e busca todos os leads históricos do formulário. */
 export async function syncMapping(mapping: any, fullSync = false): Promise<{ imported: number; skipped: number; errors: number }> {
   const sinceMs = fullSync
     ? 0
     : mapping.lastSyncedAt
-      ? new Date(mapping.lastSyncedAt).getTime() - 3_600_000
+      ? new Date(mapping.lastSyncedAt).getTime() - SYNC_OVERLAP_MS
       : Date.now() - 7 * 24 * 60 * 60 * 1000
 
   let afterCursor: string | undefined
