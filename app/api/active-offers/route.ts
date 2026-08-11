@@ -114,7 +114,10 @@ async function createFromInternalClients(request: NextRequest, user: NonNullable
     phone: client.phone,
   }));
 
-  const finalOffer = await prisma.activeOffer.create({
+  // Nota: criar com `clients: { createMany }` E `include: { _count }` na mesma chamada
+  // quebra sobre a conexão pooled do pgbouncer (retorna "column does not exist" de forma
+  // espúria). Como já sabemos o tamanho do array, não precisamos consultar a contagem.
+  const newOffer = await prisma.activeOffer.create({
     data: {
       name,
       source: ActiveOfferSource.INTERNAL_CLIENTS,
@@ -123,10 +126,9 @@ async function createFromInternalClients(request: NextRequest, user: NonNullable
       defaultPropertyOfInterestId,
       clients: { createMany: { data: contactsToCreate } },
     },
-    include: { _count: { select: { clients: true } } },
   });
 
-  return NextResponse.json(finalOffer, { status: 201 });
+  return NextResponse.json({ ...newOffer, _count: { clients: contactsToCreate.length } }, { status: 201 });
 }
 
 async function createFromMailingUpload(request: NextRequest, user: NonNullable<Awaited<ReturnType<typeof getUserFromToken>>>) {
@@ -234,7 +236,10 @@ async function createFromMailingUpload(request: NextRequest, user: NonNullable<A
     }, { status: 400 });
   }
 
-  const finalOffer = await prisma.activeOffer.create({
+  // Nota: criar com `clients: { createMany }` E `include: { _count }` na mesma chamada
+  // quebra sobre a conexão pooled do pgbouncer (retorna "column does not exist" de forma
+  // espúria). Como já sabemos o tamanho do array, não precisamos consultar a contagem.
+  const newOffer = await prisma.activeOffer.create({
     data: {
       name,
       source: ActiveOfferSource.MAILING_UPLOAD,
@@ -243,8 +248,13 @@ async function createFromMailingUpload(request: NextRequest, user: NonNullable<A
       defaultPropertyOfInterestId: propertyOfInterestId,
       clients: { createMany: { data: contactsToCreate } },
     },
-    include: { _count: { select: { clients: true } } },
   });
 
-  return NextResponse.json({ ...finalOffer, totalRows: parsedRows.length, linkedToExisting, skippedActive }, { status: 201 });
+  return NextResponse.json({
+    ...newOffer,
+    _count: { clients: contactsToCreate.length },
+    totalRows: parsedRows.length,
+    linkedToExisting,
+    skippedActive,
+  }, { status: 201 });
 }
