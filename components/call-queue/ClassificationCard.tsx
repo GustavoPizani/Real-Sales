@@ -63,7 +63,6 @@ interface PropertyOption {
 
 interface ClassificationCardProps {
   contact: QueueContact;
-  position: string;
   properties: PropertyOption[];
   submitting: boolean;
   // Imóvel padrão da campanha (ex.: mailing de um empreendimento específico) —
@@ -72,7 +71,7 @@ interface ClassificationCardProps {
   onSubmit: (payload: { outcome: Outcome; comment?: string; propertyOfInterestId?: string }, exitQueue: boolean) => void;
 }
 
-export default function ClassificationCard({ contact, position, properties, submitting, defaultPropertyId, onSubmit }: ClassificationCardProps) {
+export default function ClassificationCard({ contact, properties, submitting, defaultPropertyId, onSubmit }: ClassificationCardProps) {
   const [outcome, setOutcome] = useState<Outcome | ''>('');
   const [comment, setComment] = useState('');
   const [propertyId, setPropertyId] = useState<string>(defaultPropertyId || '');
@@ -107,10 +106,7 @@ export default function ClassificationCard({ contact, position, properties, subm
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">{contact.fullName}</CardTitle>
-            <span className="font-mono text-sm text-muted-foreground">{position}</span>
-          </div>
+          <CardTitle className="text-2xl">{contact.fullName}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

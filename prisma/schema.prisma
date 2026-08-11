@@ -569,6 +569,7 @@ enum ActiveOfferStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
+  PAUSED
 }
 
 enum ActiveOfferSource {

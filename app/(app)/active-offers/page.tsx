@@ -8,9 +8,27 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Play, Users, Clock } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Plus, Play, Users, Clock, MoreVertical, UserPlus, Pause, PlayCircle, Trash2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import CreateOfferDialog from '@/components/active-offers/CreateOfferDialog';
+import AddClientsDialog from '@/components/active-offers/AddClientsDialog';
 
 interface ActiveOffer {
   id: string;
@@ -51,6 +69,9 @@ export default function ActiveOffersPage() {
   const [offers, setOffers] = useState<ActiveOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [addClientsOfferId, setAddClientsOfferId] = useState<string | null>(null);
+  const [deleteOfferId, setDeleteOfferId] = useState<string | null>(null);
+  const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
 
   const fetchOffers = useCallback(async () => {
     setLoading(true);
@@ -74,15 +95,17 @@ export default function ActiveOffersPage() {
   }, [fetchOffers]);
 
   const getStatusBadge = (status: string) => {
-    const variants: { [key: string]: 'default' | 'secondary' | 'destructive' } = {
+    const variants: { [key: string]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
       PENDING: 'secondary',
       IN_PROGRESS: 'default',
       COMPLETED: 'destructive',
+      PAUSED: 'outline',
     };
     const labels: { [key: string]: string } = {
       PENDING: 'Pendente',
       IN_PROGRESS: 'Em andamento',
       COMPLETED: 'Concluída',
+      PAUSED: 'Pausada',
     };
     return <Badge variant={variants[status] || 'secondary'}>{labels[status] || status}</Badge>;
   };
@@ -90,7 +113,124 @@ export default function ActiveOffersPage() {
   const getSourceLabel = (source: ActiveOffer['source']) =>
     source === 'MAILING_UPLOAD' ? 'Mailing Externo' : 'Clientes Internos';
 
+  const togglePause = async (offer: ActiveOffer) => {
+    setBusyOfferId(offer.id);
+    try {
+      const token = localStorage.getItem('authToken');
+      const nextStatus = offer.status === 'PAUSED' ? 'PENDING' : 'PAUSED';
+      const response = await fetch(`/api/active-offers/${offer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!response.ok) throw new Error((await response.json()).error || 'Falha ao atualizar campanha.');
+      toast({ title: nextStatus === 'PAUSED' ? 'Campanha pausada.' : 'Campanha reativada.' });
+      fetchOffers();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setBusyOfferId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteOfferId) return;
+    setBusyOfferId(deleteOfferId);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/active-offers/${deleteOfferId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error((await response.json()).error || 'Falha ao excluir campanha.');
+      toast({ title: 'Campanha excluída.' });
+      setDeleteOfferId(null);
+      fetchOffers();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setBusyOfferId(null);
+    }
+  };
+
   if (!user) return null;
+
+  const activeOffers = offers.filter(o => o.status !== 'PAUSED');
+  const pausedOffers = offers.filter(o => o.status === 'PAUSED');
+
+  const renderOfferGrid = (list: ActiveOffer[], emptyMessage: string) => (
+    loading ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+        {[...Array(3)].map((_, i) => <OfferCardSkeleton key={i} />)}
+      </div>
+    ) : list.length === 0 ? (
+      <div className="text-center py-12 border-2 border-dashed rounded-lg mt-4">
+        <h3 className="text-xl font-semibold">Nenhuma campanha encontrada</h3>
+        <p className="text-muted-foreground mt-2">{emptyMessage}</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+        {list.map((offer) => (
+          <Card key={offer.id}>
+            <CardHeader className="flex flex-row items-start justify-between space-y-0">
+              <div>
+                <CardTitle>{offer.name}</CardTitle>
+                <CardDescription className="flex items-center gap-2 mt-1.5">
+                  Criada por {offer.createdBy.name}
+                  <Badge variant="outline">{getSourceLabel(offer.source)}</Badge>
+                </CardDescription>
+              </div>
+              {isAdmin && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={busyOfferId === offer.id}>
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {offer.source === 'INTERNAL_CLIENTS' && (
+                      <DropdownMenuItem onClick={() => setAddClientsOfferId(offer.id)}>
+                        <UserPlus className="h-4 w-4 mr-2" /> Adicionar clientes
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => togglePause(offer)}>
+                      {offer.status === 'PAUSED' ? (
+                        <><PlayCircle className="h-4 w-4 mr-2" /> Reativar</>
+                      ) : (
+                        <><Pause className="h-4 w-4 mr-2" /> Pausar</>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-destructive" onClick={() => setDeleteOfferId(offer.id)}>
+                      <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-2"><Users className="h-4 w-4" /> Pendentes na fila</span>
+                <span className="font-semibold">{offer._count.clients}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-2"><Clock className="h-4 w-4" /> Status</span>
+                {getStatusBadge(offer.status)}
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button
+                className="w-full"
+                disabled={offer.status === 'PAUSED'}
+                onClick={() => router.push(`/active-offers/${offer.id}/call`)}
+              >
+                <Play className="h-4 w-4 mr-2" /> Iniciar Ligações
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+    )
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -107,47 +247,47 @@ export default function ActiveOffersPage() {
         )}
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(3)].map((_, i) => <OfferCardSkeleton key={i} />)}
-        </div>
-      ) : offers.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed rounded-lg">
-          <h3 className="text-xl font-semibold">Nenhuma campanha encontrada</h3>
-          <p className="text-muted-foreground mt-2">
-            {isAdmin ? 'Crie sua primeira campanha de Oferta Ativa para começar.' : 'Nenhuma campanha disponível no momento.'}
-          </p>
-        </div>
+      {isAdmin ? (
+        <Tabs defaultValue="ativas">
+          <TabsList>
+            <TabsTrigger value="ativas">Ativas</TabsTrigger>
+            <TabsTrigger value="pausadas">Pausadas</TabsTrigger>
+          </TabsList>
+          <TabsContent value="ativas">
+            {renderOfferGrid(activeOffers, isAdmin ? 'Crie sua primeira campanha de Oferta Ativa para começar.' : 'Nenhuma campanha disponível no momento.')}
+          </TabsContent>
+          <TabsContent value="pausadas">
+            {renderOfferGrid(pausedOffers, 'Nenhuma campanha pausada.')}
+          </TabsContent>
+        </Tabs>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {offers.map((offer) => (
-            <Card key={offer.id}>
-              <CardHeader>
-                <CardTitle>{offer.name}</CardTitle>
-                <CardDescription className="flex items-center gap-2">
-                  Criada por {offer.createdBy.name}
-                  <Badge variant="outline">{getSourceLabel(offer.source)}</Badge>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-2"><Users className="h-4 w-4" /> Pendentes na fila</span>
-                  <span className="font-semibold">{offer._count.clients}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-2"><Clock className="h-4 w-4" /> Status</span>
-                  {getStatusBadge(offer.status)}
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full" onClick={() => router.push(`/active-offers/${offer.id}/call`)}><Play className="h-4 w-4 mr-2" /> Iniciar Ligações</Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+        renderOfferGrid(activeOffers, 'Nenhuma campanha disponível no momento.')
       )}
+
       {isAdmin && (
-        <CreateOfferDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} onOfferCreated={fetchOffers} />
+        <>
+          <CreateOfferDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} onOfferCreated={fetchOffers} />
+          <AddClientsDialog
+            open={!!addClientsOfferId}
+            onOpenChange={(open) => !open && setAddClientsOfferId(null)}
+            offerId={addClientsOfferId}
+            onClientsAdded={fetchOffers}
+          />
+          <AlertDialog open={!!deleteOfferId} onOpenChange={(open) => !open && setDeleteOfferId(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir campanha?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso remove a campanha e a fila de contatos dela. Os clientes em si não são excluídos, só o vínculo com essa campanha. Essa ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )}
     </div>
   );

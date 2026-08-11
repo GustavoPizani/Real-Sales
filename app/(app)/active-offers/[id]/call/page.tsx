@@ -102,7 +102,10 @@ export default function ActiveOfferCallPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background p-4 sm:p-8">
-      <header className="flex items-center justify-between mb-8">
+      <header className="flex items-center gap-4 mb-8">
+        <Button variant="ghost" size="icon" onClick={() => router.push('/active-offers')}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <h1 className="text-2xl font-bold">Ligação - Oferta Ativa</h1>
       </header>
 
@@ -121,7 +124,6 @@ export default function ActiveOfferCallPage() {
       ) : (
         <ClassificationCard
           contact={currentClient}
-          position={`${clients.length} na fila`}
           properties={properties}
           defaultPropertyId={defaultPropertyId}
           submitting={isSubmitting}

@@ -68,6 +68,14 @@ try {
   console.log('[migrate] Property image cover baseline already resolved, continuing.')
 }
 
+// Status PAUSED de campanha — aplicado direto no banco.
+try {
+  run('prisma migrate resolve --applied 20260811150000_add_active_offer_paused_status')
+  console.log('[migrate] Paused status baseline applied.')
+} catch {
+  console.log('[migrate] Paused status baseline already resolved, continuing.')
+}
+
 // Apply any pending migrations.
 run('prisma migrate deploy')
 console.log('[migrate] Deploy complete.')

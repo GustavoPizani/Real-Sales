@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { Role, ClientOverallStatus, ActiveOfferSource, Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
+import { buildLostClientWhere } from '@/lib/active-offers';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,11 @@ export async function GET(request: NextRequest) {
     }
 
     const activeOffers = await prisma.activeOffer.findMany({
-      where: { accountId: user.isSuperAdmin ? undefined : user.accountId },
+      where: {
+        accountId: user.isSuperAdmin ? undefined : user.accountId,
+        // Campanhas pausadas só aparecem pra administradores de marketing.
+        status: user.role === Role.BROKER ? { not: 'PAUSED' } : undefined,
+      },
       include: {
         createdBy: { select: { name: true } },
         _count: {
@@ -65,38 +70,11 @@ async function createFromInternalClients(request: NextRequest, user: NonNullable
     return NextResponse.json({ error: 'Nome e fonte são obrigatórios.' }, { status: 400 });
   }
 
-  const clientWhereClause: Prisma.ClientWhereInput = {
-    overallStatus: ClientOverallStatus.LOST,
-    accountId: user.isSuperAdmin ? undefined : user.accountId,
-  };
-
-  if (source === 'meus_clientes') {
-    clientWhereClause.brokerId = user.id;
-  } else if (source === 'equipe' && user.role === Role.MARKETING_ADMIN) {
-    const subordinateIds = (await prisma.user.findMany({ where: { supervisorId: user.id }, select: { id: true } })).map(u => u.id);
-    const allowedBrokerIds = [user.id, ...subordinateIds];
-
-    if (brokerId) {
-      if (!allowedBrokerIds.includes(brokerId)) {
-        return NextResponse.json({ error: 'Esse corretor não está na sua equipe.' }, { status: 403 });
-      }
-      clientWhereClause.brokerId = brokerId;
-    } else {
-      clientWhereClause.brokerId = { in: allowedBrokerIds };
-    }
-  } else {
-    return NextResponse.json({ error: 'Permissão negada para esta fonte de clientes.' }, { status: 403 });
+  const filterResult = await buildLostClientWhere(user, { source, propertyOfInterestId, brokerId });
+  if ('error' in filterResult) {
+    return NextResponse.json({ error: filterResult.error }, { status: filterResult.status });
   }
-
-  if (propertyOfInterestId === 'NONE') {
-    clientWhereClause.propertyOfInterestId = null;
-  } else if (propertyOfInterestId) {
-    clientWhereClause.propertyOfInterestId = propertyOfInterestId;
-  }
-
-  // Quando o filtro é um imóvel específico, ele também vira o padrão sugerido
-  // na hora de classificar os contatos dessa campanha como "interessado".
-  const defaultPropertyOfInterestId = propertyOfInterestId && propertyOfInterestId !== 'NONE' ? propertyOfInterestId : undefined;
+  const { where: clientWhereClause, defaultPropertyOfInterestId } = filterResult;
 
   const clientsToMove = await prisma.client.findMany({
     where: clientWhereClause,
