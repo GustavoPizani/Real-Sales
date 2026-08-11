@@ -114,9 +114,6 @@ async function createFromInternalClients(request: NextRequest, user: NonNullable
     phone: client.phone,
   }));
 
-  // Nota: criar a oferta com `clients: { createMany }` numa escrita aninhada quebra sobre
-  // a conexão pooled do pgbouncer (retorna "column does not exist" de forma espúria).
-  // Separar em duas chamadas simples (sem aninhamento) evita o problema.
   const newOffer = await prisma.activeOffer.create({
     data: {
       name,
@@ -127,9 +124,12 @@ async function createFromInternalClients(request: NextRequest, user: NonNullable
     },
   });
 
-  await prisma.activeOfferClient.createMany({
-    data: contactsToCreate.map(c => ({ ...c, activeOfferId: newOffer.id })),
-  });
+  // Nota: activeOfferClient.createMany() (aninhado ou não) falha com "column does not
+  // exist" de forma espúria sobre a conexão pooled do pgbouncer nesse projeto. create()
+  // individual funciona normalmente, então criamos um por um.
+  await Promise.all(contactsToCreate.map(c =>
+    prisma.activeOfferClient.create({ data: { ...c, activeOfferId: newOffer.id } })
+  ));
 
   return NextResponse.json({ ...newOffer, _count: { clients: contactsToCreate.length } }, { status: 201 });
 }
@@ -239,9 +239,6 @@ async function createFromMailingUpload(request: NextRequest, user: NonNullable<A
     }, { status: 400 });
   }
 
-  // Nota: criar a oferta com `clients: { createMany }` numa escrita aninhada quebra sobre
-  // a conexão pooled do pgbouncer (retorna "column does not exist" de forma espúria).
-  // Separar em duas chamadas simples (sem aninhamento) evita o problema.
   const newOffer = await prisma.activeOffer.create({
     data: {
       name,
@@ -252,9 +249,12 @@ async function createFromMailingUpload(request: NextRequest, user: NonNullable<A
     },
   });
 
-  await prisma.activeOfferClient.createMany({
-    data: contactsToCreate.map(c => ({ ...c, activeOfferId: newOffer.id })),
-  });
+  // Nota: activeOfferClient.createMany() (aninhado ou não) falha com "column does not
+  // exist" de forma espúria sobre a conexão pooled do pgbouncer nesse projeto. create()
+  // individual funciona normalmente, então criamos um por um.
+  await Promise.all(contactsToCreate.map(c =>
+    prisma.activeOfferClient.create({ data: { ...c, activeOfferId: newOffer.id } })
+  ));
 
   return NextResponse.json({
     ...newOffer,

@@ -63,15 +63,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const alreadyLinkedCount = eligibleClients.length - toCreate.length;
 
     if (toCreate.length > 0) {
-      await prisma.activeOfferClient.createMany({
-        data: toCreate.map(c => ({
-          activeOfferId: activeOffer.id,
-          clientId: c.id,
-          fullName: c.fullName,
-          email: c.email,
-          phone: c.phone,
-        })),
-      });
+      // Nota: activeOfferClient.createMany() falha com "column does not exist" de forma
+      // espúria sobre a conexão pooled do pgbouncer nesse projeto — create() individual
+      // funciona normalmente.
+      await Promise.all(toCreate.map(c =>
+        prisma.activeOfferClient.create({
+          data: {
+            activeOfferId: activeOffer.id,
+            clientId: c.id,
+            fullName: c.fullName,
+            email: c.email,
+            phone: c.phone,
+          },
+        })
+      ));
     }
 
     return NextResponse.json({
