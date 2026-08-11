@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         overallStatus: ClientOverallStatus.LOST,
         accountId: user.isSuperAdmin ? undefined : user.accountId,
       },
-      select: { id: true, brokerId: true },
+      select: { id: true, fullName: true, email: true, phone: true },
     });
 
     const skippedCount = clientIds.length - eligibleClients.length;
@@ -67,7 +67,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         data: toCreate.map(c => ({
           activeOfferId: activeOffer.id,
           clientId: c.id,
-          assignedToId: c.brokerId,
+          fullName: c.fullName,
+          email: c.email,
+          phone: c.phone,
         })),
       });
     }

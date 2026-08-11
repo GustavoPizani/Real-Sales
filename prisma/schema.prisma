@@ -21,7 +21,7 @@ model User {
   slackWebhookUrl      String?               @map("slack_webhook_url")
   taskReminderMinutes  Int                   @default(30)
   mustChangePassword   Boolean               @default(false) @map("must_change_password")
-  assignedCalls        ActiveOfferClient[]   @relation("AssignedCalls")
+  claimedOfferContacts ActiveOfferClient[]   @relation("ClaimedOfferContacts")
   createdOffers        ActiveOffer[]         @relation("CreatedOffers")
   attendanceRecords    AttendanceRecord[]
   clientsAsBroker      Client[]              @relation("ClientBroker")
@@ -157,6 +157,7 @@ model Property {
   updaterId            String?
   type                 String?
   interestedClients    Client[]
+  defaultForOffers     ActiveOffer[]         @relation("ActiveOfferDefaultProperty")
   facebookFormMappings FacebookFormMapping[]
   creator              User?                 @relation("CreatedProperties", fields: [creatorId], references: [id])
   updater              User?                 @relation("UpdatedProperties", fields: [updaterId], references: [id])
@@ -194,6 +195,7 @@ model ShortLink {
 model PropertyImage {
   id         String   @id @default(uuid())
   url        String
+  isCover    Boolean  @default(false)
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
@@ -361,25 +363,49 @@ model UserFunnelAccess {
 }
 
 model ActiveOffer {
-  id          String              @id @default(uuid())
-  name        String
-  status      ActiveOfferStatus   @default(PENDING)
-  createdById String
-  clients     ActiveOfferClient[]
-  createdBy   User                @relation("CreatedOffers", fields: [createdById], references: [id])
+  id                           String              @id @default(uuid())
+  name                         String
+  status                       ActiveOfferStatus   @default(PENDING)
+  source                       ActiveOfferSource
+  accountId                    String?
+  // Imóvel padrão da campanha (ex.: mailing de um empreendimento específico) —
+  // pré-preenche o imóvel de interesse na hora de classificar como "interessado".
+  defaultPropertyOfInterestId  String?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+  createdById                  String
+  clients                      ActiveOfferClient[]
+  createdBy                    User                @relation("CreatedOffers", fields: [createdById], references: [id])
+  defaultPropertyOfInterest    Property?           @relation("ActiveOfferDefaultProperty", fields: [defaultPropertyOfInterestId], references: [id])
 
   @@map("active_offers")
 }
 
 model ActiveOfferClient {
-  id            String      @id @default(uuid())
+  id            String                  @id @default(uuid())
+  fullName      String
+  email         String?
+  phone         String?
+  status        ActiveOfferClientStatus @default(PENDING)
+  notes         String?
+  // Timestamp da última tentativa de contato (bate o "não atendeu" pro fim da fila).
+  contactedAt   DateTime?
+  snoozedUntil  DateTime?
+  discardReason DiscardReason?
   activeOfferId String
-  clientId      String
-  assignedToId  String
-  activeOffer   ActiveOffer @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
-  assignedTo    User        @relation("AssignedCalls", fields: [assignedToId], references: [id])
-  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // Setado na criação (fonte "clientes internos") ou quando classificado como
+  // "interessado" (fonte mailing, cliente novo criado na hora de puxar).
+  clientId      String?
+  claimedById   String?
+  claimedAt     DateTime?
+  createdAt     DateTime                @default(now())
+  activeOffer   ActiveOffer             @relation(fields: [activeOfferId], references: [id], onDelete: Cascade)
+  client        Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  claimedBy     User?                   @relation("ClaimedOfferContacts", fields: [claimedById], references: [id])
 
+  @@index([activeOfferId])
+  @@index([status])
+  @@index([clientId])
   @@map("active_offer_clients")
 }
 
@@ -546,11 +572,21 @@ enum ActiveOfferStatus {
   COMPLETED
 }
 
+enum ActiveOfferSource {
+  INTERNAL_CLIENTS
+  MAILING_UPLOAD
+}
+
 enum ActiveOfferClientStatus {
   PENDING
   CONTACTED
   NO_ANSWER
   DISCARDED
+}
+
+enum DiscardReason {
+  NOT_INTERESTED
+  NOT_A_CLIENT
 }
 
 enum QualificationStatus {

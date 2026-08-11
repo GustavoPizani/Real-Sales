@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Save, Plus, Trash2, Upload, X, Loader2, ClipboardPaste } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Upload, X, Loader2, ClipboardPaste, Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { PropertyStatus } from "@prisma/client";
 import { compressImage } from "@/lib/image-compress";
 
@@ -209,6 +211,13 @@ function NewPropertyForm() {
         setImagePreviews(imagePreviews.filter((_, i) => i !== index));
     };
 
+    // A primeira imagem da lista é sempre a capa — "tornar capa" só move pra frente.
+    const setCoverImage = (index: number) => {
+        if (index === 0) return;
+        setImages(prev => [prev[index], ...prev.filter((_, i) => i !== index)]);
+        setImagePreviews(prev => [prev[index], ...prev.filter((_, i) => i !== index)]);
+    };
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
@@ -310,7 +319,7 @@ function NewPropertyForm() {
                                     <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => removeTypology(index)}><Trash2 className="h-4 w-4" /></Button>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div><Label>Nome</Label><Input value={typology.name || ''} onChange={(e) => handleTypologyChange(index, 'name', e.target.value)} /></div>
-                                        <div><Label>Valor</Label><Input type="number" value={typology.valor || ''} onChange={(e) => handleTypologyChange(index, 'valor', parseFloat(e.target.value))} /></div>
+                                        <div><Label>Valor</Label><CurrencyInput value={typology.valor || 0} onValueChange={(v) => handleTypologyChange(index, 'valor', v)} /></div>
                                         <div><Label>Área (m²)</Label><Input type="number" value={typology.area || ''} onChange={(e) => handleTypologyChange(index, 'area', parseFloat(e.target.value))} /></div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -344,6 +353,17 @@ function NewPropertyForm() {
                                     {imagePreviews.map((preview, index) => (
                                         <div key={index} className="relative group">
                                             <img src={preview} alt={`Preview ${index}`} className="w-full h-24 object-cover rounded-md" />
+                                            {index === 0 ? (
+                                                <Badge className="absolute top-1 left-1">Capa</Badge>
+                                            ) : (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="icon"
+                                                    className="absolute top-1 left-1 h-6 w-6 opacity-0 group-hover:opacity-100"
+                                                    title="Tornar capa"
+                                                    onClick={() => setCoverImage(index)}
+                                                ><Star className="h-4 w-4" /></Button>
+                                            )}
                                             <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => removeImage(index)}><X className="h-4 w-4" /></Button>
                                         </div>
                                     ))}

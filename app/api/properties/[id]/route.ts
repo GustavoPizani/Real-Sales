@@ -15,7 +15,7 @@ export async function GET(
     const property = await prisma.property.findUnique({
       where: { id: params.id },
       include: {
-        images: { select: { id: true, url: true } },
+        images: { select: { id: true, url: true }, orderBy: [{ isCover: 'desc' }, { id: 'asc' }] },
         propertyTypes: true,
         creator: { select: { name: true } },
         updater: { select: { name: true } },
@@ -108,7 +108,7 @@ export async function PUT(
         await tx.propertyImage.deleteMany({ where: { propertyId } });
         if (imageUrls.length > 0) {
           await tx.propertyImage.createMany({
-            data: imageUrls.map((url: string) => ({ url, propertyId })),
+            data: imageUrls.map((url: string, index: number) => ({ url, propertyId, isCover: index === 0 })),
           });
         }
       }

@@ -140,7 +140,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
             prisma.note.count({ where: { authorId: params.id } }),
             prisma.task.count({ where: { userId: params.id } }),
             prisma.activeOffer.count({ where: { createdById: params.id } }),
-            prisma.activeOfferClient.count({ where: { assignedToId: params.id } }),
+            prisma.activeOfferClient.count({ where: { claimedById: params.id } }),
             prisma.attendanceRecord.count({ where: { userId: params.id } }),
         ]);
 
@@ -192,7 +192,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
                 prisma.client.updateMany({ where: { qualifiedForId: params.id }, data: { qualifiedForId: null } }),
                 prisma.task.updateMany({ where: { userId: params.id }, data: { userId: transferToUserId } }),
                 prisma.activeOffer.updateMany({ where: { createdById: params.id }, data: { createdById: transferToUserId } }),
-                prisma.activeOfferClient.updateMany({ where: { assignedToId: params.id }, data: { assignedToId: transferToUserId } }),
+                prisma.activeOfferClient.updateMany({ where: { claimedById: params.id }, data: { claimedById: transferToUserId } }),
                 prisma.attendanceRecord.updateMany({ where: { userId: params.id }, data: { userId: transferToUserId } }),
                 prisma.property.updateMany({ where: { creatorId: params.id }, data: { creatorId: null } }),
                 prisma.property.updateMany({ where: { updaterId: params.id }, data: { updaterId: null } }),

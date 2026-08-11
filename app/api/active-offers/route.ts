@@ -3,12 +3,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import { Role, ClientOverallStatus, Prisma } from '@prisma/client';
+import { Role, ClientOverallStatus, ActiveOfferSource, Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Lista as campanhas de Oferta Ativa
+// GET: Lista as campanhas de Oferta Ativa (pool aberto — todo mundo da conta vê tudo)
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromToken();
@@ -16,26 +16,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    let whereClause: Prisma.ActiveOfferWhereInput = {};
-
-    if (user.role === Role.BROKER) {
-      // Corretores veem apenas as campanhas atribuídas a eles
-      whereClause = {
-        clients: {
-          some: { assignedToId: user.id },
-        },
-      };
-    }
-    // Admins veem tudo
-
     const activeOffers = await prisma.activeOffer.findMany({
-      where: whereClause,
+      where: { accountId: user.isSuperAdmin ? undefined : user.accountId },
       include: {
         createdBy: { select: { name: true } },
         _count: {
-          select: { clients: true },
+          select: { clients: { where: { status: 'PENDING' } } },
         },
       },
+      orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(activeOffers);
@@ -45,131 +34,217 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Cria uma nova campanha de Oferta Ativa
+// POST: Cria uma nova campanha de Oferta Ativa — de clientes internos perdidos ou upload de mailing
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
-
-    const contentType = request.headers.get('content-type') || '';
-    let newActiveOffer;
-
-    if (contentType.includes('multipart/form-data')) {
-        // --- Criação a partir de LISTA ---
-        const formData = await request.formData();
-        const name = formData.get('name') as string;
-        const file = formData.get('file') as File | null;
-        const assignedToIds = formData.getAll('assignedToIds') as string[];
-
-        if (!name || !file || assignedToIds.length === 0) {
-            return NextResponse.json({ error: 'Nome, arquivo e corretores atribuídos são obrigatórios.' }, { status: 400 });
-        }
-
-        const workbook = new ExcelJS.Workbook();
-        const buffer = await file.arrayBuffer();
-        await workbook.xlsx.load(buffer);
-        const worksheet = workbook.worksheets[0];
-
-        const contacts: Prisma.ActiveOfferClientCreateManyOfferInput[] = [];
-        worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) { // Pula o cabeçalho
-                const contactName = row.getCell(1).value?.toString();
-                if (contactName) {
-                    const contactEmail = row.getCell(2).value?.toString();
-                    const contactPhone = row.getCell(3).value?.toString();
-                    assignedToIds.forEach(brokerId => {
-                        contacts.push({
-                            assignedToId: brokerId,
-                            contactName,
-                            contactEmail,
-                            contactPhone,
-                        });
-                    });
-                }
-            }
-        });
-
-        if (contacts.length === 0) {
-            return NextResponse.json({ error: 'A planilha não contém contatos válidos.' }, { status: 400 });
-        }
-
-        newActiveOffer = await prisma.activeOffer.create({
-            data: {
-                name,
-                createdById: user.id,
-                accountId: user.accountId,
-                clients: { createMany: { data: contacts } },
-            },
-        });
-
-    } else {
-        // --- Criação a partir do SISTEMA ---
-        const { name, source, assignedToIds } = await request.json();
-
-        if (!name || !source || !assignedToIds || !assignedToIds.length) {
-            return NextResponse.json({ error: 'Nome, fonte e corretores atribuídos são obrigatórios.' }, { status: 400 });
-        }
-
-        let clientWhereClause: prisma.clientWhereInput = {
-            overallStatus: ClientOverallStatus.Perdido,
-            accountId: user.isSuperAdmin ? undefined : user.accountId
-        };
-
-        if (source === 'meus_clientes') {
-            clientWhereClause.proprietarioId = user.id;
-        } else if (source === 'equipe' && user.role === Role.MARKETING_ADMIN) {
-            const subordinateIds = (await prisma.user.findMany({ where: { superiorId: user.id }, select: { id: true } })).map(u => u.id);
-            clientWhereClause.proprietarioId = { in: [user.id, ...subordinateIds] };
-        } else if (source === 'sem_proprietario' && user.role === Role.MARKETING_ADMIN) {
-            clientWhereClause.proprietarioId = null;
-        } else {
-            return NextResponse.json({ error: 'Permissão negada para esta fonte de clientes.' }, { status: 403 });
-        }
-
-        const clientsToMove = await prisma.client.findMany({
-            where: clientWhereClause,
-            select: { id: true, fullName: true, email: true, phone: true },
-        });
-
-        if (clientsToMove.length === 0) {
-            return NextResponse.json({ error: 'Nenhum cliente encontrado para os critérios selecionados.' }, { status: 404 });
-        }
-
-        const contactsToCreate: Prisma.ActiveOfferClientCreateManyOfferInput[] = clientsToMove.flatMap(client =>
-            assignedToIds.map((brokerId: string) => ({
-                assignedToId: brokerId,
-                contactName: client.fullName,
-                contactEmail: client.email,
-                contactPhone: client.phone,
-                originalClienteId: client.id, // Rastreia a origem
-            }))
-        );
-
-        newActiveOffer = await prisma.activeOffer.create({
-            data: {
-                name,
-                createdById: user.id,
-                accountId: user.accountId,
-                clients: { createMany: { data: contactsToCreate } },
-            },
-        });
+    if (user.role !== Role.MARKETING_ADMIN) {
+      return NextResponse.json({ error: 'Apenas administradores de marketing podem criar campanhas.' }, { status: 403 });
     }
 
-    // Retorna a contagem após a criação
-    const finalOffer = await prisma.activeOffer.findUnique({
-        where: { id: newActiveOffer.id },
-        include: {
-            _count: { select: { clients: true } },
-        },
-    });
+    const contentType = request.headers.get('content-type') || '';
 
-    return NextResponse.json(finalOffer, { status: 201 });
+    if (contentType.includes('multipart/form-data')) {
+      return await createFromMailingUpload(request, user);
+    }
+    return await createFromInternalClients(request, user);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao criar oferta ativa:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+    return NextResponse.json({ error: 'Erro interno do servidor', details: error.message }, { status: 500 });
   }
+}
+
+async function createFromInternalClients(request: NextRequest, user: NonNullable<Awaited<ReturnType<typeof getUserFromToken>>>) {
+  const { name, source, propertyOfInterestId, brokerId } = await request.json();
+
+  if (!name || !source) {
+    return NextResponse.json({ error: 'Nome e fonte são obrigatórios.' }, { status: 400 });
+  }
+
+  const clientWhereClause: Prisma.ClientWhereInput = {
+    overallStatus: ClientOverallStatus.LOST,
+    accountId: user.isSuperAdmin ? undefined : user.accountId,
+  };
+
+  if (source === 'meus_clientes') {
+    clientWhereClause.brokerId = user.id;
+  } else if (source === 'equipe' && user.role === Role.MARKETING_ADMIN) {
+    const subordinateIds = (await prisma.user.findMany({ where: { supervisorId: user.id }, select: { id: true } })).map(u => u.id);
+    const allowedBrokerIds = [user.id, ...subordinateIds];
+
+    if (brokerId) {
+      if (!allowedBrokerIds.includes(brokerId)) {
+        return NextResponse.json({ error: 'Esse corretor não está na sua equipe.' }, { status: 403 });
+      }
+      clientWhereClause.brokerId = brokerId;
+    } else {
+      clientWhereClause.brokerId = { in: allowedBrokerIds };
+    }
+  } else {
+    return NextResponse.json({ error: 'Permissão negada para esta fonte de clientes.' }, { status: 403 });
+  }
+
+  if (propertyOfInterestId === 'NONE') {
+    clientWhereClause.propertyOfInterestId = null;
+  } else if (propertyOfInterestId) {
+    clientWhereClause.propertyOfInterestId = propertyOfInterestId;
+  }
+
+  // Quando o filtro é um imóvel específico, ele também vira o padrão sugerido
+  // na hora de classificar os contatos dessa campanha como "interessado".
+  const defaultPropertyOfInterestId = propertyOfInterestId && propertyOfInterestId !== 'NONE' ? propertyOfInterestId : undefined;
+
+  const clientsToMove = await prisma.client.findMany({
+    where: clientWhereClause,
+    select: { id: true, fullName: true, email: true, phone: true },
+  });
+
+  if (clientsToMove.length === 0) {
+    return NextResponse.json({ error: 'Nenhum cliente encontrado para os critérios selecionados.' }, { status: 404 });
+  }
+
+  const contactsToCreate: Prisma.ActiveOfferClientCreateManyActiveOfferInput[] = clientsToMove.map(client => ({
+    clientId: client.id,
+    fullName: client.fullName,
+    email: client.email,
+    phone: client.phone,
+  }));
+
+  const finalOffer = await prisma.activeOffer.create({
+    data: {
+      name,
+      source: ActiveOfferSource.INTERNAL_CLIENTS,
+      accountId: user.accountId,
+      createdById: user.id,
+      defaultPropertyOfInterestId,
+      clients: { createMany: { data: contactsToCreate } },
+    },
+    include: { _count: { select: { clients: true } } },
+  });
+
+  return NextResponse.json(finalOffer, { status: 201 });
+}
+
+async function createFromMailingUpload(request: NextRequest, user: NonNullable<Awaited<ReturnType<typeof getUserFromToken>>>) {
+  const formData = await request.formData();
+  const name = formData.get('name') as string;
+  const file = formData.get('file') as File | null;
+  const propertyOfInterestId = (formData.get('propertyOfInterestId') as string | null) || undefined;
+
+  if (!name || !file) {
+    return NextResponse.json({ error: 'Nome da campanha e arquivo são obrigatórios.' }, { status: 400 });
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) {
+    return NextResponse.json({ error: 'A planilha está vazia ou corrompida.' }, { status: 400 });
+  }
+
+  const headerRow = worksheet.getRow(1).values as any[];
+  if (headerRow[0] === null || headerRow[0] === undefined) headerRow.shift();
+  const normalizedHeaders = headerRow.map(h => String(h ?? '').trim().toLowerCase());
+  const nameIdx = normalizedHeaders.findIndex(h => h.includes('nome'));
+  const emailIdx = normalizedHeaders.findIndex(h => h.includes('email'));
+  const phoneIdx = normalizedHeaders.findIndex(h => h.includes('telefone') || h.includes('phone') || h.includes('celular'));
+
+  if (nameIdx === -1) {
+    return NextResponse.json({ error: 'A planilha precisa de uma coluna "Nome".' }, { status: 400 });
+  }
+
+  type ParsedRow = { fullName: string; email: string | null; phone: string | null };
+  const parsedRows: ParsedRow[] = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const values = row.values as any[];
+    if (values[0] === null || values[0] === undefined) values.shift();
+
+    const fullName = values[nameIdx]?.toString().trim();
+    if (!fullName) return;
+
+    const email = emailIdx !== -1 ? (values[emailIdx]?.toString().trim() || null) : null;
+    const phone = phoneIdx !== -1 ? (values[phoneIdx]?.toString().trim() || null) : null;
+    parsedRows.push({ fullName, email, phone });
+  });
+
+  if (parsedRows.length === 0) {
+    return NextResponse.json({ error: 'Nenhum contato válido encontrado na planilha.' }, { status: 400 });
+  }
+
+  const tenantWhere: Prisma.ClientWhereInput = { accountId: user.isSuperAdmin ? undefined : user.accountId };
+  const emails = parsedRows.map(r => r.email).filter((e): e is string => !!e);
+  const phones = parsedRows.map(r => r.phone).filter((p): p is string => !!p);
+
+  const matchingClients = (emails.length || phones.length)
+    ? await prisma.client.findMany({
+        where: {
+          ...tenantWhere,
+          OR: [
+            ...(emails.length ? [{ email: { in: emails } }] : []),
+            ...(phones.length ? [{ phone: { in: phones } }] : []),
+          ],
+        },
+        select: { id: true, email: true, phone: true, overallStatus: true },
+      })
+    : [];
+
+  const clientByEmail = new Map(matchingClients.filter(c => c.email).map(c => [c.email as string, c]));
+  const clientByPhone = new Map(matchingClients.filter(c => c.phone).map(c => [c.phone as string, c]));
+
+  let skippedActive = 0;
+  let linkedToExisting = 0;
+  const usedClientIds = new Set<string>();
+  const contactsToCreate: Prisma.ActiveOfferClientCreateManyActiveOfferInput[] = [];
+
+  for (const row of parsedRows) {
+    let matched = (row.email && clientByEmail.get(row.email)) || (row.phone && clientByPhone.get(row.phone)) || null;
+
+    if (matched && matched.overallStatus === ClientOverallStatus.ACTIVE) {
+      skippedActive++;
+      continue;
+    }
+
+    if (matched && usedClientIds.has(matched.id)) {
+      matched = null;
+    } else if (matched) {
+      usedClientIds.add(matched.id);
+    }
+
+    if (matched) linkedToExisting++;
+
+    contactsToCreate.push({
+      fullName: row.fullName,
+      email: row.email,
+      phone: row.phone,
+      clientId: matched ? matched.id : undefined,
+    });
+  }
+
+  if (contactsToCreate.length === 0) {
+    return NextResponse.json({
+      error: 'Todos os contatos da planilha já estão ativos no CRM — nenhum foi adicionado.',
+      totalRows: parsedRows.length,
+      skippedActive,
+    }, { status: 400 });
+  }
+
+  const finalOffer = await prisma.activeOffer.create({
+    data: {
+      name,
+      source: ActiveOfferSource.MAILING_UPLOAD,
+      accountId: user.accountId,
+      createdById: user.id,
+      defaultPropertyOfInterestId: propertyOfInterestId,
+      clients: { createMany: { data: contactsToCreate } },
+    },
+    include: { _count: { select: { clients: true } } },
+  });
+
+  return NextResponse.json({ ...finalOffer, totalRows: parsedRows.length, linkedToExisting, skippedActive }, { status: 201 });
 }

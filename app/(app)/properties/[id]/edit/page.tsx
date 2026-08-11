@@ -8,11 +8,13 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, ClipboardPaste, Loader2, Plus, Save, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, ClipboardPaste, Loader2, Plus, Save, Trash2, Upload, X, Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { PropertyStatus } from "@prisma/client";
 
@@ -247,6 +249,12 @@ export default function EditPropertyPage() {
   };
   const removeImage = (index: number) => setImages(prev => prev.filter((_, i) => i !== index));
 
+  // A primeira imagem da lista é sempre a capa — "tornar capa" só move pra frente.
+  const setCoverImage = (index: number) => {
+    if (index === 0) return;
+    setImages(prev => [prev[index], ...prev.filter((_, i) => i !== index)]);
+  };
+
   if (loading) {
     return <div className="flex h-full items-center justify-center p-6"><p>A carregar dados do imóvel...</p></div>;
   }
@@ -333,7 +341,7 @@ export default function EditPropertyPage() {
                   <div className="flex justify-end"><Button variant="ghost" size="icon" onClick={() => removeTypology(typology.id!)}><Trash2 className="h-4 w-4 text-red-500" /></Button></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><Label>Nome</Label><Input value={typology.name ?? ''} onChange={(e) => updateTypology(typology.id!, "name", e.target.value)} /></div>
-                    <div><Label>Valor (R$)</Label><Input type="number" value={typology.valor ?? 0} onChange={(e) => updateTypology(typology.id!, "valor", parseFloat(e.target.value) || 0)} /></div>
+                    <div><Label>Valor (R$)</Label><CurrencyInput value={typology.valor ?? 0} onValueChange={(v) => updateTypology(typology.id!, "valor", v)} /></div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     <div><Label>Dorms</Label><Input type="number" value={typology.dormitorios ?? 0} onChange={(e) => updateTypology(typology.id!, 'dormitorios', parseInt(e.target.value, 10) || 0)} /></div>
@@ -372,6 +380,17 @@ export default function EditPropertyPage() {
                 {images.map((image, index) => (
                   <div key={image.url} className="relative group">
                     <img src={image.url} alt={`Imagem ${index + 1}`} className="w-full h-20 object-cover rounded" />
+                    {index === 0 ? (
+                      <Badge className="absolute top-1 left-1">Capa</Badge>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="absolute top-1 left-1 h-6 w-6 opacity-0 group-hover:opacity-100"
+                        title="Tornar capa"
+                        onClick={() => setCoverImage(index)}
+                      ><Star className="h-4 w-4" /></Button>
+                    )}
                     <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => removeImage(index)}><X className="h-4 w-4" /></Button>
                   </div>
                 ))}

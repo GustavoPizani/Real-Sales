@@ -1,42 +1,41 @@
 // app/api/active-offers/[id]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
+import { ActiveOfferClientStatus } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
 // GET: Retorna os detalhes de uma campanha de Oferta Ativa
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const token = cookies().get('authToken')?.value;
-    const user = await getUserFromToken(token);
+    const user = await getUserFromToken();
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
- 
+
     const { id } = params;
- 
+
     const activeOffer = await prisma.activeOffer.findUnique({
       where: { id },
       include: {
         clients: {
+          // Pool aberto — qualquer usuário da conta vê e classifica.
           where: {
-            // O BROKER só vê os clientes atribuídos a ele nesta campanha
-            assignedToId: user.role === 'BROKER' ? user.id : undefined,
+            status: ActiveOfferClientStatus.PENDING,
+            OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }],
           },
           include: {
-            cliente: {
+            // Histórico só existe quando o contato já é um Client vinculado.
+            client: {
               select: {
-                fullName: true,
-                phone: true,
-                email: true,
-                notas: { orderBy: { createdAt: 'desc' }, take: 3 },
+                notes: { orderBy: { createdAt: 'desc' }, take: 3, select: { content: true, createdAt: true } },
               },
             },
           },
-          orderBy: { status: 'asc' },
+          // Nunca contatado primeiro; quem já foi tentado vai pro fim da fila.
+          orderBy: { contactedAt: { sort: 'asc', nulls: 'first' } },
         },
       },
     });

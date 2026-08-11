@@ -16,60 +16,101 @@ interface User {
   name: string;
 }
 
+interface PropertyOption {
+  id: string;
+  title: string;
+}
+
 interface CreateOfferDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOfferCreated: () => void;
 }
 
+const ANY_PROPERTY = '__ANY__';
+const NO_PROPERTY = 'NONE';
+const ANY_BROKER = '__ANY__';
+
 export default function CreateOfferDialog({ open, onOpenChange, onOfferCreated }: CreateOfferDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [originType, setOriginType] = useState<'INTERNAL_CLIENTS' | 'MAILING_UPLOAD'>('INTERNAL_CLIENTS');
   const [name, setName] = useState('');
   const [source, setSource] = useState('meus_clientes');
+  const [propertyOfInterestId, setPropertyOfInterestId] = useState(ANY_PROPERTY);
+  const [brokerId, setBrokerId] = useState(ANY_BROKER);
   const [brokers, setBrokers] = useState<User[]>([]);
-  const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
+  const [properties, setProperties] = useState<PropertyOption[]>([]);
+  const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchBrokers = useCallback(async () => {
+  const fetchOptions = useCallback(async () => {
     if (!user) return;
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/users', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (response.ok) {
-        const data = await response.json();
-        const userList = data.users || [];
-        setBrokers(userList);
-      }
+      const [usersRes, propertiesRes] = await Promise.all([
+        fetch('/api/users', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/properties', { headers: { 'Authorization': `Bearer ${token}` } }),
+      ]);
+      if (usersRes.ok) setBrokers((await usersRes.json()).users || []);
+      if (propertiesRes.ok) setProperties(await propertiesRes.json());
     } catch (error) {
-      console.error("Failed to fetch brokers", error);
+      console.error("Failed to fetch dialog options", error);
     }
   }, [user]);
 
   useEffect(() => {
     if (open) {
-      fetchBrokers();
-      // Reseta o formulário ao abrir
+      fetchOptions();
+      setOriginType('INTERNAL_CLIENTS');
       setName('');
       setSource('meus_clientes');
-      setAssignedToIds(user ? [user.id] : []);
+      setPropertyOfInterestId(ANY_PROPERTY);
+      setBrokerId(ANY_BROKER);
+      setFile(null);
     }
-  }, [open, fetchBrokers, user]);
+  }, [open, fetchOptions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('/api/active-offers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name, source, assignedToIds }),
-      });
+      let response: Response;
 
+      if (originType === 'MAILING_UPLOAD') {
+        if (!file) {
+          toast({ variant: 'destructive', title: 'Erro', description: 'Selecione um arquivo de planilha.' });
+          setIsSubmitting(false);
+          return;
+        }
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('file', file);
+        if (propertyOfInterestId !== ANY_PROPERTY && propertyOfInterestId !== NO_PROPERTY) {
+          formData.append('propertyOfInterestId', propertyOfInterestId);
+        }
+        response = await fetch('/api/active-offers', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+        });
+      } else {
+        response = await fetch('/api/active-offers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            name,
+            source,
+            propertyOfInterestId: propertyOfInterestId === ANY_PROPERTY ? undefined : propertyOfInterestId,
+            brokerId: brokerId === ANY_BROKER ? undefined : brokerId,
+          }),
+        });
+      }
+
+      const result = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Falha ao criar campanha.');
+        throw new Error(result.error || 'Falha ao criar campanha.');
       }
 
       toast({ title: 'Sucesso!', description: 'Campanha de Oferta Ativa criada.' });
@@ -96,24 +137,82 @@ export default function CreateOfferDialog({ open, onOpenChange, onOfferCreated }
             <Label htmlFor="name">Nome da Campanha</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
+
           <div>
-            <Label htmlFor="source">Fonte de Clientes</Label>
-            <Select value={source} onValueChange={setSource}>
+            <Label>Origem dos Contatos</Label>
+            <Select value={originType} onValueChange={(v) => setOriginType(v as typeof originType)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="meus_clientes">Meus Clientes Descartados</SelectItem>
-                {user.role === Role.MARKETING_ADMIN && <SelectItem value="equipe">Clientes da Minha Equipe</SelectItem>}
-                {user.role === Role.MARKETING_ADMIN && <SelectItem value="sem_corretor">Clientes Sem Corretor</SelectItem>}
+                <SelectItem value="INTERNAL_CLIENTS">Clientes Internos (perdidos no CRM)</SelectItem>
+                <SelectItem value="MAILING_UPLOAD">Mailing Externo (upload de planilha)</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label htmlFor="assignedTo">Atribuir Para</Label>
-            <Select onValueChange={(value) => setAssignedToIds([value])} defaultValue={user.id}>
-              <SelectTrigger><SelectValue placeholder="Selecione um ou mais corretores..." /></SelectTrigger>
-              <SelectContent>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+
+          {originType === 'INTERNAL_CLIENTS' ? (
+            <>
+              <div>
+                <Label htmlFor="source">Fonte de Clientes</Label>
+                <Select value={source} onValueChange={setSource}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="meus_clientes">Meus Clientes Descartados</SelectItem>
+                    {user.role === Role.MARKETING_ADMIN && <SelectItem value="equipe">Clientes da Minha Equipe</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Imóvel de Interesse</Label>
+                <Select value={propertyOfInterestId} onValueChange={setPropertyOfInterestId}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY_PROPERTY}>Qualquer imóvel</SelectItem>
+                    <SelectItem value={NO_PROPERTY}>Sem imóvel definido</SelectItem>
+                    {properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {source === 'equipe' && (
+                <div>
+                  <Label>Corretor Específico (opcional)</Label>
+                  <Select value={brokerId} onValueChange={setBrokerId}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY_BROKER}>Toda a equipe</SelectItem>
+                      {brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div>
+                <Label htmlFor="mailing-file">Planilha (.xlsx com colunas Nome, Email, Telefone)</Label>
+                <Input
+                  id="mailing-file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  required
+                />
+              </div>
+              <div>
+                <Label>Imóvel de Interesse (opcional)</Label>
+                <Select value={propertyOfInterestId} onValueChange={setPropertyOfInterestId}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY_PROPERTY}>Nenhum (variado)</SelectItem>
+                    {properties.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Se essa lista for de um empreendimento específico, o imóvel já vem pré-selecionado na hora de classificar cada contato como interessado.
+                </p>
+              </div>
+            </>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Criando...' : 'Criar Campanha'}</Button>
@@ -123,4 +222,3 @@ export default function CreateOfferDialog({ open, onOpenChange, onOfferCreated }
     </Dialog>
   );
 }
-

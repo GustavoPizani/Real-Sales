@@ -19,9 +19,7 @@ export async function GET(request: NextRequest) {
       include: {
         images: {
           take: 1,
-          orderBy: {
-            id: 'asc',
-          },
+          orderBy: [{ isCover: 'desc' }, { id: 'asc' }],
         },
         propertyTypes: true,
       },
@@ -31,7 +29,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(properties, {
-      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' },
+      headers: { 'Cache-Control': 'private, max-age=120, stale-while-revalidate=300' },
     });
   } catch (error) {
     console.error('Erro ao buscar propriedades:', error);
@@ -86,7 +84,7 @@ export async function POST(request: NextRequest) {
 
       if (imageUrls && imageUrls.length > 0) {
         await tx.propertyImage.createMany({
-          data: imageUrls.map((url: string) => ({ url, propertyId: property.id })),
+          data: imageUrls.map((url: string, index: number) => ({ url, propertyId: property.id, isCover: index === 0 })),
         });
       }
 

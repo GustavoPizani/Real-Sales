@@ -30,7 +30,7 @@ const navigationLinks: NavItem[] = [
   { name: 'Pipeline', href: '/pipeline', icon: Kanban, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Roleta e Frequência', href: '/roleta', icon: RotateCcw, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Qualificação', href: '/qualificacao', icon: Target, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente'] },
-  { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente'] },
+  { name: 'Oferta Ativa', href: '/active-offers', icon: Phone, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Tarefas', href: '/tasks', icon: CheckSquare, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Imóveis', href: '/properties', icon: Building, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },
   { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MARKETING_ADMIN', 'diretor', 'gerente', 'BROKER'] },

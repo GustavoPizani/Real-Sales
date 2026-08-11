@@ -30,7 +30,7 @@ export async function GET() {
     });
 
     return NextResponse.json({ users }, {
-      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+      headers: { 'Cache-Control': 'private, max-age=120, stale-while-revalidate=300' },
     });
   } catch (error) {
     console.error("Erro ao buscar utilizadores:", error);
