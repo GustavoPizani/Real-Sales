@@ -69,7 +69,7 @@ export default function ActiveOffersPage() {
   const [offers, setOffers] = useState<ActiveOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [addClientsOfferId, setAddClientsOfferId] = useState<string | null>(null);
+  const [addClientsOffer, setAddClientsOffer] = useState<ActiveOffer | null>(null);
   const [deleteOfferId, setDeleteOfferId] = useState<string | null>(null);
   const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
 
@@ -188,11 +188,9 @@ export default function ActiveOffersPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {offer.source === 'INTERNAL_CLIENTS' && (
-                      <DropdownMenuItem onClick={() => setAddClientsOfferId(offer.id)}>
-                        <UserPlus className="h-4 w-4 mr-2" /> Adicionar clientes
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem onClick={() => setAddClientsOffer(offer)}>
+                      <UserPlus className="h-4 w-4 mr-2" /> Adicionar clientes
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => togglePause(offer)}>
                       {offer.status === 'PAUSED' ? (
                         <><PlayCircle className="h-4 w-4 mr-2" /> Reativar</>
@@ -268,9 +266,9 @@ export default function ActiveOffersPage() {
         <>
           <CreateOfferDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} onOfferCreated={fetchOffers} />
           <AddClientsDialog
-            open={!!addClientsOfferId}
-            onOpenChange={(open) => !open && setAddClientsOfferId(null)}
-            offerId={addClientsOfferId}
+            open={!!addClientsOffer}
+            onOpenChange={(open) => !open && setAddClientsOffer(null)}
+            offer={addClientsOffer}
             onClientsAdded={fetchOffers}
           />
           <AlertDialog open={!!deleteOfferId} onOpenChange={(open) => !open && setDeleteOfferId(null)}>

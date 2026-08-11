@@ -3,9 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import { Role, ClientOverallStatus, ActiveOfferSource, Prisma } from '@prisma/client';
-import ExcelJS from 'exceljs';
-import { buildLostClientWhere } from '@/lib/active-offers';
+import { Role, ActiveOfferSource, Prisma } from '@prisma/client';
+import { buildLostClientWhere, parseMailingSpreadsheet } from '@/lib/active-offers';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,97 +121,16 @@ async function createFromMailingUpload(request: NextRequest, user: NonNullable<A
     return NextResponse.json({ error: 'Nome da campanha e arquivo são obrigatórios.' }, { status: 400 });
   }
 
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await file.arrayBuffer());
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) {
-    return NextResponse.json({ error: 'A planilha está vazia ou corrompida.' }, { status: 400 });
+  const parsed = await parseMailingSpreadsheet(file, user);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   }
-
-  const headerRow = worksheet.getRow(1).values as any[];
-  if (headerRow[0] === null || headerRow[0] === undefined) headerRow.shift();
-  const normalizedHeaders = headerRow.map(h => String(h ?? '').trim().toLowerCase());
-  const nameIdx = normalizedHeaders.findIndex(h => h.includes('nome'));
-  const emailIdx = normalizedHeaders.findIndex(h => h.includes('email'));
-  const phoneIdx = normalizedHeaders.findIndex(h => h.includes('telefone') || h.includes('phone') || h.includes('celular'));
-
-  if (nameIdx === -1) {
-    return NextResponse.json({ error: 'A planilha precisa de uma coluna "Nome".' }, { status: 400 });
-  }
-
-  type ParsedRow = { fullName: string; email: string | null; phone: string | null };
-  const parsedRows: ParsedRow[] = [];
-
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return;
-    const values = row.values as any[];
-    if (values[0] === null || values[0] === undefined) values.shift();
-
-    const fullName = values[nameIdx]?.toString().trim();
-    if (!fullName) return;
-
-    const email = emailIdx !== -1 ? (values[emailIdx]?.toString().trim() || null) : null;
-    const phone = phoneIdx !== -1 ? (values[phoneIdx]?.toString().trim() || null) : null;
-    parsedRows.push({ fullName, email, phone });
-  });
-
-  if (parsedRows.length === 0) {
-    return NextResponse.json({ error: 'Nenhum contato válido encontrado na planilha.' }, { status: 400 });
-  }
-
-  const tenantWhere: Prisma.ClientWhereInput = { accountId: user.isSuperAdmin ? undefined : user.accountId };
-  const emails = parsedRows.map(r => r.email).filter((e): e is string => !!e);
-  const phones = parsedRows.map(r => r.phone).filter((p): p is string => !!p);
-
-  const matchingClients = (emails.length || phones.length)
-    ? await prisma.client.findMany({
-        where: {
-          ...tenantWhere,
-          OR: [
-            ...(emails.length ? [{ email: { in: emails } }] : []),
-            ...(phones.length ? [{ phone: { in: phones } }] : []),
-          ],
-        },
-        select: { id: true, email: true, phone: true, overallStatus: true },
-      })
-    : [];
-
-  const clientByEmail = new Map(matchingClients.filter(c => c.email).map(c => [c.email as string, c]));
-  const clientByPhone = new Map(matchingClients.filter(c => c.phone).map(c => [c.phone as string, c]));
-
-  let skippedActive = 0;
-  let linkedToExisting = 0;
-  const usedClientIds = new Set<string>();
-  const contactsToCreate: Prisma.ActiveOfferClientCreateManyActiveOfferInput[] = [];
-
-  for (const row of parsedRows) {
-    let matched = (row.email && clientByEmail.get(row.email)) || (row.phone && clientByPhone.get(row.phone)) || null;
-
-    if (matched && matched.overallStatus === ClientOverallStatus.ACTIVE) {
-      skippedActive++;
-      continue;
-    }
-
-    if (matched && usedClientIds.has(matched.id)) {
-      matched = null;
-    } else if (matched) {
-      usedClientIds.add(matched.id);
-    }
-
-    if (matched) linkedToExisting++;
-
-    contactsToCreate.push({
-      fullName: row.fullName,
-      email: row.email,
-      phone: row.phone,
-      clientId: matched ? matched.id : undefined,
-    });
-  }
+  const { contactsToCreate, totalRows, linkedToExisting, skippedActive } = parsed;
 
   if (contactsToCreate.length === 0) {
     return NextResponse.json({
       error: 'Todos os contatos da planilha já estão ativos no CRM — nenhum foi adicionado.',
-      totalRows: parsedRows.length,
+      totalRows,
       skippedActive,
     }, { status: 400 });
   }
@@ -237,7 +155,7 @@ async function createFromMailingUpload(request: NextRequest, user: NonNullable<A
   return NextResponse.json({
     ...newOffer,
     _count: { clients: contactsToCreate.length },
-    totalRows: parsedRows.length,
+    totalRows,
     linkedToExisting,
     skippedActive,
   }, { status: 201 });
