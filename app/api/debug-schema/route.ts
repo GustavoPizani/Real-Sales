@@ -35,6 +35,26 @@ export async function GET() {
       directCreateResult = e.message === '__ROLLBACK__' ? 'OK (rolled back)' : `FAILED: ${e.message}`;
     }
 
+    let nestedCreateResult: string;
+    try {
+      await prisma.$transaction(async (tx: any) => {
+        await tx.activeOffer.create({
+          data: {
+            name: '__debug_probe_nested__',
+            source: 'INTERNAL_CLIENTS',
+            accountId: user.accountId,
+            createdById: user.id,
+            defaultPropertyOfInterestId: undefined,
+            clients: { createMany: { data: [{ fullName: '__debug_contact__' }] } },
+          },
+        });
+        throw new Error('__ROLLBACK__');
+      });
+      nestedCreateResult = 'unexpected: commit succeeded';
+    } catch (e: any) {
+      nestedCreateResult = e.message === '__ROLLBACK__' ? 'OK (rolled back)' : `FAILED: ${e.message}`;
+    }
+
     let dbHost = 'unknown';
     try {
       dbHost = new URL(process.env.DATABASE_URL || '').host;
@@ -53,6 +73,7 @@ export async function GET() {
       searchPath: searchPathRows[0]?.search_path,
       activeOffersColumnsBySchema: byschema,
       directCreateResult,
+      nestedCreateResult,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
