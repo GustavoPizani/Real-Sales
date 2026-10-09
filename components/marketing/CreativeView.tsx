@@ -1,108 +1,86 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { ImageOff, Megaphone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ImageIcon, Video, Megaphone } from "lucide-react";
+import { DASH_CARD } from "@/components/dashboard/ui";
+import type { CreativeRow } from "@/hooks/marketing/useDashboardData";
 
-interface CreativeViewProps {
-  data?: any[];
-  isLoading?: boolean;
-}
+const GRID = "grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] lg:gap-4";
 
-export const CreativeView = ({ data = [], isLoading = false }: CreativeViewProps) => {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value || 0);
-  };
+const formatBRL = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+const formatInt = (value: number) => new Intl.NumberFormat("pt-BR").format(value || 0);
 
-  // Tela de Loading (Esqueleto Escuro)
+export const CreativeView = ({ data = [], isLoading = false }: { data?: CreativeRow[]; isLoading?: boolean }) => {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[1, 2, 3].map((i) => (
-          <Card key={i} className="bg-[#1A1A1A] border-[#333]">
-            <CardHeader>
-              <Skeleton className="h-4 w-2/3 bg-[#333]" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <Skeleton className="h-10 w-full bg-[#333]" />
-                <Skeleton className="h-10 w-full bg-[#333]" />
-              </div>
-            </CardContent>
-          </Card>
+      <ul className={GRID} aria-busy="true">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <li key={i} className={`overflow-hidden ${DASH_CARD}`}>
+            <Skeleton className="aspect-video w-full rounded-none" />
+            <div className="space-y-3 p-4">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </li>
         ))}
+      </ul>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className={`flex flex-col items-center px-5 py-12 text-center ${DASH_CARD}`}>
+        <Megaphone className="mb-3 h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground">Nenhum criativo com dados no período.</p>
       </div>
     );
   }
 
-  // Estado Vazio
-  if (!data || data.length === 0) {
-    return (
-      <Card className="bg-[#1A1A1A] border-[#333] text-center py-12 col-span-full">
-        <CardContent className="text-gray-400 flex flex-col items-center justify-center pt-6">
-          <Megaphone className="h-12 w-12 mb-4 text-[#333]" />
-          <p>Nenhum criativo encontrado neste período.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {data.map((creative, index) => {
-        const isVideo = creative.ad_name?.toLowerCase().includes('video');
+    <ul className={GRID}>
+      {data.map(creative => (
+        <li key={`${creative.account_name}|${creative.campaign_name}|${creative.ad_name}`} className={`flex flex-col overflow-hidden ${DASH_CARD}`}>
+          {/* A imagem do anúncio vem do Meta e fica guardada na sincronização. */}
+          <div className="aspect-video bg-muted">
+            {creative.thumbnail_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={creative.thumbnail_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full w-full place-items-center">
+                <ImageOff className="h-8 w-8 text-muted-foreground/50" aria-label="Sem imagem" />
+              </div>
+            )}
+          </div>
 
-        return (
-          // Card escuro com hover dourado suave
-          <Card 
-            key={index} 
-            className="bg-[#1A1A1A] border-[#333] text-white overflow-hidden hover:border-[#aa8d44]/50 transition-all duration-300 shadow-lg"
-          >
-            <CardHeader className="p-4 border-b border-[#333] bg-black/40">
-              <div className="flex items-start justify-between gap-4">
-                <CardTitle className="text-sm font-medium line-clamp-2 leading-snug" title={creative.ad_name}>
-                  {creative.ad_name}
-                </CardTitle>
-                <Badge variant="outline" className="bg-[#aa8d44]/10 text-[#aa8d44] border-[#aa8d44]/30 shrink-0">
-                  {isVideo ? <Video className="w-3 h-3 mr-1" /> : <ImageIcon className="w-3 h-3 mr-1" />}
-                  {isVideo ? 'Vídeo' : 'Imagem'}
-                </Badge>
+          <div className="flex flex-1 flex-col gap-3 p-4">
+            <div className="min-w-0">
+              <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground" title={creative.ad_name}>{creative.ad_name}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground" title={creative.campaign_name}>{creative.campaign_name}</p>
+            </div>
+
+            <dl className="mt-auto grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3">
+              <div>
+                <dt className="text-xs text-muted-foreground">Leads</dt>
+                <dd className="text-xl font-semibold tabular-nums text-foreground">{formatInt(creative.leads)}</dd>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="p-5 grid grid-cols-2 gap-y-4 gap-x-4">
-                {/* O rosa foi removido daqui e substituído por branco */}
-                <div>
-                  <p className="text-xs text-gray-400 mb-1 uppercase tracking-wider">Investimento</p>
-                  <p className="text-xl font-bold text-white">{formatCurrency(creative.spend)}</p>
-                </div>
-                
-                {/* Leads em destaque dourado */}
-                <div>
-                  <p className="text-xs text-gray-400 mb-1 uppercase tracking-wider">Leads</p>
-                  <p className="text-xl font-bold text-[#aa8d44]">{creative.leads}</p>
-                </div>
-                
-                <div className="pt-2 border-t border-[#333]">
-                  <p className="text-xs text-gray-400 mb-1">CPL</p>
-                  <p className="text-sm font-medium text-gray-200">{formatCurrency(creative.cpl)}</p>
-                </div>
-                
-                <div className="pt-2 border-t border-[#333]">
-                  <p className="text-xs text-gray-400 mb-1">Cliques (CTR)</p>
-                  <p className="text-sm font-medium text-gray-200">
-                    {creative.clicks} <span className="text-gray-500 text-xs">({creative.ctr?.toFixed(2)}%)</span>
-                  </p>
-                </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">CPL</dt>
+                <dd className="text-xl font-semibold tabular-nums text-foreground">{creative.leads > 0 ? formatBRL(creative.cpl) : "—"}</dd>
               </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Investimento</dt>
+                <dd className="text-sm font-medium tabular-nums text-foreground">{formatBRL(creative.spend)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Cliques (CTR)</dt>
+                <dd className="text-sm font-medium tabular-nums text-foreground">
+                  {formatInt(creative.clicks)} <span className="text-muted-foreground">({creative.ctr.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%)</span>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 };

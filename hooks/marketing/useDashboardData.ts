@@ -2,217 +2,217 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { DateRange } from "react-day-picker";
-import { format } from "date-fns";
-import CryptoJS from "crypto-js";
+import { addDays, differenceInCalendarDays, format } from "date-fns";
 
-const ENCRYPTION_KEY = "ads-intel-hub-2024";
+// O Supabase devolve no máximo 1000 linhas por consulta. A tabela tem uma linha
+// por anúncio por dia, então um mês de campanhas passa disso com facilidade:
+// sem paginar, os totais do dashboard saíam cortados sem nenhum aviso.
+const PAGE_SIZE = 1000;
+const MAX_ROWS = 100_000;
+const METRIC_COLUMNS = "id,date,account_name,campaign_name,ad_name,spend,leads,impressions,clicks,reach,thumbnail_url,channel";
 
-export const useDashboardData = (dateRange?: DateRange, refreshTrigger?: number) => {
-  const [data, setData] = useState<any[]>([]); 
-  const [creatives, setCreatives] = useState<any[]>([]);
-  const [dailyMetrics, setDailyMetrics] = useState<any[]>([]);
-  const [rawMetrics, setRawMetrics] = useState<any[]>([]);
-  
-  // Armazena nomes de CONTAS para o filtro principal
-  const [allProjects, setAllProjects] = useState<string[]>([]); 
-  
+export interface CampaignRow {
+  account_name: string;
+  campaign_name: string;
+  spend: number;
+  leads: number;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  cpl: number;
+  ctr: number;
+  cpc: number;
+}
+
+export interface CreativeRow {
+  account_name: string;
+  campaign_name: string;
+  ad_name: string;
+  thumbnail_url: string | null;
+  channel: string | null;
+  spend: number;
+  leads: number;
+  impressions: number;
+  clicks: number;
+  cpl: number;
+  ctr: number;
+}
+
+export interface DailyRow {
+  date: string;
+  account_name: string;
+  campaign_name: string;
+  spend: number;
+  leads: number;
+}
+
+const day = (d: Date) => format(d, "yyyy-MM-dd");
+const safeNumber = (val: unknown) => {
+  const num = Number(val);
+  return isNaN(num) ? 0 : num;
+};
+
+async function fetchAllMetrics(userId: string, from: string, to: string) {
+  const rows: any[] = [];
+  for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("campaign_metrics")
+      .select(METRIC_COLUMNS)
+      .eq("user_id", userId)
+      .gte("date", from)
+      .lte("date", to)
+      // Ordem estável: sem ela as páginas podem repetir ou pular linhas.
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+// A chave sempre inclui a conta: duas contas podem ter campanhas com o mesmo
+// nome, e antes elas eram somadas como uma só.
+function groupCampaigns(rows: any[]): CampaignRow[] {
+  const groups: Record<string, any> = {};
+  for (const row of rows) {
+    const account_name = row.account_name?.trim() || "Conta desconhecida";
+    const campaign_name = row.campaign_name || "Campanha sem nome";
+    const key = `${account_name}|${campaign_name}`;
+    const g = (groups[key] ??= { account_name, campaign_name, spend: 0, leads: 0, impressions: 0, clicks: 0, reach: 0 });
+    g.spend += safeNumber(row.spend);
+    g.leads += safeNumber(row.leads);
+    g.impressions += safeNumber(row.impressions);
+    g.clicks += safeNumber(row.clicks);
+    g.reach += safeNumber(row.reach);
+  }
+  return Object.values(groups)
+    .map((c: any) => ({
+      ...c,
+      cpl: c.leads > 0 ? c.spend / c.leads : 0,
+      ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+      cpc: c.clicks > 0 ? c.spend / c.clicks : 0,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+}
+
+function groupCreatives(rows: any[]): CreativeRow[] {
+  const groups: Record<string, any> = {};
+  for (const row of rows) {
+    const account_name = row.account_name?.trim() || "Conta desconhecida";
+    const campaign_name = row.campaign_name || "Campanha sem nome";
+    const ad_name = row.ad_name || "Criativo sem nome";
+    const key = `${account_name}|${campaign_name}|${ad_name}`;
+    const g = (groups[key] ??= { account_name, campaign_name, ad_name, thumbnail_url: null, channel: row.channel ?? null, spend: 0, leads: 0, impressions: 0, clicks: 0 });
+    // As linhas vêm em ordem de data: fica a miniatura mais recente que existir.
+    if (row.thumbnail_url) g.thumbnail_url = row.thumbnail_url;
+    g.spend += safeNumber(row.spend);
+    g.leads += safeNumber(row.leads);
+    g.impressions += safeNumber(row.impressions);
+    g.clicks += safeNumber(row.clicks);
+  }
+  return Object.values(groups)
+    .map((ad: any) => ({
+      ...ad,
+      cpl: ad.leads > 0 ? ad.spend / ad.leads : 0,
+      ctr: ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0,
+    }))
+    .sort((a, b) => b.leads - a.leads || b.spend - a.spend);
+}
+
+// Por dia, conta e campanha. A página soma por dia depois de aplicar os filtros;
+// antes vinha já somado e o gráfico ignorava o filtro de conta.
+function groupDaily(rows: any[]): DailyRow[] {
+  const groups: Record<string, DailyRow> = {};
+  for (const row of rows) {
+    const account_name = row.account_name?.trim() || "Conta desconhecida";
+    const campaign_name = row.campaign_name || "Campanha sem nome";
+    const key = `${row.date}|${account_name}|${campaign_name}`;
+    const g = (groups[key] ??= { date: row.date, account_name, campaign_name, spend: 0, leads: 0 });
+    g.spend += safeNumber(row.spend);
+    g.leads += safeNumber(row.leads);
+  }
+  return Object.values(groups).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+/**
+ * Dados do dashboard de marketing para o período escolhido, mais as campanhas
+ * do período imediatamente anterior (mesma duração) para a comparação.
+ *
+ * A sincronização com o Meta roda no servidor (/api/marketing/sync): esta tela
+ * não lê nem decifra o token.
+ */
+export const useDashboardData = (dateRange?: DateRange) => {
+  const [data, setData] = useState<CampaignRow[]>([]);
+  const [previousData, setPreviousData] = useState<CampaignRow[]>([]);
+  const [creatives, setCreatives] = useState<CreativeRow[]>([]);
+  const [dailyMetrics, setDailyMetrics] = useState<DailyRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const { toast } = useToast();
 
-  const [kpis, setKpis] = useState({
-    investido: 0, impressions: 0, clicks: 0, leads: 0, reach: 0, cpl: 0, ctr: 0, cpc: 0, crm_leads: 0, sales: 0, revenue: 0,
-  });
-
-  const safeNumber = (val: any) => {
-    const num = Number(val);
-    return isNaN(num) ? 0 : num;
-  };
-
-  const decrypt = (ciphertext: string) => {
-    try { return CryptoJS.AES.decrypt(ciphertext, ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8) }
-    catch { return '' }
-  }
+  const from = dateRange?.from ? day(dateRange.from) : day(addDays(new Date(), -30));
+  const to = dateRange?.to ? day(dateRange.to) : dateRange?.from ? day(dateRange.from) : day(new Date());
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
+    setHasError(false);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Sincroniza com a Meta API quando acionado manualmente
-      if (refreshTrigger > 0) {
-        console.log("🔄 Sincronizando com a API da Meta...");
+      // Período anterior: mesma duração, terminando na véspera do início.
+      const fromDate = new Date(`${from}T00:00:00`);
+      const length = differenceInCalendarDays(new Date(`${to}T00:00:00`), fromDate) + 1;
+      const previousFrom = day(addDays(fromDate, -length));
 
-        const { data: settingsData } = await supabase
-          .from('api_settings')
-          .select('setting_key, encrypted_value')
-          .eq('user_id', user.id)
+      const rows = await fetchAllMetrics(user.id, previousFrom, to);
+      const current = rows.filter(row => String(row.date) >= from);
+      const previous = rows.filter(row => String(row.date) < from);
 
-        const keys: Record<string, string> = {}
-        settingsData?.forEach(s => {
-          const val = decrypt(s.encrypted_value)
-          if (val) keys[s.setting_key] = val
-        })
-
-        const accessToken = keys['META_ACCESS_TOKEN']
-        const adAccountIds = keys['META_AD_ACCOUNT_IDS']?.split(',').filter(Boolean) ?? []
-        const since = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
-        const until = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
-
-        if (accessToken && adAccountIds.length > 0) {
-          const { data: syncResult, error: syncError } = await supabase.functions.invoke('meta-insights', {
-            body: { adAccountIds, accessToken, since, until }
-          })
-          if (syncError) {
-            console.error("[SYNC] Erro na Edge Function:", syncError)
-            toast({ variant: "destructive", title: "Erro na sincronização", description: syncError.message || "Falha ao comunicar com a Meta API." })
-          } else if (syncResult?.failed > 0) {
-            console.warn("[SYNC] Contas com falha:", syncResult)
-            toast({ variant: "destructive", title: "Falha em algumas contas", description: `${syncResult.failed} conta(s) não sincronizaram. Verifique se o Access Token é válido.` })
-          } else {
-            console.log("✅ Sincronização Meta finalizada.", syncResult)
-          }
-        } else {
-          console.warn("[SYNC] META_ACCESS_TOKEN ou META_AD_ACCOUNT_IDS não configurados.")
-          toast({ variant: "destructive", title: "Chaves Meta não configuradas", description: "Configure META_ACCESS_TOKEN e as Contas de Anúncio em Configurações." })
-        }
-      }
-
-      // Rotação local: se o filtro está em ≤ 90 dias, apaga dados mais antigos que 90 dias
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      const filterSince = dateRange?.from ?? ninetyDaysAgo;
-      if (filterSince >= ninetyDaysAgo) {
-        const cutoff = ninetyDaysAgo.toISOString().split('T')[0];
-        await supabase
-          .from('campaign_metrics')
-          .delete()
-          .eq('user_id', user.id)
-          .lt('date', cutoff);
-      }
-
-      // Busca os dados do banco após sincronizar
-      const { data: metricsData, error: metricsError } = await supabase
-        .from('campaign_metrics')
-        .select('*')
-        .eq('user_id', user.id);
-
-      // 2. BUSCA NOMES DAS CONTAS (Agora o banco já terá a EVO e VILA SAÚDE)
-      // Adicionamos .trim() e limpeza de vazios para evitar "Unknown Account" ou nomes duplicados
-      const { data: allAccountsData } = await supabase
-        .from("campaign_metrics")
-        .select("account_name")
-        .eq("user_id", user.id);
-
-      if (allAccountsData) {
-        const uniqueAccounts = Array.from(new Set(
-            allAccountsData
-                .map(c => c.account_name ? c.account_name.trim() : null)
-                .filter(Boolean)
-        )).sort() as string[];
-        setAllProjects(uniqueAccounts);
-      }
-
-      // 3. BUSCA MÉTRICAS (Filtered by Date)
-      let query = supabase.from("campaign_metrics").select("*").eq("user_id", user.id);
-      if (dateRange?.from) query = query.gte("date", format(dateRange.from, "yyyy-MM-dd"));
-      if (dateRange?.to) query = query.lte("date", format(dateRange.to, "yyyy-MM-dd"));
-
-      const { data: metrics, error: dbError } = await query;
-      if (dbError) throw dbError;
-
-      setRawMetrics(metrics || []);
-
-      // CRM leads — contagem via API do sistema
-      const crmRes = await fetch(`/api/dashboard/stats`).catch(() => null)
-      const crmStats = crmRes?.ok ? await crmRes.json().catch(() => null) : null
-      const crmLeadsCount = crmStats?.totalClients ?? 0
-
-      // 5. PROCESSAMENTO: Agrupar por Campanha, incluindo account_name
-      const campaignGroups: Record<string, any> = {};
-      const creativeGroups: Record<string, any> = {};
-      const dailyGroups: Record<string, any> = {};
-      let totalSpend = 0, totalLeads = 0, totalImpressions = 0, totalClicks = 0, totalReach = 0;
-
-      (metrics || []).forEach((row) => {
-        const accName = row.account_name?.trim() || "Conta Desconhecida";
-        const campName = row.campaign_name || "Campanha sem nome";
-        const adName = row.ad_name || "Criativo sem nome";
-        
-        const spend = safeNumber(row.spend);
-        const leads = safeNumber(row.leads);
-        const impressions = safeNumber(row.impressions);
-        const clicks = safeNumber(row.clicks);
-        const reach = safeNumber(row.reach);
-
-        totalSpend += spend; totalLeads += leads; totalImpressions += impressions; totalClicks += clicks; totalReach += reach;
-
-        // A. Campanhas
-        if (!campaignGroups[campName]) {
-          campaignGroups[campName] = { 
-              account_name: accName,
-              campaign_name: campName, 
-              spend: 0, leads: 0, impressions: 0, clicks: 0, reach: 0 
-          };
-        }
-        campaignGroups[campName].spend += spend; 
-        campaignGroups[campName].leads += leads; 
-        campaignGroups[campName].impressions += impressions; 
-        campaignGroups[campName].clicks += clicks; 
-        campaignGroups[campName].reach += reach;
-
-        // B. Criativos
-        const creativeKey = `${adName}_${campName}`; 
-        if (!creativeGroups[creativeKey]) {
-          creativeGroups[creativeKey] = { 
-              account_name: accName,
-              ad_name: adName, 
-              campaign_name: campName, 
-              thumbnail_url: row.thumbnail_url, channel: row.channel, spend: 0, leads: 0, impressions: 0, clicks: 0 
-          };
-        }
-        creativeGroups[creativeKey].spend += spend; 
-        creativeGroups[creativeKey].leads += leads; 
-        creativeGroups[creativeKey].impressions += impressions; 
-        creativeGroups[creativeKey].clicks += clicks;
-
-        // C. Diário
-        if (!dailyGroups[row.date]) dailyGroups[row.date] = { date: row.date, spend: 0, leads: 0 };
-        dailyGroups[row.date].spend += spend; 
-        dailyGroups[row.date].leads += leads;
-      });
-
-      const formattedCampaigns = Object.values(campaignGroups).map((camp: any) => ({ ...camp, cpl: camp.leads > 0 ? camp.spend / camp.leads : 0, ctr: camp.impressions > 0 ? (camp.clicks / camp.impressions) * 100 : 0, cpc: camp.clicks > 0 ? camp.spend / camp.clicks : 0 }));
-      const formattedCreatives = Object.values(creativeGroups).map((ad: any) => ({ ...ad, cpl: ad.leads > 0 ? ad.spend / ad.leads : 0, ctr: ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0 }));
-      const formattedDaily = Object.values(dailyGroups).map((day: any) => ({ ...day, cpl: day.leads > 0 ? day.spend / day.leads : 0 })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      setData(formattedCampaigns);
-      setCreatives(formattedCreatives);
-      setDailyMetrics(formattedDaily);
-      
-      setKpis({ 
-          investido: totalSpend, 
-          leads: totalLeads, 
-          impressions: totalImpressions, 
-          clicks: totalClicks, 
-          reach: totalReach,
-          cpl: totalLeads > 0 ? totalSpend / totalLeads : 0, 
-          ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0, 
-          cpc: totalClicks > 0 ? totalSpend / totalClicks : 0, 
-          crm_leads: crmLeadsCount,
-          sales: 0, 
-          revenue: 0 
-      });
-
+      setData(groupCampaigns(current));
+      setPreviousData(groupCampaigns(previous));
+      setCreatives(groupCreatives(current));
+      setDailyMetrics(groupDaily(current));
     } catch (error: any) {
-      console.error("Erro Dashboard Hook:", error);
-      toast({ variant: "destructive", title: "Erro ao carregar dados", description: error.message });
+      console.error("Erro ao carregar o dashboard de marketing:", error);
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
-  }, [dateRange, toast, refreshTrigger]);
+  }, [from, to]);
 
-  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData, refreshTrigger]);
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
-  return { data, creatives, dailyMetrics, rawMetrics, allProjects, isLoading, kpis, fetchDashboardData };
+  const sync = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/marketing/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ since: from, until: to }),
+      });
+      const result = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(result?.error || "Falha ao sincronizar com o Meta.");
+
+      if (result.errors?.length > 0) {
+        toast({
+          variant: "destructive",
+          title: result.imported > 0 ? "Sincronizado com falhas" : "Não foi possível sincronizar",
+          description: result.errors[0],
+        });
+      } else {
+        toast({ title: "Campanhas sincronizadas", description: `${result.imported} registros atualizados em ${result.accounts} conta(s).` });
+      }
+      await fetchDashboardData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro na sincronização", description: error.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [from, to, toast, fetchDashboardData]);
+
+  return { data, previousData, creatives, dailyMetrics, isLoading, isSyncing, hasError, sync, reload: fetchDashboardData };
 };

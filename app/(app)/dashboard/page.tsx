@@ -1,551 +1,153 @@
 // app/(app)/dashboard/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Users, Building2, TrendingUp, Calendar, ExternalLink, AlertCircle, Clock } from "lucide-react";
-import Link from "next/link";
-import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { DateTimePicker } from "@/components/ui/datetime-picker";
-import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
+import { AnalyticsPanel, clearAnalyticsCache } from "@/components/dashboard/analytics-panel";
+import { DashboardSettingsTab } from "@/components/dashboard/dashboard-settings";
+import { QuickActions } from "@/components/dashboard/quick-actions";
+import { WorkQueue } from "@/components/dashboard/work-queue";
+import { dashboardFetch } from "@/lib/dashboard-fetch";
+import type { DashboardData, DashboardView } from "@/components/dashboard/types";
+import { DASH_PANEL, DASH_SURFACE } from "@/components/dashboard/ui";
 
-interface DashboardStats {
-  hierarchicalTotalClients: number;
-  hierarchicalActiveClients: number;
-  totalProperties: number;
-  conversionRate: number;
-}
+// Abas em formato de pílula, com a ativa na cor principal.
+const TABS_LIST = `h-auto max-w-full justify-start overflow-x-auto rounded-full p-1 ${DASH_SURFACE}`;
+const TABS_TRIGGER = "rounded-full px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none";
 
-interface OverdueClient {
-  id: string;
-  fullName: string;
-  updatedAt: string;
-}
+// O que cada papel vê primeiro: admin analisa, gerente acompanha a equipe, corretor executa.
+const SUBTITLE: Record<DashboardView, string> = {
+  admin: "Conversão dos clientes, do cadastro à venda.",
+  manager: "Indicadores, tarefas e clientes da sua equipe.",
+  broker: "Suas tarefas e os clientes que precisam de atenção.",
+};
 
-interface Task {
-  id: string;
-  title: string;
-  dateTime: string;
-  isCompleted: boolean;
-  clientId: string;
-  client: { id: string; fullName: string } | null;
-}
+// Última fila carregada: ao voltar para a página ela aparece na hora e atualiza por trás.
+let lastData: DashboardData | null = null;
 
-interface Client {
-  id: string;
-  fullName: string;
-}
-
-interface Broker {
-  id: string;
-  name: string;
-  role: string;
-}
-
-function StatCardSkeleton() {
+function OverdueBadge({ count }: { count: number }) {
+  if (count === 0) return null;
   return (
-    <Card className="border-l-4 border-l-muted">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-4 rounded-full" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-8 w-16 mb-1" />
-        <Skeleton className="h-3 w-40" />
-      </CardContent>
-    </Card>
+    <span className="ml-2 rounded-full bg-destructive px-2 py-0.5 text-xs font-medium tabular-nums text-destructive-foreground">
+      {count}
+      <span className="sr-only"> atrasadas</span>
+    </span>
   );
 }
 
-function TaskRowSkeleton() {
+function QueueSkeleton() {
   return (
-    <div className="p-3 rounded-md space-y-2">
-      <div className="flex justify-between">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-3 w-20" />
+    <div className="space-y-6" aria-busy="true">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-[20px]" />)}
       </div>
-      <Skeleton className="h-3 w-28" />
+      <Skeleton className="h-72 w-full rounded-[20px]" />
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const { user, isLoading: isAuthLoading } = useAuth();
-  const { toast } = useToast();
+  const { user } = useAuth();
+  const [data, setData] = useState<DashboardData | null>(lastData);
+  const [hasError, setHasError] = useState(false);
+  // Trocado ao salvar a configuração: remonta as análises com os dados novos.
+  const [analyticsKey, setAnalyticsKey] = useState(0);
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [overdueClients, setOverdueClients] = useState<OverdueClient[]>([]);
-  const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
-  const [overdueTasks, setOverdueTasks] = useState<Task[]>([]);
-  const [isDataLoading, setIsDataLoading] = useState(true);
-
-  // Modal state — data fetched lazily when modal opens
-  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-
-  const [clients, setClients] = useState<Client[]>([]);
-  const [brokers, setBrokers] = useState<Broker[]>([]);
-
-  const [clientForm, setClientForm] = useState({ fullName: "", email: "", phone: "", selectedbrokerId: "" });
-  const [propertyForm, setPropertyForm] = useState({ title: "", endereco: "", price: "" });
-  const [taskForm, setTaskForm] = useState<{ title: string; description: string; dueDate: string; clientId: string; reminderMinutesBefore: number | null; overdueRepeatMinutes: number | null }>({ title: "", description: "", dueDate: "", clientId: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
-
-  // Modal de conclusão de tarefa
-  const [isCompleteTaskOpen, setIsCompleteTaskOpen] = useState(false);
-  const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
-  const [completionComment, setCompletionComment] = useState("");
-
-  const fetchDashboardData = useCallback(async () => {
-    if (!user) return;
-    setIsDataLoading(true);
+  const loadData = useCallback(async () => {
+    setHasError(false);
     try {
-      const token = localStorage.getItem("authToken");
-      const res = await fetch("/api/dashboard/data", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Falha ao carregar dados.");
-      const data = await res.json();
-      setStats(data.stats);
-      setOverdueClients(data.overdueClients);
-      setPendingTasks(data.pendingTasks);
-      setOverdueTasks(data.overdueTasks);
+      const res = await dashboardFetch("/api/dashboard/data");
+      if (!res.ok) throw new Error();
+      lastData = await res.json();
+      setData(lastData);
     } catch {
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível carregar os dados do dashboard." });
-    } finally {
-      setIsDataLoading(false);
+      setHasError(true);
     }
-  }, [user, toast]);
+  }, []);
 
   useEffect(() => {
-    if (user) fetchDashboardData();
-  }, [user, fetchDashboardData]);
+    if (user) loadData();
+  }, [user, loadData]);
 
-  // Lazy-load clients when task modal opens
-  useEffect(() => {
-    if (!isTaskModalOpen || clients.length > 0) return;
-    const token = localStorage.getItem("authToken");
-    fetch("/api/clients", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setClients(d.clients || []))
-      .catch(() => null);
-  }, [isTaskModalOpen, clients.length]);
+  if (!user) return null;
 
-  // Lazy-load brokers when client modal opens
-  useEffect(() => {
-    if (!isClientModalOpen || brokers.length > 0) return;
-    const token = localStorage.getItem("authToken");
-    fetch("/api/users", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setBrokers(d.users || []))
-      .catch(() => null);
-  }, [isClientModalOpen, brokers.length]);
+  // O admin é conhecido pelo login; gerente e corretor só se distinguem depois da
+  // primeira resposta (gerente é o corretor que tem equipe).
+  const view: DashboardView | null = data?.view ?? (user.role === "MARKETING_ADMIN" ? "admin" : null);
+  const firstName = user.name?.split(" ")[0] ?? "";
+  const overdue = data?.totals.overdueTasks ?? 0;
 
-  const handleClientSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const isManager = user && ["MARKETING_ADMIN", "diretor", "gerente"].includes(user.role);
-    if (isManager && !clientForm.selectedbrokerId) {
-      toast({ variant: "destructive", title: "Campo obrigatório", description: "Selecione um corretor responsável." });
-      return;
-    }
-    const brokerId = isManager ? clientForm.selectedbrokerId : user?.id;
-    try {
-      const token = localStorage.getItem("authToken");
-      const res = await fetch("/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ fullName: clientForm.fullName, email: clientForm.email, phone: clientForm.phone, brokerId, currentFunnelStage: "Contato" }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Falha ao criar cliente.");
-      toast({ title: "Sucesso!", description: "Cliente criado com sucesso." });
-      setIsClientModalOpen(false);
-      setClientForm({ fullName: "", email: "", phone: "", selectedbrokerId: "" });
-      fetchDashboardData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
-    }
-  };
+  const loadError = (
+    <div className="flex flex-col items-center gap-3 py-10 text-center">
+      <AlertCircle className="h-6 w-6 text-destructive" aria-hidden="true" />
+      <p className="text-sm text-muted-foreground">Não foi possível carregar tarefas e clientes.</p>
+      <Button variant="outline" onClick={loadData}>
+        <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />Tentar de novo
+      </Button>
+    </div>
+  );
 
-  const handlePropertySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem("authToken");
-      const res = await fetch("/api/properties", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...propertyForm, price: parseFloat(propertyForm.price) }),
-      });
-      if (!res.ok) throw new Error("Falha ao criar imóvel.");
-      toast({ title: "Sucesso!", description: "Imóvel criado com sucesso." });
-      setIsPropertyModalOpen(false);
-      setPropertyForm({ title: "", endereco: "", price: "" });
-      fetchDashboardData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
-    }
-  };
+  // Com dados já na tela, uma falha ao atualizar não troca a fila pela mensagem de erro.
+  const queue = data ? (
+    <WorkQueue data={data} currentUserId={user.id} team={data.view === "manager"} onChanged={loadData} />
+  ) : hasError ? loadError : <QueueSkeleton />;
 
-  const handleTaskSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!taskForm.dueDate) {
-      toast({ variant: "destructive", title: "Erro", description: "Selecione a data e hora da tarefa." });
-      return;
-    }
-    try {
-      const token = localStorage.getItem("authToken");
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          title: taskForm.title,
-          description: taskForm.description,
-          dateTime: taskForm.dueDate,
-          clientId: taskForm.clientId,
-          reminderMinutesBefore: taskForm.reminderMinutesBefore,
-          overdueRepeatMinutes: taskForm.overdueRepeatMinutes,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Erro ao criar tarefa");
-      toast({ title: "Sucesso!", description: "Tarefa criada com sucesso." });
-      setIsTaskModalOpen(false);
-      setTaskForm({ title: "", description: "", dueDate: "", clientId: "", reminderMinutesBefore: null, overdueRepeatMinutes: null });
-      fetchDashboardData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
-    }
-  };
-
-  const handleCompleteTask = async () => {
-    if (!taskToComplete) return;
-    try {
-      const token = localStorage.getItem("authToken");
-      const res = await fetch(`/api/tasks/${taskToComplete.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ isCompleted: true }),
-      });
-      if (!res.ok) throw new Error("Falha ao concluir tarefa.");
-
-      if (taskToComplete.clientId) {
-        const noteContent = `Tarefa Concluída: "${taskToComplete.title}".\n\nComentário: ${completionComment || "Nenhum comentário adicionado."}`;
-        await fetch(`/api/clients/${taskToComplete.clientId}/notes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ content: noteContent }),
-        });
-      }
-
-      toast({ title: "Sucesso!", description: "Tarefa concluída e anotação criada." });
-      setIsCompleteTaskOpen(false);
-      setTaskToComplete(null);
-      setCompletionComment("");
-      fetchDashboardData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
-    }
-  };
-
-  if (isAuthLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-custom" />
-      </div>
-    );
-  }
+  const analytics = view ? <AnalyticsPanel key={analyticsKey} view={view} /> : null;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col space-y-2">
-        <h1 className="text-3xl font-bold text-secondary-custom">
-          👋 Olá, {user?.name ?? "Usuário"}!
-        </h1>
-        <p className="text-muted-foreground">Aqui está um resumo das suas atividades e performance</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isDataLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
-        ) : (
-          <>
-            <Card className="border-l-4 border-l-secondary-custom">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total de Clientes</CardTitle>
-                <Users className="h-4 w-4 text-secondary-custom" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.hierarchicalTotalClients ?? 0}</div>
-                <p className="text-xs text-muted-foreground">Todos os clientes cadastrados</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-blue-400">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Clientes Ativos</CardTitle>
-                <TrendingUp className="h-4 w-4 text-blue-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-400">{stats?.hierarchicalActiveClients ?? 0}</div>
-                <p className="text-xs text-muted-foreground">Em andamento no pipeline</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-secondary-custom">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total de Imóveis</CardTitle>
-                <Building2 className="h-4 w-4 text-secondary-custom" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-secondary-custom">{stats?.totalProperties ?? 0}</div>
-                <p className="text-xs text-muted-foreground">Imóveis cadastrados</p>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-emerald-400">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Taxa de Conversão</CardTitle>
-                <TrendingUp className="h-4 w-4 text-emerald-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-emerald-400">{stats?.conversionRate ?? 0}%</div>
-                <p className="text-xs text-muted-foreground">Clientes ativos vs total</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-secondary-custom">Ações Rápidas</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-            <DialogTrigger asChild>
-              <Card className="cursor-pointer hover:shadow-lg hover:shadow-secondary-custom/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-secondary-custom/60">
-                <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                  <Plus className="h-6 w-6 text-secondary-custom mb-2" />
-                  <h3 className="font-medium">Novo Cliente</h3>
-                </CardContent>
-              </Card>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader>
-              <form onSubmit={handleClientSubmit} className="space-y-4">
-                <div className="space-y-2"><Label>Nome Completo</Label><Input value={clientForm.fullName} onChange={e => setClientForm({ ...clientForm, fullName: e.target.value })} required /></div>
-                <div className="space-y-2"><Label>Email</Label><Input type="email" value={clientForm.email} onChange={e => setClientForm({ ...clientForm, email: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Telefone</Label><Input value={clientForm.phone} onChange={e => setClientForm({ ...clientForm, phone: e.target.value })} /></div>
-                {user && ["MARKETING_ADMIN", "diretor", "gerente"].includes(user.role) && (
-                  <div className="space-y-2">
-                    <Label>Corretor Responsável</Label>
-                    <Select value={clientForm.selectedbrokerId} onValueChange={v => setClientForm(p => ({ ...p, selectedbrokerId: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Selecione um corretor" /></SelectTrigger>
-                      <SelectContent>{brokers.filter(b => b.role === "BROKER").map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsClientModalOpen(false)}>Cancelar</Button>
-                  <Button type="submit">Salvar</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isPropertyModalOpen} onOpenChange={setIsPropertyModalOpen}>
-            <DialogTrigger asChild>
-              <Card className="cursor-pointer hover:shadow-lg hover:shadow-blue-400/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-blue-400/60">
-                <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                  <Building2 className="h-6 w-6 text-blue-400 mb-2" />
-                  <h3 className="font-medium">Novo Imóvel</h3>
-                </CardContent>
-              </Card>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Novo Imóvel</DialogTitle></DialogHeader>
-              <form onSubmit={handlePropertySubmit} className="space-y-4">
-                <div className="space-y-2"><Label>Título</Label><Input value={propertyForm.title} onChange={e => setPropertyForm({ ...propertyForm, title: e.target.value })} required /></div>
-                <div className="space-y-2"><Label>Endereço</Label><Input value={propertyForm.endereco} onChange={e => setPropertyForm({ ...propertyForm, endereco: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Preço</Label><Input type="number" value={propertyForm.price} onChange={e => setPropertyForm({ ...propertyForm, price: e.target.value })} /></div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsPropertyModalOpen(false)}>Cancelar</Button>
-                  <Button type="submit">Salvar</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
-            <DialogTrigger asChild>
-              <Card className="cursor-pointer hover:shadow-lg hover:shadow-secondary-custom/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-secondary-custom/60">
-                <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                  <Calendar className="h-6 w-6 text-secondary-custom mb-2" />
-                  <h3 className="font-medium">Nova Tarefa</h3>
-                </CardContent>
-              </Card>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Criar Nova Tarefa</DialogTitle></DialogHeader>
-              <form onSubmit={handleTaskSubmit} className="space-y-4">
-                <div className="space-y-2"><Label>Título *</Label><Input value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} required /></div>
-                <div className="space-y-2">
-                  <Label>Cliente *</Label>
-                  <Select value={taskForm.clientId} onValueChange={v => setTaskForm({ ...taskForm, clientId: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
-                    <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.fullName}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2"><Label>Data e Hora *</Label><DateTimePicker value={taskForm.dueDate} onChange={v => setTaskForm({ ...taskForm, dueDate: v })} /></div>
-                <div className="space-y-2"><Label>Descrição</Label><Textarea value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} /></div>
-                <TaskReminderFields
-                  reminderMinutesBefore={taskForm.reminderMinutesBefore}
-                  onReminderMinutesBeforeChange={v => setTaskForm({ ...taskForm, reminderMinutesBefore: v })}
-                  overdueRepeatMinutes={taskForm.overdueRepeatMinutes}
-                  onOverdueRepeatMinutesChange={v => setTaskForm({ ...taskForm, overdueRepeatMinutes: v })}
-                />
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Cancelar</Button>
-                  <Button type="submit">Criar Tarefa</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Link href="/pipeline">
-            <Card className="cursor-pointer hover:shadow-lg hover:shadow-emerald-400/10 transition-all duration-200 border-2 border-dashed border-border/40 hover:border-emerald-400/60">
-              <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-                <ExternalLink className="h-6 w-6 text-emerald-400 mb-2" />
-                <h3 className="font-medium">Ver Pipeline</h3>
-              </CardContent>
-            </Card>
-          </Link>
+    <div className="p-3 md:p-4">
+    <div className={`space-y-5 sm:space-y-6 ${DASH_PANEL}`}>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Olá{firstName ? `, ${firstName}` : ""}</h1>
+          <p className="text-sm text-muted-foreground">{view ? SUBTITLE[view] : "Carregando seu painel..."}</p>
         </div>
+        <QuickActions currentUserId={user.id} brokers={data?.brokers ?? []} canAssignBroker={!!view && view !== "broker"} onChanged={loadData} />
       </div>
 
-      {/* Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-secondary-custom">Clientes em Atraso</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72 overflow-y-auto space-y-2">
-            {isDataLoading ? (
-              Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)
-            ) : overdueClients.length > 0 ? (
-              overdueClients.map(client => (
-                <Link href={`/client/${client.id}`} key={client.id} className="block p-3 rounded-md hover:bg-accent">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-800 dark:text-gray-200">{client.fullName}</p>
-                    <span className="text-xs text-red-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      {formatDistanceToNow(new Date(client.updatedAt), { addSuffix: true, locale: ptBR })}
-                    </span>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="text-center text-muted-foreground py-8">Nenhum cliente em atraso.</div>
-            )}
-          </CardContent>
-        </Card>
+      {view === null && (hasError ? loadError : <QueueSkeleton />)}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-secondary-custom">Tarefas</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72 overflow-y-auto p-0">
-            <Tabs defaultValue="pendentes" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="pendentes">Pendentes</TabsTrigger>
-                <TabsTrigger value="atrasadas">Atrasadas</TabsTrigger>
-              </TabsList>
-              <TabsContent value="pendentes" className="space-y-1 p-3">
-                {isDataLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => <TaskRowSkeleton key={i} />)
-                ) : pendingTasks.length > 0 ? (
-                  pendingTasks.map(task => (
-                    <button
-                      key={task.id}
-                      className="block w-full text-left p-3 rounded-md hover:bg-accent cursor-pointer"
-                      onClick={() => { setTaskToComplete(task); setCompletionComment(""); setIsCompleteTaskOpen(true); }}
-                    >
-                      <div className="flex justify-between items-start">
-                        <p className="font-medium">{task.title}</p>
-                        {task.client && <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{task.client.fullName}</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                        <Clock className="h-3 w-3" />
-                        {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}
-                      </p>
-                    </button>
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">Nenhuma tarefa pendente.</p>
-                )}
-              </TabsContent>
-              <TabsContent value="atrasadas" className="space-y-1 p-3">
-                {isDataLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => <TaskRowSkeleton key={i} />)
-                ) : overdueTasks.length > 0 ? (
-                  overdueTasks.map(task => (
-                    <button
-                      key={task.id}
-                      className="block w-full text-left p-3 rounded-md hover:bg-accent cursor-pointer"
-                      onClick={() => { setTaskToComplete(task); setCompletionComment(""); setIsCompleteTaskOpen(true); }}
-                    >
-                      <div className="flex justify-between items-start">
-                        <p className="font-medium text-red-500">{task.title}</p>
-                        {task.client && <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{task.client.fullName}</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                        <AlertCircle className="h-3 w-3 text-red-500" />
-                        {format(new Date(task.dateTime), "dd/MM 'às' HH:mm")}
-                      </p>
-                    </button>
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">Nenhuma tarefa atrasada.</p>
-                )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+      {view === "admin" && (
+        <Tabs defaultValue="analytics" className="space-y-6">
+          <TabsList className={TABS_LIST}>
+            <TabsTrigger className={TABS_TRIGGER} value="analytics">Análises</TabsTrigger>
+            <TabsTrigger className={TABS_TRIGGER} value="queue">Minhas tarefas<OverdueBadge count={overdue} /></TabsTrigger>
+            <TabsTrigger className={TABS_TRIGGER} value="settings">Configurar</TabsTrigger>
+          </TabsList>
+          <TabsContent value="analytics">{analytics}</TabsContent>
+          <TabsContent value="queue">{queue}</TabsContent>
+          <TabsContent value="settings">
+            <DashboardSettingsTab onSaved={() => { clearAnalyticsCache(); setAnalyticsKey(k => k + 1); }} />
+          </TabsContent>
+        </Tabs>
+      )}
 
-      {/* Modal de conclusão de tarefa */}
-      <Dialog open={isCompleteTaskOpen} onOpenChange={(open) => {
-        setIsCompleteTaskOpen(open);
-        if (!open) { setTaskToComplete(null); setCompletionComment(""); }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Concluir Tarefa: {taskToComplete?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {taskToComplete?.client && (
-              <p className="text-sm text-muted-foreground">Cliente: <span className="font-medium text-foreground">{taskToComplete.client.fullName}</span></p>
-            )}
-            <Label htmlFor="dashboard-comment">Comentário de conclusão</Label>
-            <Textarea
-              id="dashboard-comment"
-              placeholder="Descreva o resultado ou adicione informações relevantes..."
-              value={completionComment}
-              onChange={(e) => setCompletionComment(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsCompleteTaskOpen(false)}>Cancelar</Button>
-            <Button type="button" onClick={handleCompleteTask}>Confirmar Conclusão</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {view === "manager" && (
+        <Tabs defaultValue="analytics" className="space-y-6">
+          <TabsList className={TABS_LIST}>
+            <TabsTrigger className={TABS_TRIGGER} value="analytics">Indicadores da equipe</TabsTrigger>
+            <TabsTrigger className={TABS_TRIGGER} value="queue">Tarefas e clientes<OverdueBadge count={overdue} /></TabsTrigger>
+          </TabsList>
+          <TabsContent value="analytics">{analytics}</TabsContent>
+          <TabsContent value="queue">{queue}</TabsContent>
+        </Tabs>
+      )}
+
+      {view === "broker" && (
+        <Tabs defaultValue="queue" className="space-y-6">
+          <TabsList className={TABS_LIST}>
+            <TabsTrigger className={TABS_TRIGGER} value="queue">Meu dia<OverdueBadge count={overdue} /></TabsTrigger>
+            <TabsTrigger className={TABS_TRIGGER} value="analytics">Meus números</TabsTrigger>
+          </TabsList>
+          <TabsContent value="queue">{queue}</TabsContent>
+          <TabsContent value="analytics">{analytics}</TabsContent>
+        </Tabs>
+      )}
+    </div>
     </div>
   );
 }

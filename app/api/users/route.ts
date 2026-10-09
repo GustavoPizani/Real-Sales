@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateTempPassword } from "@/lib/generate-temp-password";
 import { type NextRequest } from "next/server";
 import { Prisma, Role } from "@prisma/client";
+import { hideTestUsers } from "@/lib/test-account";
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export async function GET() {
     const where: Prisma.UserWhereInput = {
       // Filtro de Tenant: mesma regra usada em /api/clients
       accountId: user.isSuperAdmin ? undefined : user.accountId,
+      ...hideTestUsers(user),
     };
 
     const users = await prisma.user.findMany({

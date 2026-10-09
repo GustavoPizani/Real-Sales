@@ -18,12 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
-import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Send, Users as UsersIcon, Lock } from "lucide-react";
+import { Plus, MessageCircle, User, CalendarIcon, Phone, Mail, Search, X, Pencil, Trash2, Filter, Send, Users as UsersIcon, Lock, AlertCircle, Building2, Check, Clock, Hourglass, MoreHorizontal, Trophy, XCircle } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/use-toast";
-import { format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
+import { differenceInCalendarDays, format, startOfToday, startOfWeek, startOfMonth, subMonths, endOfToday, endOfWeek, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { type Client as Cliente, type User as Broker, Role, ClientOverallStatus } from "@/lib/types";
 import { cachedFetch } from "@/lib/api-cache";
@@ -61,6 +63,26 @@ interface ActiveOfferSummary {
   _count?: { clients: number };
 }
 
+// --- Contexto dos cards: etapas do funil aberto e a ação de mover ---
+// Evita repassar as duas coisas por coluna → card arrastável → conteúdo.
+const PipelineCardContext = React.createContext<{
+  stages: FunnelStage[];
+  onMove: (clientId: string, stageId: string) => void;
+}>({ stages: [], onMove: () => {} });
+
+// Mesmo corte do dashboard: cliente em andamento sem atualização há 7+ dias conta como parado.
+const STALE_DAYS = 7;
+// Cards desenhados por coluna de cada vez. Uma coluna com centenas de clientes
+// travava a tela e o arrasto; o restante entra sob demanda em "Mostrar mais".
+const COLUMN_PAGE = 40;
+const NO_CLIENTS: Cliente[] = [];
+
+// Moldura em degradê para clientes encerrados. Ativos ficam com a borda neutra.
+const STATUS_FRAME: Partial<Record<ClientOverallStatus, string>> = {
+  [ClientOverallStatus.WON]: "bg-gradient-to-br from-emerald-300 via-emerald-500 to-emerald-800",
+  [ClientOverallStatus.LOST]: "bg-gradient-to-br from-red-300 via-red-500 to-red-800",
+};
+
 // --- Conteúdo compartilhado do card ---
 function ClientCardContent({
   client, isDragging = false,
@@ -69,127 +91,165 @@ function ClientCardContent({
   client: Cliente; isDragging?: boolean;
   selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
 }) {
-  const openWhatsApp = (phone: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const cleanPhone = phone.replace(/\D/g, "");
-    window.open(`https://wa.me/55${cleanPhone}`, "_blank");
-  };
+  const { stages, onMove } = React.useContext(PipelineCardContext);
 
-  const initials = client.fullName
-    .split(' ')
-    .slice(0, 2)
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase();
+  const isWon = client.overallStatus === ClientOverallStatus.WON;
+  const isLost = client.overallStatus === ClientOverallStatus.LOST;
+  const isActive = !isWon && !isLost;
 
-  const cardStyle: React.CSSProperties = {
-    background: 'hsl(var(--card))',
-    border: '1px solid hsl(var(--border) / 0.5)',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-    borderRadius: '14px',
-    overflow: 'hidden',
-    marginBottom: '10px',
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const nextTask = client.tasks?.[0];
+  const taskDate = nextTask ? new Date(nextTask.dateTime) : null;
+  const taskOverdue = !!taskDate && taskDate < new Date();
+  const daysIdle = client.updatedAt ? differenceInCalendarDays(new Date(), new Date(client.updatedAt)) : 0;
+  const cleanPhone = client.phone?.replace(/\D/g, "");
 
-  const cardBody = (
-    <>
-      <div className="h-1 w-full bg-gradient-to-r from-secondary-custom via-secondary-custom/60 to-transparent" />
-      <div className="p-3.5 space-y-3">
-        <div className="flex items-center gap-2.5">
+  return (
+    <div
+      onClick={selectionMode ? onToggleSelect : undefined}
+      className={cn(
+        "group relative mb-2.5 rounded-[16px] p-[1.5px] transition-shadow",
+        STATUS_FRAME[client.overallStatus] ?? "bg-border",
+        isDragging && "opacity-50",
+        selectionMode && "cursor-pointer",
+        isSelected && "ring-2 ring-ring ring-offset-1 ring-offset-background",
+      )}
+    >
+      <div className="space-y-2.5 rounded-[14.5px] bg-[var(--bg-card)] p-3 shadow-sm dark:bg-[var(--bg-card-hover)]">
+        <div className="flex items-start gap-2">
           {selectionMode && (
             <Checkbox
               checked={isSelected}
               onCheckedChange={() => onToggleSelect?.()}
               onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0"
+              className="mt-0.5 flex-shrink-0"
+              aria-label={`Selecionar ${client.fullName}`}
             />
           )}
-          <div
-            className="h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
-            style={{ background: 'linear-gradient(135deg, var(--secondary-custom), #6b5a2a)' }}
-          >
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-foreground text-sm leading-tight truncate">{client.fullName}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-              <CalendarIcon className="h-2.5 w-2.5" />
-              {client.createdAt ? format(new Date(client.createdAt), "dd/MM/yy") : ''}
-            </p>
-          </div>
-          {client.phone && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-green-500/20 flex-shrink-0"
-              onClick={(e) => openWhatsApp(client.phone!, e)}
-            >
-              <MessageCircle className="h-3.5 w-3.5 text-green-500" />
-            </Button>
-          )}
-        </div>
-
-        {(client.phone || client.email) && (
-          <div className="space-y-1.5 rounded-lg bg-muted/30 px-3 py-2">
-            {client.phone && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Phone className="h-3 w-3 flex-shrink-0 text-secondary-custom/70" />
-                <span className="truncate">{client.phone}</span>
-              </div>
+          <div className="min-w-0 flex-1">
+            {selectionMode ? (
+              <p className="text-sm font-semibold leading-snug text-foreground line-clamp-2">{client.fullName}</p>
+            ) : (
+              // O link cobre o card inteiro (after:inset-0); os botões ficam por cima dele.
+              <Link
+                href={`/client/${client.id}`}
+                draggable={false}
+                className="block text-sm font-semibold leading-snug text-foreground line-clamp-2 after:absolute after:inset-0 after:rounded-[16px] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+              >
+                {client.fullName}
+              </Link>
             )}
-            {client.email && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Mail className="h-3 w-3 flex-shrink-0 text-secondary-custom/70" />
-                <span className="truncate">{client.email}</span>
-              </div>
+            {isWon && (
+              <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />Ganho
+              </p>
+            )}
+            {isLost && (
+              <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400">
+                <XCircle className="h-3.5 w-3.5" aria-hidden="true" />Perdido
+              </p>
             )}
           </div>
-        )}
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-1">
-            {client.tags && client.tags.length > 0
-              ? client.tags.map((tag: any) => (
-                  <span
-                    key={tag.id}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                    style={{ backgroundColor: tag.color + '25', color: tag.color, border: `1px solid ${tag.color}50` }}
+          {!selectionMode && (
+            // stopPropagation: tocar nos botões não inicia o arrasto do card.
+            <div className="relative z-10 flex flex-shrink-0 items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+              {cleanPhone && (
+                <a
+                  href={`https://wa.me/55${cleanPhone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Abrir WhatsApp de ${client.fullName}`}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500/15 text-emerald-700 transition-colors hover:bg-emerald-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-emerald-400"
+                >
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Ações de ${client.fullName}`}
+                    className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {tag.name}
-                  </span>
-                ))
-              : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary-custom/15 text-secondary-custom border border-secondary-custom/25">Lead</span>
-            }
-          </div>
-          {client.broker && (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <div className="h-5 w-5 rounded-full bg-muted border border-border flex items-center justify-center">
-                <span className="text-[9px] font-bold text-muted-foreground uppercase">
-                  {client.broker.name.charAt(0)}
-                </span>
-              </div>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[70px]">{client.broker.name}</span>
+                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Mover para</DropdownMenuLabel>
+                  {stages.map(stage => {
+                    const isCurrent = stage.id === client.funnelStageId;
+                    return (
+                      <DropdownMenuItem key={stage.id} disabled={isCurrent} onSelect={() => onMove(client.id, stage.id)}>
+                        <span className="mr-2 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: stage.color }} aria-hidden="true" />
+                        <span className="truncate">{stage.name}</span>
+                        {isCurrent && <Check className="ml-auto h-4 w-4" aria-label="Etapa atual" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href={`/client/${client.id}`}>Abrir ficha do cliente</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>
-      </div>
-    </>
-  );
 
-  if (selectionMode) {
-    return (
-      <div style={cardStyle} onClick={onToggleSelect} className="group cursor-pointer">
-        {cardBody}
-      </div>
-    );
-  }
+        {isActive && (
+          <p className={cn("flex items-center gap-1.5 text-xs", taskOverdue ? "font-medium text-destructive" : "text-muted-foreground")}>
+            {taskOverdue
+              ? <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+              : <Clock className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
+            <span className="truncate">
+              {nextTask && taskDate
+                ? `${taskOverdue ? "Atrasada: " : ""}${nextTask.title} · ${format(taskDate, "dd/MM 'às' HH:mm")}`
+                : "Sem tarefa agendada"}
+            </span>
+          </p>
+        )}
 
-  return (
-    <Link href={`/client/${client.id}`} style={cardStyle} className="group cursor-pointer block">
-      {cardBody}
-    </Link>
+        {isActive && daysIdle >= STALE_DAYS && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <Hourglass className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            Parado há {daysIdle} dias
+          </p>
+        )}
+
+        {client.propertyOfInterest?.title && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Building2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span className="truncate">{client.propertyOfInterest.title}</span>
+          </p>
+        )}
+
+        {client.phone && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Phone className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span className="truncate">{client.phone}</span>
+          </p>
+        )}
+
+        {((client.tags && client.tags.length > 0) || client.broker) && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap gap-1">
+              {client.tags?.map((tag: any) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{ backgroundColor: tag.color + '25', color: tag.color, border: `1px solid ${tag.color}50` }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+            {client.broker && (
+              <span className="max-w-[9rem] flex-shrink-0 truncate text-xs text-muted-foreground">{client.broker.name}</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -218,17 +278,35 @@ function DraggableClientCard({ client, selectionMode, isSelected, onToggleSelect
   );
 }
 
-// --- Card simples para mobile (sem DnD, permite scroll) ---
-function MobileClientCard({ client, selectionMode, isSelected, onToggleSelect }: {
-  client: Cliente; selectionMode?: boolean; isSelected?: boolean; onToggleSelect?: () => void;
-}) {
+/** Botão que revela mais cards de uma etapa, quando ela passa do limite desenhado. */
+function ShowMoreButton({ hidden, onClick }: { hidden: number; onClick: () => void }) {
+  if (hidden <= 0) return null;
   return (
-    <ClientCardContent
-      client={client}
-      selectionMode={selectionMode}
-      isSelected={isSelected}
-      onToggleSelect={onToggleSelect}
-    />
+    <Button variant="ghost" className="w-full" onClick={onClick}>
+      Mostrar mais {Math.min(COLUMN_PAGE, hidden)} de {hidden} restantes
+    </Button>
+  );
+}
+
+// --- Lista de cards de uma etapa no celular (sem arrastar; mover é pelo menu do card) ---
+function MobileStageList({ clients, selectionMode, selectedClientIds, onToggleSelect }: {
+  clients: Cliente[]; selectionMode?: boolean;
+  selectedClientIds: Set<string>; onToggleSelect: (id: string) => void;
+}) {
+  const [limit, setLimit] = useState(COLUMN_PAGE);
+  return (
+    <>
+      {clients.slice(0, limit).map(client => (
+        <ClientCardContent
+          key={client.id}
+          client={client}
+          selectionMode={selectionMode}
+          isSelected={selectedClientIds.has(client.id)}
+          onToggleSelect={() => onToggleSelect(client.id)}
+        />
+      ))}
+      <ShowMoreButton hidden={clients.length - limit} onClick={() => setLimit(l => l + COLUMN_PAGE)} />
+    </>
   );
 }
 
@@ -239,23 +317,31 @@ function FunnelColumn({ stage, clients, selectionMode, selectedClientIds, onTogg
   onToggleSelectAll?: (clientIds: string[], select: boolean) => void;
 }) {
     const { setNodeRef } = useSortable({ id: stage.id, data: { isContainer: true } });
+    const [limit, setLimit] = useState(COLUMN_PAGE);
+    const visibleClients = useMemo(() => clients.slice(0, limit), [clients, limit]);
+    const visibleIds = useMemo(() => visibleClients.map(c => c.id), [visibleClients]);
+    // "Selecionar todos" vale para a coluna inteira, não só para os cards desenhados.
     const columnClientIds = useMemo(() => clients.map(c => c.id), [clients]);
     const allSelected = selectionMode && columnClientIds.length > 0 && columnClientIds.every(id => selectedClientIds?.has(id));
     return (
-        <div ref={setNodeRef} className="flex flex-col bg-card/50 border border-border rounded-lg h-full w-[300px] flex-shrink-0">
-            <div className="p-3 font-semibold text-center text-white rounded-t-lg sticky top-0 z-10 flex items-center justify-center gap-2" style={{ backgroundColor: stage.color }}>
+        <div ref={setNodeRef} className="flex h-full w-[300px] flex-shrink-0 flex-col rounded-[20px] bg-[var(--bg-secondary)] dark:bg-[var(--bg-card)]">
+            {/* Cabeçalho neutro: a cor da etapa fica num ponto, não no fundo (texto branco sobre cor clara ficava ilegível). */}
+            <div className="flex items-center gap-2 px-4 py-3">
                 {selectionMode && (
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={(checked) => onToggleSelectAll?.(columnClientIds, !!checked)}
                     disabled={columnClientIds.length === 0}
+                    aria-label={`Selecionar todos de ${stage.name}`}
                   />
                 )}
-                {stage.name} ({clients.length})
+                <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: stage.color }} aria-hidden="true" />
+                <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{stage.name}</h2>
+                <span className="rounded-full bg-background px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">{clients.length}</span>
             </div>
-            <div className="p-2 flex-1 overflow-y-auto space-y-2">
-                <SortableContext items={clients.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                    {clients.map(client => (
+            <div className="flex-1 overflow-y-auto px-2 pb-2">
+                <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
+                    {visibleClients.map(client => (
                         <DraggableClientCard
                           key={client.id}
                           client={client}
@@ -265,11 +351,21 @@ function FunnelColumn({ stage, clients, selectionMode, selectedClientIds, onTogg
                         />
                     ))}
                 </SortableContext>
+                {clients.length === 0 && (
+                  <p className="py-8 text-center text-xs text-muted-foreground">Nenhum cliente nesta etapa.</p>
+                )}
+                <ShowMoreButton hidden={clients.length - limit} onClick={() => setLimit(l => l + COLUMN_PAGE)} />
             </div>
         </div>
     );
 }
 
+
+// A página ocupa exatamente a altura visível: no celular desconta o cabeçalho fixo
+// (4rem); no desktop não há barra superior, então é a tela inteira.
+const PAGE_HEIGHT = "h-[calc(100dvh-4rem)] lg:h-dvh";
+// Campos em pílula sobre a superfície dos cartões, como no dashboard.
+const FIELD = "rounded-full bg-[var(--bg-card)] dark:bg-[var(--bg-card-hover)]";
 
 const LAST_FUNNEL_STORAGE_KEY = 'pipeline:lastFunnelId';
 const FILTERS_STORAGE_KEY = 'pipeline:filters';
@@ -361,6 +457,14 @@ function getDatePresetRange(preset: 'today' | 'week' | 'month' | 'last_month'): 
   }
 }
 
+const sameDay = (a?: Date, b?: Date) => !!a && !!b && format(a, "yyyy-MM-dd") === format(b, "yyyy-MM-dd");
+
+/** O intervalo atual é exatamente o de um atalho (Hoje, Esta semana...)? */
+function matchesPreset(range: DateRange | undefined, preset: Parameters<typeof getDatePresetRange>[0]) {
+  const target = getDatePresetRange(preset);
+  return sameDay(range?.from, target.from) && sameDay(range?.to, target.to);
+}
+
 // --- Filtro de data (componente estável — não deve ser recriado a cada render) ---
 function DateFilter({
   inModal = false,
@@ -417,14 +521,10 @@ function DateFilter({
           {presets.map(p => (
             <Button
               key={p.key}
-              variant={
-                activeRange?.from && activeRange?.to &&
-                format(activeRange.from, 'dd/MM') === format(startOfToday(), 'dd/MM') && p.key === 'today'
-                  ? 'default' : 'outline'
-              }
-              size="sm"
+              variant={matchesPreset(activeRange, p.key) ? 'default' : 'outline'}
+              aria-pressed={matchesPreset(activeRange, p.key)}
               onClick={() => applyPreset(p.key)}
-              className="w-full text-xs"
+              className="w-full rounded-full"
             >
               {p.label}
             </Button>
@@ -433,7 +533,7 @@ function DateFilter({
 
         {/* Indicador de seleção */}
         {rangeLabel ? (
-          <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-center font-medium">
+          <div className="rounded-full bg-muted px-3 py-2 text-center text-sm font-medium">
             {rangeLabel}
           </div>
         ) : (
@@ -448,7 +548,7 @@ function DateFilter({
           selected={activeRange}
           onSelect={setPendingDateRange}
           locale={ptBR}
-          className="rounded-md border w-full mx-auto"
+          className="mx-auto w-fit"
           numberOfMonths={1}
         />
       </div>
@@ -458,23 +558,49 @@ function DateFilter({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-[240px] justify-start text-left font-normal">
-          {filters.dateRange?.from && <X className="h-3 w-3 mr-1 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setFilters(f => ({ ...f, dateRange: undefined })); }} />}
-          {label}
+        <Button variant="outline" className={`w-[240px] justify-start text-left font-normal ${FIELD}`}>
+          <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate">{label}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 flex" align="start">
-        <div className="flex flex-col space-y-1 p-2 border-r min-w-[120px]">
-          {presets.map(p => (
-            <Button key={p.key} variant="ghost" size="sm" className="justify-start" onClick={() => setFilters(f => ({ ...f, dateRange: getDatePresetRange(p.key) }))}>{p.label}</Button>
-          ))}
-          {filters.dateRange?.from && (
-            <Button variant="ghost" size="sm" className="justify-start text-destructive" onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}>
-              <X className="h-3 w-3 mr-1" /> Limpar
-            </Button>
-          )}
+      <PopoverContent className="w-auto space-y-4 rounded-[20px] p-4" align="start">
+        {/* Atalhos em cima, calendário no meio, intervalo escolhido embaixo. */}
+        <div className="flex flex-wrap gap-2">
+          {presets.map(p => {
+            const active = matchesPreset(filters.dateRange, p.key);
+            return (
+              <Button
+                key={p.key}
+                variant={active ? "default" : "outline"}
+                size="sm"
+                aria-pressed={active}
+                className="h-9 rounded-full px-4"
+                onClick={() => setFilters(f => ({ ...f, dateRange: getDatePresetRange(p.key) }))}
+              >
+                {p.label}
+              </Button>
+            );
+          })}
         </div>
         <Calendar mode="range" selected={filters.dateRange} onSelect={date => setFilters(f => ({ ...f, dateRange: date }))} locale={ptBR} />
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            {filters.dateRange?.from
+              ? filters.dateRange.to
+                ? `${format(filters.dateRange.from, "dd/MM/yyyy")} a ${format(filters.dateRange.to, "dd/MM/yyyy")}`
+                : `${format(filters.dateRange.from, "dd/MM/yyyy")} — escolha a data final`
+              : "Escolha a data inicial e a final"}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 rounded-full"
+            disabled={!filters.dateRange?.from}
+            onClick={() => setFilters(f => ({ ...f, dateRange: undefined }))}
+          >
+            <X className="mr-1 h-3.5 w-3.5" aria-hidden="true" />Limpar
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -508,10 +634,10 @@ function FilterControls({
     <div className={`flex ${inModal ? 'flex-col' : 'flex-wrap items-center'} gap-2`}>
       <div className="relative">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
+        <Input placeholder="Buscar por nome, email, telefone..." className={`pl-8 ${FIELD} ${inModal ? 'w-full' : 'w-64'}`} value={filters.searchTerm} onChange={e => setFilters(f => ({...f, searchTerm: e.target.value}))} />
       </div>
       <Select value={String(filters.status)} onValueChange={(value) => setFilters(f => ({...f, status: value as ClientOverallStatus | 'all'}))}>
-        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue /></SelectTrigger>
+        <SelectTrigger className={`${FIELD} ${inModal ? 'w-full' : 'w-[180px]'}`}><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos os Status</SelectItem>
           <SelectItem value={ClientOverallStatus.ACTIVE}>Em andamento</SelectItem>
@@ -522,7 +648,7 @@ function FilterControls({
       <DateFilter inModal={inModal} filters={filters} setFilters={setFilters} pendingDateRange={pendingDateRange} setPendingDateRange={setPendingDateRange} />
       {managers.length > 0 && (
         <Select value={filters.managerId} onValueChange={value => setFilters(f => ({ ...f, managerId: value, brokerId: 'all' }))}>
-          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Equipe" /></SelectTrigger>
+          <SelectTrigger className={`${FIELD} ${inModal ? 'w-full' : 'w-[180px]'}`}><SelectValue placeholder="Equipe" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as equipes</SelectItem>
             {managers.map(m => <SelectItem key={m.id} value={m.id}>Equipe {m.name}</SelectItem>)}
@@ -531,7 +657,7 @@ function FilterControls({
       )}
       {isRoleActive('BROKER') && (
         <Select value={filters.brokerId} onValueChange={value => setFilters(f => ({ ...f, brokerId: value }))}>
-          <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Corretor" /></SelectTrigger>
+          <SelectTrigger className={`${FIELD} ${inModal ? 'w-full' : 'w-[180px]'}`}><SelectValue placeholder="Corretor" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os corretores</SelectItem>
             {(filters.managerId !== 'all'
@@ -542,13 +668,13 @@ function FilterControls({
         </Select>
       )}
       <Select value={filters.tagId} onValueChange={value => setFilters(f => ({ ...f, tagId: value }))}>
-        <SelectTrigger className={inModal ? 'w-full' : 'w-[180px]'}><SelectValue placeholder="Etiqueta" /></SelectTrigger>
+        <SelectTrigger className={`${FIELD} ${inModal ? 'w-full' : 'w-[180px]'}`}><SelectValue placeholder="Etiqueta" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todas as etiquetas</SelectItem>
           {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button variant="ghost" className={inModal ? 'w-full' : ''} onClick={() => setFilters(defaultFilters)}>
+      <Button variant="ghost" className={`rounded-full ${inModal ? 'w-full' : ''}`} onClick={() => setFilters(defaultFilters)}>
         <X className="h-4 w-4 mr-2" />Limpar filtros
       </Button>
     </div>
@@ -577,12 +703,9 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [activeClient, setActiveClient] = useState<Cliente | null>(null);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
-  const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>(undefined);
   const [newClientForm, setNewClientForm] = useState({ fullName: "", phone: "", email: "", selectedbrokerId: "", selectedStageId: "" });
-  const [newStageForm, setNewStageForm] = useState({ name: "", color: "#010f27" });
-  const [editingStages, setEditingStages] = useState<FunnelStage[]>([]);
 
   const [filters, setFilters] = useState<PipelineFilters>(() => loadCachedFilters());
 
@@ -831,36 +954,60 @@ export default function PipelinePage() {
     setActiveClient(allClients.find(c => c.id === active.id) || null);
   };
   
-  const handleDragEnd = async (event: DragEndEvent) => {
+  // Move o cliente de etapa: usado pelo arrasto (desktop) e pelo menu "Mover para"
+  // do card (celular e teclado). A tela muda na hora e volta atrás se a API recusar.
+  const moveClient = useCallback(async (clientId: string, newStageId: string) => {
+    if (!selectedFunnel) return;
+    const newFunnelId = selectedFunnel.id;
+    let previous: Cliente | undefined;
+
+    setAllClients(prev => prev.map(c => {
+      if (c.id !== clientId) return c;
+      previous = c;
+      return { ...c, funnelId: newFunnelId, funnelStageId: newStageId };
+    }));
+
+    try {
+      const response = await fetch(`/api/clients/${clientId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ funnelId: newFunnelId, funnelStageId: newStageId }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Não foi possível mover o cliente.');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+      const original = previous;
+      if (original) setAllClients(prev => prev.map(c => (c.id === clientId ? original : c)));
+    }
+  }, [selectedFunnel, toast]);
+
+  const cardContext = useMemo(() => ({ stages: funnelStages, onMove: moveClient }), [funnelStages, moveClient]);
+
+  // Clientes agrupados por etapa uma vez só, em vez de filtrar a lista inteira para cada coluna.
+  const clientsByStage = useMemo(() => {
+    const map = new Map<string, Cliente[]>();
+    for (const client of filteredClients) {
+      const list = map.get(client.funnelStageId);
+      if (list) list.push(client); else map.set(client.funnelStageId, [client]);
+    }
+    return map;
+  }, [filteredClients]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveClient(null);
 
-    if (over && over.data.current?.isContainer && active.data.current?.stageId !== over.id.toString() && selectedFunnel) {
-        const originalClients = [...allClients];
-        const newStageId = over.id as string; // Este é o ID da etapa de destino
-        const newFunnelId = selectedFunnel.id; // ID do funil atualmente selecionado
-        
-        // Atualiza o estado local para refletir a mudança imediatamente
-        setAllClients(prev => prev.map(c => 
-            c.id === active.id 
-                ? { ...c, funnelId: newFunnelId, funnelStageId: newStageId } 
-                : c
-        ));
+    // O alvo pode ser a coluna (área vazia) ou um card dentro dela. Antes só a
+    // coluna contava, então soltar em cima de outro card não movia o cliente.
+    const targetStageId: string | undefined = over?.data.current?.isContainer
+      ? String(over.id)
+      : over?.data.current?.stageId;
 
-        try {
-            const token = localStorage.getItem('authToken');
-            const response = await fetch(`/api/clients/${active.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ funnelId: newFunnelId, funnelStageId: newStageId }),
-            });
-            if (!response.ok) throw new Error('Falha ao atualizar o status.');
-            toast({ title: 'Sucesso!', description: 'Cliente movido para um novo estágio.' });
-            // Opcional: fetchData() para re-sincronizar tudo, mas a UI já está atualizada.
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível mover o cliente.' });
-            setAllClients(originalClients);
-        }
+    if (targetStageId && active.data.current?.stageId !== targetStageId) {
+      moveClient(String(active.id), targetStageId);
     }
   };
 
@@ -909,78 +1056,11 @@ export default function PipelinePage() {
     }
   };
 
-  const handleStageUpdate = async (stage: FunnelStage) => {
-    const token = localStorage.getItem('authToken');
-    const response = await fetch(`/api/funnel-stages/${stage.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name: stage.name, color: stage.color }),
-    });
-    if (!response.ok) throw new Error('Falha ao atualizar estágio.');
-  };
-
-  const handleStageDelete = async (stageId: string) => {
-    const token = localStorage.getItem('authToken');
-    const response = await fetch(`/api/funnel-stages/${stageId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error('Falha ao deletar estágio.');
-  };
-
-  const handleAddStage = async () => {
-    const token = localStorage.getItem('authToken');
-    const response = await fetch('/api/funnel-stages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(newStageForm),
-    });
-    if (!response.ok) throw new Error('Falha ao criar estágio.');
-  };
-
-  const onStageDelete = async (stageId: string) => {
-    // O ideal seria adicionar um Dialog de confirmação aqui
-    try {
-        await handleStageDelete(stageId);
-        toast({ title: 'Sucesso', description: 'Estágio deletado.' });
-        setEditingStages(s => s.filter(i => i.id !== stageId));
-        // Opcional: fetchData() para garantir a sincronia total
-    } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Erro ao deletar', description: error.message });
-    }
-  };
-
-  const onStageAdd = async () => {
-    if (!newStageForm.name.trim()) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'O name do estágio não pode ser vazio.' });
-        return;
-    }
-    try {
-        await handleAddStage();
-        toast({ title: 'Sucesso', description: 'Novo estágio adicionado.' });
-        setNewStageForm({ name: "", color: "#010f27" });
-        fetchData(); // Re-fetch para obter o novo estágio com seu ID do banco de dados
-    } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Erro ao adicionar', description: error.message });
-    }
-  };
-
-  const saveAllStageChanges = async () => {
-    try {
-        await Promise.all(editingStages.map(stage => handleStageUpdate(stage)));
-        toast({ title: 'Sucesso!', description: 'Estágios atualizados.' });
-        fetchData();
-        setIsStageDialogOpen(false);
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar todos os estágios.' });
-    }
-  };
-
   if (loading) return <PipelineSkeleton />;
 
   if (funnels.length === 0) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-background text-center p-6">
+      <div className={`${PAGE_HEIGHT} flex flex-col items-center justify-center bg-background text-center p-6`}>
         <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
           <Lock className="h-6 w-6 text-muted-foreground" />
         </div>
@@ -993,8 +1073,9 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="border-b bg-card flex-shrink-0">
+    <PipelineCardContext.Provider value={cardContext}>
+    <div className={`${PAGE_HEIGHT} flex flex-col bg-background overflow-hidden`}>
+      <header className="flex-shrink-0 border-b lg:border-b-0">
         {/* Mobile header */}
         <div className="flex items-center gap-2 px-4 py-3 lg:hidden">
           <Select value={selectedFunnelId || ''} onValueChange={selectFunnel}>
@@ -1027,9 +1108,9 @@ export default function PipelinePage() {
         {/* Desktop header */}
         <div className="hidden lg:flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold text-foreground">Pipeline de Vendas</h1>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Pipeline de Vendas</h1>
                 <Select value={selectedFunnelId || ''} onValueChange={selectFunnel}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className={`w-[200px] ${FIELD}`}>
                     <SelectValue placeholder="Selecione um funil..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -1038,7 +1119,7 @@ export default function PipelinePage() {
                 </Select>
                 {user?.role === 'MARKETING_ADMIN' && (
                   <Link href="/settings/funnels">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" className="rounded-full">
                           <Pencil className="h-3 w-3 mr-2" />
                           Gerenciar Funis
                       </Button>
@@ -1048,6 +1129,7 @@ export default function PipelinePage() {
                   <Button
                     variant={selectionMode ? "secondary" : "outline"}
                     size="sm"
+                    className="rounded-full"
                     onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
                   >
                     <UsersIcon className="h-3 w-3 mr-2" />
@@ -1058,7 +1140,7 @@ export default function PipelinePage() {
             <div>
               <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
                   <DialogTrigger asChild>
-                      <Button><Plus className="h-4 w-4 mr-2" /> Novo Cliente</Button>
+                      <Button className="h-11 rounded-full px-5"><Plus className="h-4 w-4 mr-2" /> Novo Cliente</Button>
                   </DialogTrigger>
                   <DialogContent>
                       <DialogHeader><DialogTitle>Adicionar Novo Cliente</DialogTitle></DialogHeader>
@@ -1119,7 +1201,7 @@ export default function PipelinePage() {
       </header>
       
       {/* Filtros para Desktop */}
-      <div className="p-4 border-b bg-card flex-shrink-0 hidden lg:flex">
+      <div className="px-6 pb-4 flex-shrink-0 hidden lg:flex">
         <FilterControls
           filters={filters}
           setFilters={setFilters}
@@ -1134,14 +1216,14 @@ export default function PipelinePage() {
       </div>
       
       {/* Layout Desktop: Colunas do Funil */}
-      <div className="flex-1 overflow-x-auto p-4 hidden lg:flex">
+      <div className="flex-1 overflow-x-auto px-6 pb-4 hidden lg:flex">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 h-full">
             {funnelStages.map((stage) => (
               <FunnelColumn
                 key={stage.id}
                 stage={stage}
-                clients={filteredClients.filter(c => c.funnelStageId === stage.id)}
+                clients={clientsByStage.get(stage.id) ?? NO_CLIENTS}
                 selectionMode={selectionMode}
                 selectedClientIds={selectedClientIds}
                 onToggleSelect={toggleClientSelection}
@@ -1157,7 +1239,9 @@ export default function PipelinePage() {
 
       {/* Layout Mobile: Abas */}
       <div className="block lg:hidden flex-1 flex flex-col overflow-hidden">
-        <Tabs defaultValue={funnelStages[0]?.id} className="flex-1 flex flex-col overflow-hidden">
+        {/* key: ao trocar de funil as abas recomeçam na primeira etapa do funil novo
+            (sem isso nenhuma aba ficava selecionada e a lista aparecia vazia). */}
+        <Tabs key={selectedFunnelId ?? 'none'} defaultValue={funnelStages[0]?.id} className="flex-1 flex flex-col overflow-hidden">
           {/* Stage tabs — scroll horizontal sem barra visível */}
           <div
             className="no-scrollbar flex-shrink-0 bg-card border-b border-border overflow-x-auto"
@@ -1165,12 +1249,12 @@ export default function PipelinePage() {
           >
             <TabsList className="flex w-max bg-transparent rounded-none border-none shadow-none h-auto px-3 py-2 gap-1.5">
               {funnelStages.map((stage) => {
-                const count = filteredClients.filter(c => c.funnelStageId === stage.id).length;
+                const count = clientsByStage.get(stage.id)?.length ?? 0;
                 return (
                   <TabsTrigger
                     key={stage.id}
                     value={stage.id}
-                    className="flex-shrink-0 whitespace-nowrap rounded-full h-auto px-3.5 py-1.5 text-xs font-medium
+                    className="flex-shrink-0 whitespace-nowrap rounded-full h-auto px-3.5 py-2 text-sm font-medium
                       border border-border/60 bg-card text-muted-foreground shadow-none
                       data-[state=active]:bg-secondary-custom data-[state=active]:text-primary-custom
                       data-[state=active]:border-secondary-custom data-[state=active]:shadow-sm
@@ -1178,7 +1262,7 @@ export default function PipelinePage() {
                   >
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
                     {stage.name}
-                    <span className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 rounded-full bg-black/10 dark:bg-white/15 text-[9px] font-bold tabular-nums">
+                    <span className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1 rounded-full bg-black/10 dark:bg-white/15 text-xs font-semibold tabular-nums">
                       {count}
                     </span>
                   </TabsTrigger>
@@ -1190,7 +1274,7 @@ export default function PipelinePage() {
           {/* Conteúdo de cada aba */}
           <div className="flex-1 overflow-hidden">
             {funnelStages.map((stage) => {
-              const stageClients = filteredClients.filter(c => c.funnelStageId === stage.id);
+              const stageClients = clientsByStage.get(stage.id) ?? NO_CLIENTS;
               return (
                 <TabsContent
                   key={stage.id}
@@ -1208,15 +1292,14 @@ export default function PipelinePage() {
                       </div>
                     )}
                     {stageClients.length > 0
-                      ? stageClients.map(client => (
-                          <MobileClientCard
-                            key={client.id}
-                            client={client}
+                      ? (
+                          <MobileStageList
+                            clients={stageClients}
                             selectionMode={selectionMode}
-                            isSelected={selectedClientIds.has(client.id)}
-                            onToggleSelect={() => toggleClientSelection(client.id)}
+                            selectedClientIds={selectedClientIds}
+                            onToggleSelect={toggleClientSelection}
                           />
-                        ))
+                        )
                       : (
                         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                           <div
@@ -1226,7 +1309,7 @@ export default function PipelinePage() {
                             <User className="h-5 w-5" style={{ color: stage.color }} />
                           </div>
                           <p className="text-sm font-medium">Nenhum cliente</p>
-                          <p className="text-xs mt-0.5 text-muted-foreground/60">Nesta etapa do funil</p>
+                          <p className="text-xs mt-0.5 text-muted-foreground">Nesta etapa do funil</p>
                         </div>
                       )
                     }
@@ -1253,7 +1336,7 @@ export default function PipelinePage() {
 
       {/* Barra de ação em massa */}
       {selectionMode && selectedClientIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-2xl p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="fixed bottom-3 left-3 right-3 z-50 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-border bg-card p-3 shadow-2xl lg:left-24">
           <span className="text-sm font-medium">{selectedClientIds.size} selecionado(s)</span>
           <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={exitSelectionMode}>Cancelar</Button>
@@ -1271,31 +1354,6 @@ export default function PipelinePage() {
           </div>
         </div>
       )}
-
-      <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
-          <DialogContent className="max-w-2xl">
-              <DialogHeader><DialogTitle>Editar Estágios do Funil: {selectedFunnel?.name}</DialogTitle></DialogHeader>
-              <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-                  {editingStages.map((stage, index) => (
-                      <div key={stage.id} className="flex items-center gap-2 p-2 border rounded-lg">
-                          <Input value={stage.name} onChange={e => setEditingStages(s => s.map(i => i.id === stage.id ? {...i, name: e.target.value} : i))} />
-                          <Input type="color" value={stage.color} onChange={e => setEditingStages(s => s.map(i => i.id === stage.id ? {...i, color: e.target.value} : i))} className="w-12 h-10" />
-                          <Button variant="ghost" size="icon" onClick={() => onStageDelete(stage.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
-                      </div>
-                  ))}
-                  <Separator />
-                  <div className="flex items-center gap-2 p-2">
-                      <Input placeholder="Nome do novo estágio" value={newStageForm.name} onChange={e => setNewStageForm({...newStageForm, name: e.target.value})} />
-                      <Input type="color" value={newStageForm.color} onChange={e => setNewStageForm({...newStageForm, color: e.target.value})} className="w-12 h-10" />
-                      <Button onClick={onStageAdd}>Adicionar</Button>
-                  </div>
-              </div>
-              <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsStageDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={saveAllStageChanges}>Salvar Todas as Alterações</Button>
-              </DialogFooter>
-          </DialogContent>
-      </Dialog>
 
       {/* Modal de Filtros para Mobile */}
       <Dialog
@@ -1388,5 +1446,6 @@ export default function PipelinePage() {
         </DialogContent>
       </Dialog>
     </div>
+    </PipelineCardContext.Provider>
   )
 }

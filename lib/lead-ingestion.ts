@@ -4,6 +4,7 @@ import { notifyNewLead } from './notifications'
 import { sendSlackLeadNotification } from './slack'
 import { ClientOverallStatus } from '@prisma/client'
 import { findDuplicateClient, registerRecadastro, reopenLostClient } from './lead-dedup'
+import { claimNextRouletteUser } from './public-lead-link'
 
 export interface IngestResult {
   status: 'created' | 'skipped' | 'error'
@@ -107,21 +108,14 @@ export async function ingestLead(
   let assignedRoletaId: string | null = null
 
   if (!brokerId && mapping.roletaId) {
-    const rouletteUsers = await prisma.leadRouletteUser.findMany({
-      where: { rouletteId: mapping.roletaId },
-      include: { user: { select: { id: true, name: true } } },
-      // nulls: 'first' é essencial — sem isso o Postgres joga quem nunca recebeu lead (lastAssignedAt null) pro final da fila, quebrando o round-robin
-      orderBy: { lastAssignedAt: { sort: 'asc', nulls: 'first' } },
-    })
-
-    const activeUser = rouletteUsers[0]
-    if (activeUser) {
-      brokerId = activeUser.userId
+    // Mesma passagem de vez da página pública do imóvel: escolhe quem está há
+    // mais tempo sem receber e marca a vez no mesmo passo. Antes eram duas
+    // operações separadas, e dois leads chegando juntos (comum quando o Meta
+    // entrega em lote) caíam no mesmo corretor.
+    const nextUserId = await claimNextRouletteUser(mapping.roletaId)
+    if (nextUserId) {
+      brokerId = nextUserId
       assignedRoletaId = mapping.roletaId
-      await prisma.leadRouletteUser.update({
-        where: { rouletteId_userId: { rouletteId: activeUser.rouletteId, userId: activeUser.userId } },
-        data: { lastAssignedAt: new Date() },
-      })
     }
   }
 

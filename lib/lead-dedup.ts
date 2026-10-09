@@ -21,20 +21,23 @@ export async function findDuplicateClient(email: string | null | undefined, phon
 // (ex.: cliente reenviando o formulário do Facebook repetidas vezes em poucos minutos).
 const RECADASTRO_NOTIFICATION_COOLDOWN_MS = 15 * 60 * 1000
 
-// Lead ativo com corretor: NÃO deve furar a roleta nem trocar de corretor —
-// só registra o recadastro no histórico e avisa quem já está atendendo.
-export async function registerRecadastro(client: Client, source: string): Promise<void> {
-  const isActiveWithBroker = client.overallStatus === ClientOverallStatus.ACTIVE && !!client.brokerId
+// Lead em andamento ou que já comprou: NÃO deve furar a roleta nem trocar de
+// corretor — só registra o recadastro no histórico e avisa quem já atende.
+// (Antes só o lead em andamento gerava aviso: quem já tinha comprado e voltava
+// a se cadastrar passava em silêncio.)
+export async function registerRecadastro(client: Client, source: string, message?: string): Promise<void> {
+  const hasBrokerToNotify = client.overallStatus !== ClientOverallStatus.LOST && !!client.brokerId
+  const alreadyBought = client.overallStatus === ClientOverallStatus.WON
 
   await prisma.note.create({
     data: {
-      content: `🔄 Recadastro: ${client.fullName} preencheu o formulário novamente.\nOrigem: ${source}`,
+      content: `🔄 Recadastro: ${client.fullName} preencheu o formulário novamente.\nOrigem: ${source}${message ? `\nMensagem: ${message}` : ''}`,
       authorId: client.brokerId ?? undefined,
       clientId: client.id,
     },
   }).catch(() => null)
 
-  if (!isActiveWithBroker || !client.brokerId) return
+  if (!hasBrokerToNotify || !client.brokerId) return
 
   // Se já avisamos o corretor sobre um recadastro desse cliente recentemente, não
   // manda de novo — a nota acima já guarda o histórico de cada reenvio individual.
@@ -49,7 +52,7 @@ export async function registerRecadastro(client: Client, source: string): Promis
   })
   if (recentNotification) return
 
-  const title = '🔄 Lead recadastrado'
+  const title = alreadyBought ? '🔄 Cliente que já comprou se cadastrou de novo' : '🔄 Lead recadastrado'
   const body = `${client.fullName} preencheu o formulário de novo — ${source}`
 
   await Promise.allSettled([

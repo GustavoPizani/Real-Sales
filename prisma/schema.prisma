@@ -78,6 +78,7 @@ model Client {
   notes                Note[]
   tasks                Task[]
   tags                 Tag[]               @relation("ClientTags")
+  stageEvents          ClientStageEvent[]
   sdrContact           Contact?
 
   @@index([accountId])
@@ -87,6 +88,28 @@ model Client {
   @@index([createdById])
   @@index([roletaId])
   @@map("clients")
+}
+
+// Histórico de etapa e status do cliente. Quem grava é um trigger na tabela
+// clients (ver prisma/migrations/20261008120000_client_stage_events), não a
+// aplicação — assim toda mudança entra, venha de onde vier. O dashboard usa
+// isso para medir conversão pela data em que cada etapa aconteceu.
+model ClientStageEvent {
+  id            String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  clientId      String
+  funnelId      String
+  funnelStageId String
+  overallStatus ClientOverallStatus
+  occurredAt    DateTime            @default(now())
+  // Data informada pelo usuário para o evento (ex.: data da venda), quando difere de occurredAt.
+  effectiveAt   DateTime?
+  // true = linha criada na instalação a partir do estado atual do cliente; a data é aproximada.
+  isBackfill    Boolean             @default(false)
+  client        Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([occurredAt])
+  @@map("client_stage_events")
 }
 
 model ApiSetting {

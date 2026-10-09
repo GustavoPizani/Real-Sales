@@ -19,10 +19,13 @@ export async function GET(
       include: {
         images: {
           select: { id: true, url: true },
+          // Capa primeiro, como na lista e na edição (antes a ordem aqui era outra).
+          orderBy: [{ isCover: 'desc' }, { id: 'asc' }],
         },
         propertyTypes: true,
         creator: { select: { name: true } },
         updater: { select: { name: true } },
+        _count: { select: { interestedClients: true } },
       },
     });
 
@@ -48,6 +51,7 @@ export async function GET(
         vagas: t.vagas,
         floorPlanUrl: t.floorPlanUrl ?? null,
       })),
+      interestedClientsCount: property._count.interestedClients,
       creatorName: property.creator?.name || 'N/A',
       updaterName: property.updater?.name || 'N/A',
       createdAt: property.createdAt.toISOString(),

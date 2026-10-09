@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from "@/lib/auth";
+import { checkClientAccess } from "@/lib/client-access";
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +76,11 @@ export async function PUT(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    // Antes bastava estar logado: qualquer usuário alterava qualquer cliente pelo ID.
+    const access = await checkClientAccess(user, params.id);
+    if (access === 'not_found') return NextResponse.json({ error: "Cliente não encontrado." }, { status: 404 });
+    if (access === 'forbidden') return NextResponse.json({ error: "Você não tem acesso a este cliente." }, { status: 403 });
+
     const body = await request.json();
     const {
       fullName,
@@ -122,6 +128,25 @@ export async function PUT(
       }
     });
 
+    // A data da venda informada na tela vai para o evento de "ganho" que o
+    // trigger acabou de gravar em client_stage_events. Fora da transação e
+    // tolerante a falha: sem a tabela de histórico, marcar a venda continua funcionando.
+    const saleDate = detalhesDeVenda?.sale_date ? new Date(detalhesDeVenda.sale_date) : null;
+    if (overallStatus === 'WON' && saleDate && !isNaN(saleDate.getTime())) {
+      try {
+        const wonEvent = await prisma.clientStageEvent.findFirst({
+          where: { clientId: params.id, overallStatus: 'WON' },
+          orderBy: { occurredAt: 'desc' },
+          select: { id: true },
+        });
+        if (wonEvent) {
+          await prisma.clientStageEvent.update({ where: { id: wonEvent.id }, data: { effectiveAt: saleDate } });
+        }
+      } catch (error) {
+        console.warn('Data da venda não registrada no histórico de etapas:', error);
+      }
+    }
+
     const updatedClient = await getClientWithDetails(params.id);
     return NextResponse.json({ client: updatedClient });
 
@@ -141,6 +166,10 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+
+    const access = await checkClientAccess(user, params.id);
+    if (access === 'not_found') return NextResponse.json({ error: "Cliente não encontrado." }, { status: 404 });
+    if (access === 'forbidden') return NextResponse.json({ error: "Você não tem acesso a este cliente." }, { status: 403 });
 
     const client = await getClientWithDetails(params.id);
 

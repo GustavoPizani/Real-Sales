@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { Role } from '@prisma/client';
+import { isTestAccountEmail } from '@/lib/test-account';
 
 // Precisa bater exatamente com o header setado em lib/supabase/middleware.ts.
 // Só é confiável porque o middleware sempre apaga qualquer valor vindo do
@@ -21,6 +22,8 @@ export interface UserPayload {
   accountId: string | null;
   isSuperAdmin: boolean;
   mustChangePassword: boolean;
+  /** Conta de teste invisível (ver lib/test-account.ts). */
+  isTest: boolean;
 }
 
 /**
@@ -70,6 +73,7 @@ export async function getUserFromToken(request?: NextRequest): Promise<UserPaylo
     return {
       ...userProfile,
       isSuperAdmin: userProfile.role === Role.MARKETING_ADMIN,
+      isTest: isTestAccountEmail(userProfile.email),
     };
   } catch (error: any) {
     console.error(`[AUTH] Unexpected error: ${error.message}`);

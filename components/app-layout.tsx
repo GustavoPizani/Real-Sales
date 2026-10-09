@@ -5,10 +5,11 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Navigation } from "./navigation";
 import { MobileHeader } from "./mobile-header";
-import { NotificationBell } from "./notification-bell";
-import { ThemeToggleIcon } from "./theme-toggle-icon";
 import { usePathname, useRouter } from "next/navigation";
 import { useMobileHeader } from "@/contexts/mobile-header-context";
+import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
+import { sidebarContentMargin } from "./app-sidebar";
+import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -20,6 +21,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { actionButton } = useMobileHeader();
+  const [sidebarCollapsed] = useSidebarCollapsed();
 
   // Sem sessão ativa — manda direto pro login em vez de deixar a tela em branco
   useEffect(() => {
@@ -58,12 +60,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       />
       
       {/* Conteúdo Principal com espaçamento ajustado */}
-      <div className="pt-16 lg:pt-0 lg:ml-16 transition-all duration-300">
-        {/* Barra superior desktop com tema e sino de notificações */}
-        <div className="hidden lg:flex items-center justify-end gap-1 px-6 py-2 border-b bg-card/50">
-          <ThemeToggleIcon variant="sidebar" />
-          <NotificationBell variant="sidebar" />
-        </div>
+      <div className={cn("pt-16 lg:pt-0 transition-[margin] duration-300 ease-out", sidebarContentMargin(sidebarCollapsed))}>
+        {/* No desktop não há barra superior: tema e notificações ficam no rodapé do menu lateral. */}
         <main className="min-h-screen">
           <div>{children}</div>
         </main>

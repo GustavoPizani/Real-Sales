@@ -4,6 +4,9 @@ import React, { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { MarketingNavigation } from "./marketing-navigation"
 import { Menu } from "lucide-react"
+import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed"
+import { sidebarContentMargin } from "./app-sidebar"
+import { cn } from "@/lib/utils"
 
 interface MarketingLayoutProps {
   children: React.ReactNode
@@ -12,6 +15,7 @@ interface MarketingLayoutProps {
 export function MarketingLayout({ children }: MarketingLayoutProps) {
   const { user, isLoading } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed] = useSidebarCollapsed()
 
   if (isLoading) {
     return (
@@ -42,7 +46,7 @@ export function MarketingLayout({ children }: MarketingLayoutProps) {
       </header>
 
       {/* Main content */}
-      <div className="pt-14 lg:pt-0 lg:ml-16 transition-all duration-300">
+      <div className={cn("pt-14 lg:pt-0 transition-[margin] duration-300 ease-out", sidebarContentMargin(sidebarCollapsed))}>
         <main className="min-h-screen">
           {children}
         </main>

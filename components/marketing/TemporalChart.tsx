@@ -15,6 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// "2026-10-08" sozinho é lido como meia-noite UTC, que no Brasil ainda é o dia 7.
+// Com o horário explícito, a data fica no dia certo.
+const parseDay = (value: string) => new Date(String(value).length === 10 ? `${value}T00:00:00` : value);
+
 // --- TOOLTIP PERSONALIZADO (Adaptado para o Dark Premium) ---
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -22,7 +26,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <div className="bg-[#1A1A1A] border border-[#333] p-3 rounded-xl shadow-xl">
         {/* Data no topo */}
         <p className="text-gray-400 text-xs mb-2 font-medium border-b border-[#333] pb-1">
-          {label ? format(new Date(label), "dd 'de' MMMM", { locale: ptBR }) : ""}
+          {label ? format(parseDay(label), "dd 'de' MMMM", { locale: ptBR }) : ""}
         </p>
         
         {/* Itens do Gráfico */}
@@ -80,7 +84,7 @@ export const TemporalChart = ({ data = [], isLoading = false }: any) => {
             axisLine={false}
             tickFormatter={(val) => {
               try {
-                return format(new Date(val), 'dd/MM', { locale: ptBR });
+                return format(parseDay(val), 'dd/MM', { locale: ptBR });
               } catch { return val; }
             }}
           />

@@ -2,13 +2,24 @@
 "use client";
 import { Building } from "lucide-react";
 
-export default function PropertiesEmptyState() {
+/** Estado vazio da lista de imóveis: sem nenhum cadastrado, ou sem resultado para os filtros. */
+export default function PropertiesEmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="text-center py-8 text-gray-500">
-      <Building className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-      <p>Nenhum imóvel encontrado</p>
-      <p className="text-sm">Tente ajustar os filtros ou adicione um novo imóvel</p>
+    <div className="flex flex-col items-center px-4 py-16 text-center">
+      <span className="mb-4 grid h-14 w-14 place-items-center rounded-full bg-muted">
+        <Building className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+      </span>
+      <p className="font-medium text-foreground">{title}</p>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
-

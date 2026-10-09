@@ -17,6 +17,7 @@ import { ArrowLeft, ClipboardPaste, Loader2, Plus, Save, Trash2, Upload, X, Star
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { PropertyStatus } from "@prisma/client";
+import { DeletePropertyButton } from "@/components/properties/delete-property-button";
 
 type TypologyWithPlanta = {
   id?: string;
@@ -47,6 +48,7 @@ export default function EditPropertyPage() {
   const [images, setImages] = useState<{ url: string }[]>([]);
   const [typologies, setTypologies] = useState<TypologyWithPlanta[]>([]);
   const [features, setFeatures] = useState<string[]>([]); // ✅ Adicionado
+  const [interestedClientsCount, setInterestedClientsCount] = useState(0);
 
   // ✅ --- NOVOS ESTADOS PARA IMPORTAÇÃO DE TEXTO --- ✅
   const [isParseTextModalOpen, setIsParseTextModalOpen] = useState(false);
@@ -70,6 +72,7 @@ export default function EditPropertyPage() {
       setTypologies((data.typologies || []).map((t: any) => ({ ...t, valor: t.valor ?? t.value ?? 0, floorPlanUrl: t.floorPlanUrl ?? null })));
       setImages(data.images || []);
       setFeatures(data.features || []); // ✅ Adicionado
+      setInterestedClientsCount(data.interestedClientsCount ?? 0);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao carregar imóvel", description: error.message });
       router.push("/properties");
@@ -271,7 +274,10 @@ export default function EditPropertyPage() {
             <p className="text-gray-600">{title}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {propertyId && (
+            <DeletePropertyButton propertyId={propertyId} title={title} interestedClientsCount={interestedClientsCount} />
+          )}
           <Button onClick={handleSave} disabled={saving || uploading}>
             <Save className="h-4 w-4 mr-2" />
             {saving ? "A guardar..." : "Guardar Alterações"}

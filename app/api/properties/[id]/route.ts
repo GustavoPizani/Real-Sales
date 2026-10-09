@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
+import { Role } from '@prisma/client';
+import { createAdminClient } from '@/lib/supabase/admin';
+
+// Mesmo bucket de /api/upload, que recebe fotos e plantas.
+const STORAGE_BUCKET = 'property-images';
+
+/** Caminho do arquivo dentro do bucket, a partir da URL pública. null se a URL for de outro lugar. */
+function storagePathOf(url: string): string | null {
+  const marker = `/${STORAGE_BUCKET}/`;
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  const path = url.slice(index + marker.length).split('?')[0];
+  return path ? decodeURIComponent(path) : null;
+}
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +33,7 @@ export async function GET(
         propertyTypes: true,
         creator: { select: { name: true } },
         updater: { select: { name: true } },
+        _count: { select: { interestedClients: true } },
       },
     });
 
@@ -44,6 +59,8 @@ export async function GET(
         vagas: t.vagas,
         floorPlanUrl: t.floorPlanUrl,
       })),
+      // Usado na confirmação de exclusão: quantos clientes perderiam o vínculo.
+      interestedClientsCount: property._count.interestedClients,
       creatorName: property.creator?.name || 'N/A',
       updaterName: property.updater?.name || 'N/A',
       createdAt: property.createdAt.toISOString(),
@@ -52,6 +69,87 @@ export async function GET(
   } catch (error) {
     console.error('Erro ao buscar imóvel:', error);
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
+  }
+}
+
+/**
+ * Exclui tudo o que é do imóvel: o cadastro, as tipologias, as fotos e plantas
+ * (registros e arquivos no armazenamento) e os links curtos de compartilhamento.
+ * Clientes, ofertas ativas e formulários que apontavam para ele continuam
+ * existindo, só perdem o vínculo. Só o administrador exclui: não há como desfazer.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getUserFromToken();
+    if (!user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+    if (user.role !== Role.MARKETING_ADMIN) {
+      return NextResponse.json({ error: 'Apenas o administrador pode excluir imóveis.' }, { status: 403 });
+    }
+
+    const existing = await prisma.property.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        images: { select: { url: true } },
+        propertyTypes: { select: { floorPlanUrl: true } },
+      },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: 'Imóvel não encontrado' }, { status: 404 });
+    }
+
+    // Arquivos do imóvel no armazenamento: fotos e plantas das tipologias.
+    const fileUrls = Array.from(new Set([
+      ...existing.images.map(i => i.url),
+      ...existing.propertyTypes.map(t => t.floorPlanUrl),
+    ].filter((url): url is string => !!url)));
+
+    // Um mesmo arquivo pode estar em outro imóvel (cadastro duplicado, por
+    // exemplo): só sai do armazenamento o que nenhum outro imóvel usa.
+    const [sharedImages, sharedPlans] = fileUrls.length > 0
+      ? await Promise.all([
+          prisma.propertyImage.findMany({ where: { url: { in: fileUrls }, propertyId: { not: params.id } }, select: { url: true } }),
+          prisma.propertyType.findMany({ where: { floorPlanUrl: { in: fileUrls }, propertyId: { not: params.id } }, select: { floorPlanUrl: true } }),
+        ])
+      : [[], []];
+    const stillUsed = new Set([...sharedImages.map(i => i.url), ...sharedPlans.map(p => p.floorPlanUrl)]);
+    const storagePaths = fileUrls
+      .filter(url => !stillUsed.has(url))
+      .map(storagePathOf)
+      .filter((path): path is string => !!path);
+
+    // Banco primeiro: imóvel (tipologias e fotos em cascata) e os links curtos
+    // de compartilhamento que apontavam para a página pública dele.
+    const [, deletedLinks] = await prisma.$transaction([
+      prisma.property.delete({ where: { id: params.id } }),
+      prisma.shortLink.deleteMany({ where: { targetUrl: { contains: `/imovel/${params.id}` } } }),
+    ]);
+
+    // Depois os arquivos. Se o armazenamento falhar, o imóvel já saiu do
+    // sistema; a resposta avisa quantos arquivos ficaram para trás.
+    let filesRemoved = 0;
+    let filesFailed = 0;
+    if (storagePaths.length > 0) {
+      try {
+        const { data, error } = await createAdminClient().storage.from(STORAGE_BUCKET).remove(storagePaths);
+        if (error) throw error;
+        filesRemoved = data?.length ?? 0;
+        filesFailed = storagePaths.length - filesRemoved;
+      } catch (storageError) {
+        console.error('Imóvel excluído, mas os arquivos não saíram do armazenamento:', storageError);
+        filesFailed = storagePaths.length;
+      }
+    }
+
+    return NextResponse.json({ success: true, filesRemoved, filesFailed, linksRemoved: deletedLinks.count });
+  } catch (error) {
+    console.error('Erro ao EXCLUIR imóvel:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor ao excluir o imóvel.' }, { status: 500 });
   }
 }
 

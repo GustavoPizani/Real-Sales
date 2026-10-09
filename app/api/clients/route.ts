@@ -5,6 +5,7 @@ import { getUserFromToken } from "@/lib/auth";
 import { Prisma, Role } from "@prisma/client";
 import { z } from 'zod';
 import { notifyNewLead } from "@/lib/notifications";
+import { hideTestClients } from "@/lib/test-account";
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     const where: Prisma.ClientWhereInput = {
       // Filtro de Tenant: Garante que a query só retorne dados da conta do usuário
       accountId: user.isSuperAdmin ? undefined : user.accountId,
+      ...hideTestClients(user),
     };
 
     // Filtro opcional de status (ex.: Pipeline pede só os ACTIVE por padrão,
@@ -51,6 +53,14 @@ export async function GET(request: NextRequest) {
         brokerId: true,
         broker: { select: { id: true, name: true } },
         tags: { select: { id: true, name: true, color: true } },
+        propertyOfInterest: { select: { id: true, title: true } },
+        // Só a próxima tarefa em aberto: é o que o card do pipeline mostra.
+        tasks: {
+          where: { isCompleted: false },
+          orderBy: { dateTime: 'asc' },
+          take: 1,
+          select: { id: true, title: true, dateTime: true },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });
