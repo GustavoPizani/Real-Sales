@@ -1,6 +1,6 @@
 ---
 name: creative-fatigue-detection
-description: Detecta sinais precoces de fadiga em anúncios Meta antes que a performance colapse. Analisa decay de CTR, acúmulo de frequência e aumento de CPM por anúncio. Categoriza como urgente (trocar agora), atenção (1-2 semanas) ou saudável.
+description: Detecta sinais precoces de fadiga em anúncios Meta antes que a performance colapse. Analisa decay de CTR, acúmulo de frequência e aumento de CPM por anúncio. Categoriza como urgente (trocar agora), atenção (1-2 semanas) ou saudável. Use semanalmente na revisão de criativos ou quando o CTR cair e o CPL subir em anúncios específicos.
 ---
 
 # Creative Fatigue Detection — Meta Ads
