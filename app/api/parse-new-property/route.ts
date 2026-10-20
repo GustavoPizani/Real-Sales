@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
+import { GROQ_MODEL, reasoningOptions } from '@/lib/llm/models';
 
 const SYSTEM_PROMPT = `Você é um assistente especialista em extrair dados de blocos de texto sobre imóveis.
 Retorne APENAS um objeto JSON válido, sem markdown, sem explicações, sem \`\`\`.
@@ -48,15 +49,16 @@ export async function POST(req: Request) {
         const groq = new Groq({ apiKey });
 
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
+            model: GROQ_MODEL,
             messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: text },
             ],
             temperature: 0.1,
-            max_tokens: 2048,
+            max_tokens: 8192,
             response_format: { type: 'json_object' },
-        });
+            ...reasoningOptions(GROQ_MODEL),
+        } as any);
 
         const responseText = completion.choices[0]?.message?.content ?? '';
         const parsedData = JSON.parse(responseText);

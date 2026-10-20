@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveGroqModel } from "@/lib/llm/models";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
         initiationStrategy: body.initiationStrategy || "",
         qualificationBoundary: body.qualificationBoundary || "",
         targetFunnelStage: body.targetFunnelStage || "lead_qualificado",
-        model: body.model || "llama3-70b-8192",
+        model: resolveGroqModel(body.model),
         provider: body.provider || "groq",
         temperature: body.temperature ?? 0.3,
         maxTokens: body.maxTokens ?? 1024,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { GROQ_MODEL_OPTIONS, resolveGroqModel } from "@/lib/llm/models";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save } from "lucide-react";
@@ -33,7 +34,7 @@ export default function NewAgentPage() {
 
   const [formData, setFormData] = useState({
     name: "",
-    model: "llama3-70b-8192",
+    model: "openai/gpt-oss-120b",
     temperature: 0.3,
     isDefault: false,
     initiationStrategy: "",
@@ -94,10 +95,7 @@ export default function NewAgentPage() {
               <Select value={formData.model} onValueChange={(v) => setFormData({ ...formData, model: v })}>
                 <SelectTrigger className="focus:ring-primary"><SelectValue placeholder="Selecione um modelo" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="llama3-70b-8192">Llama 3 70B (Recomendado)</SelectItem>
-                  <SelectItem value="llama3-8b-8192">Llama 3 8B (Rápido)</SelectItem>
-                  <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
-                  <SelectItem value="gemma2-9b-it">Gemma 2 9B</SelectItem>
+                  {GROQ_MODEL_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

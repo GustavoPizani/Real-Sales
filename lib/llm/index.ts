@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { reasoningOptions, resolveGroqModel } from "./models";
 import { sendTextViaWaha } from "./waha-sender";
 import { sendSlackSDRNotification } from "@/lib/slack";
 import type { NormalizedMessage } from "@/lib/debounce";
@@ -108,7 +109,8 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
 - OBRIGATÓRIO: Quando o lead fornecer as informações necessárias do teto operacional, chame a ferramenta (tool) "qualify_lead" informando o resumo do que foi coletado.`;
 
   // Parâmetros do modelo — broadcast usa defaults, SDR usa AgentSession
-  const modelName   = session?.model       ?? "llama3-70b-8192";
+  // Agentes salvos com um modelo que a Groq retirou passam a usar o padrão (lib/llm/models.ts).
+  const modelName   = resolveGroqModel(session?.model);
   const temperature = session?.temperature ?? 0.7;
   const maxTokens   = session?.maxTokens   ?? 512;
   const memoryWindow = session ? parseInt(session.memoryMode.replace("window_", "")) || 20 : 10;
@@ -138,6 +140,7 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
       },
       body: JSON.stringify({
         model: modelName,
+        ...reasoningOptions(modelName),
         messages: messagesPayload,
         temperature,
         max_tokens: maxTokens,
