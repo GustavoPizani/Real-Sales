@@ -298,6 +298,18 @@ export async function syncMapping(mapping: any, fullSync = false): Promise<{ imp
       const result = await ingestLead(lead, mapping)
       if (result.status === 'created') imported++
       else if (result.status === 'skipped') skipped++
+      else if (result.reason === 'no_broker' || result.reason === 'no_funnel') {
+        // Falta de configuração (roleta apagada ou vazia, funil sem etapa): o lead
+        // não pode ser descartado. Interrompe SEM avançar o lastSyncedAt, para que
+        // ele e os seguintes sejam buscados de novo assim que a configuração for
+        // corrigida. Antes o lead era contado como erro, a janela avançava e ele
+        // se perdia para sempre.
+        throw new Error(
+          result.reason === 'no_broker'
+            ? `Lead ${lead.id} não importado: o formulário não tem corretor nem roleta com corretores. Configure a distribuição em Integrações.`
+            : `Lead ${lead.id} não importado: o formulário não tem funil e etapa de entrada. Configure em Integrações.`,
+        )
+      }
       else errors++
     }
 

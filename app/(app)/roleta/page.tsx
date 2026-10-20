@@ -940,7 +940,9 @@ export default function RoletaPage() {
                 setMessage("Roleta excluída com sucesso!");
                 loadRoletas();
             } else {
-                setMessage("Erro ao excluir roleta.");
+                // Ex.: roleta ainda usada por um formulário do Facebook — a API diz qual.
+                const data = await response.json().catch(() => null);
+                setMessage(data?.error || "Erro ao excluir roleta.");
             }
         } catch (error) {
             setMessage("Erro ao excluir roleta.");

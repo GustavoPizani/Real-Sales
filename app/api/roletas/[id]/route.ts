@@ -117,6 +117,22 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    // Formulários do Facebook que distribuem por esta roleta. Apagá-la deixava o
+    // formulário apontando para uma roleta inexistente, e todo lead novo dele era
+    // descartado por falta de corretor (aconteceu com o formulário do Prado).
+    const forms = await prisma.facebookFormMapping.findMany({
+      where: { roletaId: params.id },
+      select: { formName: true },
+    });
+    if (forms.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Esta roleta distribui os leads de: ${forms.map(f => f.formName).join(', ')}. Em Integrações, troque a roleta desses formulários antes de excluir.`,
+        },
+        { status: 409 },
+      );
+    }
+
     await prisma.leadRoulette.delete({ where: { id: params.id } });
 
     return NextResponse.json({ message: 'Roleta excluída com sucesso' });
