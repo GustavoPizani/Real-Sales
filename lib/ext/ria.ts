@@ -92,7 +92,7 @@ async function baseConhecimento(accountId: string): Promise<{ playbook: string; 
   return { playbook, exemplos };
 }
 
-async function groq(corpo: Record<string, unknown>) {
+export async function groq(corpo: Record<string, unknown>) {
   if (!process.env.GROQ_API_KEY) throw new ErroExt(503, 'GROQ_API_KEY não configurada no servidor.');
   const r = await fetch(`${GROQ}/chat/completions`, {
     method: 'POST',
@@ -101,7 +101,7 @@ async function groq(corpo: Record<string, unknown>) {
   });
   if (r.status === 429) {
     const seg = Number(r.headers.get('retry-after')) || 30;
-    throw new ErroExt(429, `Limite da IA atingido. Tente de novo em ${seg} s.`);
+    throw new ErroExt(429, `Limite da IA atingido. Tente de novo em ${seg} s.`, seg);
   }
   if (!r.ok) {
     console.error('[EXT_RIA] Groq', r.status, (await r.text()).slice(0, 500));

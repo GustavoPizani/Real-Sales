@@ -12,6 +12,7 @@ import {
   juntar, jsonMsgs, limparMensagens, resolverSugestoes, resumoTempos, sufixoTelefone, type MsgWa,
 } from '@/lib/ext/conversa';
 import { resumir, sugerir, transcrever } from '@/lib/ext/ria';
+import { analisarConversa, consolidar, salvarPropostas } from '@/lib/ext/aprender';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -272,14 +273,18 @@ const ROTAS: Record<string, Handler> = {
     return { texto: resultado };
   },
 
-  async conhecimento(u, c) {
-    const tipo = c.tipo === 'example' ? 'example' : 'playbook';
-    const resposta = texto(c.resposta, 4000);
-    if (!resposta) throw new ErroExt(400, 'Escreva a resposta ou a regra.');
-    const item = await prisma.knowledgeItem.create({
-      data: { accountId: u.accountId, userId: u.id, kind: tipo, situation: texto(c.situacao, 1500) || null, answer: resposta, source: 'faixa' },
-    });
-    return { id: item.id };
+  /** Uma conversa inteira (formato do arquivo exportado) → histórico + regras e exemplos propostos. */
+  async 'ia/aprender'(_u, c) {
+    if (!c.conversa || !Array.isArray(c.conversa.mensagens)) throw new ErroExt(400, 'Conversa inválida.');
+    return analisarConversa(c.conversa);
+  },
+
+  async 'ia/aprender/consolidar'(u, c) {
+    return consolidar(u.accountId, { regras: c.regras, exemplos: c.exemplos });
+  },
+
+  async 'conhecimento/lote'(u, c) {
+    return salvarPropostas(u.accountId, u.id, { regras: c.regras, exemplos: c.exemplos }, 'conversas');
   },
 
   /** "Boa resposta": sua última mensagem e o que o cliente disse antes viram exemplo. */
@@ -368,7 +373,7 @@ export async function POST(req: Request, { params }: { params: { path: string[] 
     const corpo = ehForm ? {} : await req.json().catch(() => ({}));
     return responder(req, await handler(u, corpo, req));
   } catch (e) {
-    if (e instanceof ErroExt) return responder(req, { erro: e.message }, e.status);
+    if (e instanceof ErroExt) return responder(req, { erro: e.message, ...(e.esperarSeg ? { esperarSeg: e.esperarSeg } : {}) }, e.status);
     console.error(`[EXT] ${rota}`, e);
     return responder(req, { erro: 'Erro interno. Tente de novo.' }, 500);
   }

@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, Copy, Download, Link2, Loader2, Plus, Trash2 } from "lucide-react";
+import { Bot, Copy, Download, Link2, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,7 +25,174 @@ type Item = {
 type Stats = { used?: number; edited?: number; ignored?: number; pending?: number; conversas?: number };
 type Imovel = { id: string; title: string };
 
-const FONTE: Record<string, string> = { manual: "CRM", faixa: "Faixa", sugestao: "Sugestão" };
+const FONTE: Record<string, string> = { manual: "CRM", faixa: "Faixa", sugestao: "Sugestão", conversas: "Conversas (faixa)", importacao: "Conversas importadas" };
+
+type Proposta = { situacao: string; resposta: string };
+type Propostas = { regras: Proposta[]; exemplos: Proposta[] };
+
+const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** POST em /api/extensao; no limite da IA (429) espera o tempo pedido e tenta de novo. */
+async function chamar(corpo: object, aoEsperar: (seg: number) => void): Promise<any> {
+  for (let tentativa = 0; ; tentativa++) {
+    const r = await fetch("/api/extensao", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return j;
+    if (r.status === 429 && tentativa < 6) {
+      const seg = (j.esperarSeg || 30) + 1;
+      aoEsperar(seg);
+      await dormir(seg * 1000);
+      continue;
+    }
+    throw new Error(j.error || `Erro ${r.status}`);
+  }
+}
+
+/**
+ * Importa o arquivo JSON exportado pela faixa ("Exportar JSON"), a RIA lê cada
+ * conversa inteira e propõe regras e exemplos; você escolhe o que entra na base.
+ */
+function AprenderComConversas({ aoSalvar }: { aoSalvar: () => void }) {
+  const { toast } = useToast();
+  const [progresso, setProgresso] = useState<{ feito: number; total: number; texto: string } | null>(null);
+  const [propostas, setPropostas] = useState<Propostas | null>(null);
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const [salvando, setSalvando] = useState(false);
+
+  const importar = async (arquivo: File) => {
+    let conversas: any[];
+    try {
+      const j = JSON.parse(await arquivo.text());
+      conversas = (Array.isArray(j?.conversas) ? j.conversas : []).filter((c: any) => Array.isArray(c?.mensagens) && c.mensagens.length);
+    } catch {
+      return toast({ title: "Arquivo inválido", description: "Use o JSON exportado pela faixa do WhatsApp.", variant: "destructive" });
+    }
+    if (!conversas.length) return toast({ title: "Nenhuma conversa no arquivo", variant: "destructive" });
+
+    setPropostas(null);
+    const juntas: Propostas = { regras: [], exemplos: [] };
+    try {
+      for (let i = 0; i < conversas.length; i++) {
+        const c = conversas[i];
+        setProgresso({ feito: i, total: conversas.length, texto: `A RIA está lendo ${c.nome || c.telefone || "a conversa"}…` });
+        const r = await chamar({ acao: "analisar", conversa: c }, (seg) =>
+          setProgresso({ feito: i, total: conversas.length, texto: `Limite da IA: aguardando ${seg} s…` }),
+        );
+        juntas.regras.push(...r.regras);
+        juntas.exemplos.push(...r.exemplos);
+      }
+      setProgresso({ feito: conversas.length, total: conversas.length, texto: "Juntando o que se repete e tirando o que a base já tem…" });
+      const final: Propostas = await chamar({ acao: "consolidar", ...juntas }, (seg) =>
+        setProgresso({ feito: conversas.length, total: conversas.length, texto: `Limite da IA: aguardando ${seg} s…` }),
+      );
+      setPropostas(final);
+      setMarcadas(new Set([...final.regras.map((_, i) => `r${i}`), ...final.exemplos.map((_, i) => `e${i}`)]));
+      if (!final.regras.length && !final.exemplos.length) toast({ title: "A RIA não achou nada novo nessas conversas." });
+    } catch (e: any) {
+      toast({ title: "Não foi possível analisar", description: e.message, variant: "destructive" });
+    } finally {
+      setProgresso(null);
+    }
+  };
+
+  const alternar = (chave: string) =>
+    setMarcadas((m) => {
+      const n = new Set(m);
+      if (n.has(chave)) n.delete(chave);
+      else n.add(chave);
+      return n;
+    });
+
+  const salvar = async () => {
+    if (!propostas) return;
+    setSalvando(true);
+    try {
+      const r = await chamar(
+        {
+          acao: "salvar",
+          regras: propostas.regras.filter((_, i) => marcadas.has(`r${i}`)),
+          exemplos: propostas.exemplos.filter((_, i) => marcadas.has(`e${i}`)),
+        },
+        () => null,
+      );
+      toast({ title: `${r.salvos} ${r.salvos === 1 ? "item entrou" : "itens entraram"} na base` });
+      setPropostas(null);
+      aoSalvar();
+    } catch (e: any) {
+      toast({ title: "Não foi possível salvar", description: e.message, variant: "destructive" });
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const grupo = (titulo: string, prefixo: "r" | "e", lista: Proposta[]) =>
+    lista.length > 0 && (
+      <div className="space-y-2">
+        <p className="text-sm font-semibold">{titulo} ({lista.length})</p>
+        {lista.map((p, i) => (
+          <label key={i} className="flex gap-3 items-start rounded-md border p-3 text-sm cursor-pointer">
+            <input type="checkbox" className="mt-1" checked={marcadas.has(`${prefixo}${i}`)} onChange={() => alternar(`${prefixo}${i}`)} />
+            <span>
+              {p.situacao && <span className="block text-muted-foreground">{p.situacao}</span>}
+              <span className="whitespace-pre-wrap">{p.resposta}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    );
+
+  return (
+    <div className="rounded-lg border border-dashed p-4 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold">Aprender com conversas</p>
+          <p className="text-sm text-muted-foreground">
+            Importe o JSON exportado pela faixa (&quot;Exportar JSON&quot;). A RIA lê as conversas inteiras e propõe regras e exemplos; você escolhe o que entra.
+          </p>
+        </div>
+        <Button asChild variant="outline" disabled={!!progresso}>
+          <label className="cursor-pointer">
+            <Upload className="h-4 w-4 mr-2" /> Importar conversas (.json)
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              disabled={!!progresso}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) importar(f);
+              }}
+            />
+          </label>
+        </Button>
+      </div>
+
+      {progresso && (
+        <div className="space-y-2 text-sm">
+          <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {progresso.texto}</p>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary transition-all" style={{ width: `${progresso.total ? (progresso.feito / progresso.total) * 100 : 0}%` }} />
+          </div>
+          <p className="text-xs text-muted-foreground">{progresso.feito} de {progresso.total} conversas</p>
+        </div>
+      )}
+
+      {propostas && (propostas.regras.length > 0 || propostas.exemplos.length > 0) && (
+        <div className="space-y-4">
+          {grupo("Regras propostas", "r", propostas.regras)}
+          {grupo("Exemplos de resposta", "e", propostas.exemplos)}
+          <div className="flex gap-2">
+            <Button onClick={salvar} disabled={!marcadas.size || salvando}>
+              {salvando && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Salvar {marcadas.size} na base
+            </Button>
+            <Button variant="ghost" onClick={() => setPropostas(null)}>Descartar</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Mensagem pré-preenchida com "ref.": a faixa reconhece o imóvel e vincula sozinha. */
 const mensagemRef = (imovel: Imovel) => `Olá! Tenho interesse no ${imovel.title} (ref. ${imovel.id.slice(0, 6).toUpperCase()})`;
@@ -40,8 +206,6 @@ export default function ExtensaoPage() {
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
   const [numero, setNumero] = useState("");
   const [imovelId, setImovelId] = useState("");
-  const [novo, setNovo] = useState({ tipo: "playbook", situacao: "", resposta: "" });
-  const [salvando, setSalvando] = useState(false);
 
   const carregar = useCallback(async () => {
     const r = await fetch("/api/extensao");
@@ -83,19 +247,6 @@ export default function ExtensaoPage() {
   const copiar = async (texto: string) => {
     await navigator.clipboard.writeText(texto);
     toast({ title: "Copiado" });
-  };
-
-  const salvarNovo = async () => {
-    setSalvando(true);
-    const r = await fetch("/api/extensao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(novo),
-    });
-    setSalvando(false);
-    if (!r.ok) return toast({ title: "Não foi possível salvar", variant: "destructive" });
-    setNovo({ tipo: novo.tipo, situacao: "", resposta: "" });
-    carregar();
   };
 
   const alternar = async (item: Item) => {
@@ -211,37 +362,15 @@ export default function ExtensaoPage() {
         <CardHeader>
           <CardTitle>Base de conhecimento da RIA</CardTitle>
           <CardDescription>
-            Regras de como você trabalha e exemplos de respostas. A RIA usa tudo o que está ativo, e o bot vai usar a mesma base.
+            Regras de como você trabalha e exemplos de respostas, tirados das suas conversas. A RIA usa tudo o que está ativo, e o bot vai usar a mesma base.
             Também entra aqui o que você marca na faixa como &quot;boa resposta&quot;.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-3 md:grid-cols-[180px_1fr_1fr_auto] items-end">
-            <div className="space-y-2">
-              <Label>Tipo</Label>
-              <Select value={novo.tipo} onValueChange={(tipo) => setNovo((n) => ({ ...n, tipo }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="playbook">Regra</SelectItem>
-                  <SelectItem value="example">Exemplo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="situacao">Situação</Label>
-              <Textarea id="situacao" rows={2} value={novo.situacao} onChange={(e) => setNovo((n) => ({ ...n, situacao: e.target.value }))} placeholder="Ex.: cliente pergunta se aceita FGTS" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="resposta">Resposta ou regra</Label>
-              <Textarea id="resposta" rows={2} value={novo.resposta} onChange={(e) => setNovo((n) => ({ ...n, resposta: e.target.value }))} placeholder="Ex.: Aceita sim, na entrada e para amortizar." />
-            </div>
-            <Button onClick={salvarNovo} disabled={!novo.resposta.trim() || salvando}>
-              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Adicionar
-            </Button>
-          </div>
+          <AprenderComConversas aoSalvar={carregar} />
 
           {itens.length === 0 && !carregando ? (
-            <p className="text-sm text-muted-foreground">Nada ainda. Comece pelas regras: região em que você atua, como agenda visitas, objeções comuns.</p>
+            <p className="text-sm text-muted-foreground">Nada ainda. Importe conversas exportadas pela faixa, ou use &quot;Aprender com conversas&quot; direto no WhatsApp Web.</p>
           ) : (
             <ul className="divide-y">
               {itens.map((item) => (

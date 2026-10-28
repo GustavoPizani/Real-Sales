@@ -1,7 +1,8 @@
 // Ponte com o WhatsApp Web (roda no "mundo" da página, junto com a WA-JS).
 // Recebe pedidos do content script por eventos do documento e responde com JSON.
-// Lista fechada de ações: lê a conversa aberta e as mensagens, baixa um áudio,
-// abre uma conversa e coloca texto na caixa de mensagem. NÃO envia nada.
+// Lista fechada de ações: lê a conversa aberta, as mensagens e o histórico, lista
+// as conversas, baixa um áudio, abre uma conversa e coloca texto na caixa de
+// mensagem. NÃO envia nada.
 (() => {
   if (window.__nordicPonte) return;
   window.__nordicPonte = true;
@@ -75,6 +76,62 @@
     return raw.map(compacta).filter((m) => m && m.ts > 0);
   }
 
+  /**
+   * Conversa inteira, para exportar e para a RIA aprender. Com "antigo", pede ao
+   * celular as mensagens anteriores (50 por vez) até o celular não mandar mais
+   * ou chegar ao máximo. O WhatsApp não garante entregar tudo: "completo" diz se
+   * o celular parou de mandar antes do máximo.
+   */
+  async function historico(chatId, max, antigo) {
+    const porId = new Map();
+    const juntar = (lista) => lista.forEach((m) => porId.set(idDe(m.id), m));
+    juntar(await WPP.chat.getMessages(chatId, { count: -1 }));
+    let completo = !antigo;
+    if (antigo) {
+      let vazias = 0;
+      while (porId.size < max) {
+        const maisAntiga = [...porId.values()].sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0))[0];
+        if (!maisAntiga) {
+          completo = true;
+          break;
+        }
+        const antes = await WPP.chat.getMessages(chatId, { count: 50, direction: "before", id: idDe(maisAntiga.id) }).catch(() => []);
+        const novas = antes.filter((m) => !porId.has(idDe(m.id)));
+        if (!novas.length) {
+          // o celular às vezes demora: dá mais uma chance antes de considerar que acabou
+          if (++vazias >= 2) {
+            completo = true;
+            break;
+          }
+          await dormir(1500);
+          continue;
+        }
+        vazias = 0;
+        juntar(novas);
+        await dormir(400);
+      }
+    }
+    const mensagens = [...porId.values()]
+      .map(compacta)
+      .filter((m) => m && m.ts > 0)
+      .sort((a, b) => a.ts - b.ts)
+      .slice(-max);
+    return { mensagens, completo };
+  }
+
+  async function listarConversas(quantas) {
+    const chats = await WPP.chat.list({ onlyUsers: true, count: quantas });
+    return Promise.all(
+      chats
+        .filter((c) => !idDe(c.id).endsWith("@broadcast"))
+        .map(async (c) => {
+          const id = idDe(c.id);
+          const ct = c.contact || {};
+          return { id, nome: c.formattedTitle || c.name || ct.name || ct.pushname || "", telefone: await telefoneDe(id), t: Number(c.t) || 0 };
+        }),
+    );
+  }
+
   async function baixarAudio(msgId) {
     const blob = await WPP.chat.downloadMedia(msgId);
     const buf = new Uint8Array(await blob.arrayBuffer());
@@ -87,6 +144,8 @@
     conversaAtiva: () => conversaAtiva(),
     mensagens: ({ chatId, quantas }) => mensagens(chatId, Math.min(Math.max(Number(quantas) || 80, 1), 500)),
     baixarAudio: ({ msgId }) => baixarAudio(msgId),
+    historico: ({ chatId, max, antigo }) => historico(chatId, Math.min(Math.max(Number(max) || 2000, 1), 10000), Boolean(antigo)),
+    listarConversas: ({ quantas }) => listarConversas(Math.min(Math.max(Number(quantas) || 30, 1), 500)),
     abrirConversa: async ({ chatId }) => {
       await WPP.chat.openChatBottom(chatId);
       return true;

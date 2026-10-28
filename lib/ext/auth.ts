@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Versão da extensão publicada (tem de bater com extensao/manifest.base.json). */
-export const VERSAO_EXTENSAO = '0.1.0';
+export const VERSAO_EXTENSAO = '0.2.0';
 
 /**
  * ID fixo da extensão (vem da chave pública em extensao/chave-publica.txt; o
@@ -26,7 +26,8 @@ export interface UsuarioExt {
 }
 
 export class ErroExt extends Error {
-  constructor(public status: number, message: string) {
+  /** esperarSeg: no limite da IA (429), quanto esperar antes de tentar de novo */
+  constructor(public status: number, message: string, public esperarSeg?: number) {
     super(message);
   }
 }

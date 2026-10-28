@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
+import { ErroExt } from '@/lib/ext/auth';
+import { analisarConversa, consolidar, salvarPropostas } from '@/lib/ext/aprender';
+
+export const maxDuration = 60;
 
 /**
  * Página "Extensão WhatsApp" do CRM (só MARKETING_ADMIN): maturidade da RIA
  * (o que foi feito das sugestões) e a base de conhecimento.
  *   GET    → { stats, itens }
- *   POST   → cria item { tipo, situacao?, resposta }
+ *   POST   → aprender com conversas importadas (ver abaixo)
  *   PATCH  → { id, ativo }
  *   DELETE → ?id=
  */
@@ -31,22 +35,29 @@ export async function GET() {
   return NextResponse.json({ stats: { ...stats, conversas }, itens });
 }
 
+/**
+ * Aprender com conversas importadas (arquivo JSON exportado pela faixa):
+ *   { acao: "analisar", conversa }            → { historico, regras, exemplos }
+ *   { acao: "consolidar", regras, exemplos }  → { regras, exemplos }
+ *   { acao: "salvar", regras, exemplos }      → { salvos }
+ */
 export async function POST(request: NextRequest) {
   const a = await admin();
   if ('erro' in a) return a.erro;
   const body = await request.json().catch(() => ({}));
-  const resposta = typeof body.resposta === 'string' ? body.resposta.trim().slice(0, 4000) : '';
-  if (!resposta) return NextResponse.json({ error: 'Escreva a resposta ou a regra.' }, { status: 400 });
-  const item = await prisma.knowledgeItem.create({
-    data: {
-      accountId: a.accountId,
-      userId: a.user.id,
-      kind: body.tipo === 'example' ? 'example' : 'playbook',
-      situation: typeof body.situacao === 'string' && body.situacao.trim() ? body.situacao.trim().slice(0, 1500) : null,
-      answer: resposta,
-    },
-  });
-  return NextResponse.json(item, { status: 201 });
+  try {
+    if (body.acao === 'analisar') {
+      if (!body.conversa || !Array.isArray(body.conversa.mensagens)) return NextResponse.json({ error: 'Conversa inválida.' }, { status: 400 });
+      return NextResponse.json(await analisarConversa(body.conversa));
+    }
+    if (body.acao === 'consolidar') return NextResponse.json(await consolidar(a.accountId, body));
+    if (body.acao === 'salvar') return NextResponse.json(await salvarPropostas(a.accountId, a.user.id, body, 'importacao'));
+    return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
+  } catch (e) {
+    if (e instanceof ErroExt) return NextResponse.json({ error: e.message, esperarSeg: e.esperarSeg }, { status: e.status });
+    console.error('[EXTENSAO_APRENDER]', e);
+    return NextResponse.json({ error: 'Erro interno. Tente de novo.' }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: NextRequest) {

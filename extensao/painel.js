@@ -33,6 +33,18 @@
     ocupado: {},
     aviso: null, // { tipo, texto }
     vinculados: {}, // chatId → true: conversas vinculadas (abre numa chamada só)
+    // "Aprender com conversas": exportar em JSON e a RIA propor regras e exemplos
+    aprender: {
+      escopo: "esta", // esta | ultimas
+      quantas: 30,
+      antigo: true, // pedir ao celular o histórico antigo
+      progresso: null, // { feito, total, texto }
+      parar: false,
+      propostas: null, // { regras, exemplos }
+      marcadas: { r: new Set(), e: new Set() },
+      historico: null, // histórico da conversa aberta (vinculada), para a anotação
+      relatorio: null, // { conversas, puladas, incompletas }
+    },
   };
 
   // ── utilidades ────────────────────────────────────────────────────────────
@@ -49,19 +61,20 @@
   const ler = (k) => new Promise((r) => chrome.storage.local.get(k, (v) => r(v[k])));
   const iniciais = (n) =>
     String(n || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "?";
+  const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
   const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
   // ── ponte com o WhatsApp ──────────────────────────────────────────────────
   let seqPedido = 0;
   const pendentes = new Map();
-  function wa(acao, dados) {
+  function wa(acao, dados, ms = 60000) {
     const id = ++seqPedido;
     return new Promise((resolve, reject) => {
       pendentes.set(id, { resolve, reject });
       parent.postMessage({ nordic: "pedido", id, acao, dados }, WA_ORIGEM);
       setTimeout(() => {
         if (pendentes.delete(id)) reject(new Error("O WhatsApp Web não respondeu."));
-      }, 60000);
+      }, ms);
     });
   }
   window.addEventListener("message", (e) => {
@@ -113,6 +126,7 @@
     if (!r.ok) {
       const e = new Error(r.status === 404 && !j.erro ? "Este servidor ainda não tem a extensão publicada." : j.erro || `Erro ${r.status}`);
       e.status = r.status;
+      e.esperarSeg = j.esperarSeg || 0;
       if (r.status === 401 || r.status === 403) await sair(false, e.message);
       throw e;
     }
@@ -431,10 +445,136 @@
     est.aviso = { tipo: "ok", texto: `A RIA aprendeu com a sua resposta: "${r.resposta.slice(0, 80)}${r.resposta.length > 80 ? "…" : ""}"` };
   }
 
-  async function ensinar(form) {
-    await api("conhecimento", { tipo: form.tipo.value, situacao: form.situacao.value, resposta: form.resposta.value });
-    form.reset();
-    est.aviso = { tipo: "ok", texto: "Guardado na base de conhecimento da RIA." };
+  // ── aprender com conversas ──────────────────────────────────────────────
+  const TIPO_EXPORT = { a: "audio", i: "imagem", v: "video", d: "documento" };
+
+  function progresso(feito, total, texto) {
+    est.aprender.progresso = { feito, total, texto };
+    render();
+  }
+
+  /** Lê as conversas escolhidas do WhatsApp Web, no formato do arquivo exportado. */
+  async function coletar() {
+    const ap = est.aprender;
+    const alvos =
+      ap.escopo === "esta"
+        ? [{ id: est.conversa.id, nome: est.conversa.nome, telefone: est.conversa.telefone }]
+        : await wa("listarConversas", { quantas: ap.quantas });
+    const conversas = [];
+    for (let i = 0; i < alvos.length && !ap.parar; i++) {
+      const c = alvos[i];
+      progresso(i, alvos.length, `Lendo ${c.nome || c.telefone || "conversa"}${ap.antigo ? " (pedindo o histórico ao celular)" : ""}…`);
+      const h = await wa("historico", { chatId: c.id, max: 2000, antigo: ap.antigo }, 10 * 60000).catch(() => null);
+      if (!h?.mensagens?.length) continue;
+      conversas.push({
+        chat_id: c.id,
+        nome: c.nome || "",
+        telefone: c.telefone || "",
+        historico_completo: h.completo,
+        total_mensagens: h.mensagens.length,
+        mensagens: h.mensagens.map((m) => ({
+          id: m.id,
+          data: new Date(m.ts * 1000).toISOString(),
+          de: m.lado === ">" ? "corretor" : "cliente",
+          tipo: m.tipo ? TIPO_EXPORT[m.tipo] : "texto",
+          ...(m.seg ? { duracao_seg: m.seg } : {}),
+          texto: m.texto,
+        })),
+      });
+    }
+    return conversas;
+  }
+
+  async function exportarConversas() {
+    const ap = est.aprender;
+    ap.parar = false;
+    try {
+      const conversas = await coletar();
+      if (!conversas.length) throw new Error("Nenhuma mensagem encontrada para exportar.");
+      const arquivo = { formato: "nordic-conversas-v1", exportado_em: new Date().toISOString(), conta: est.usuario?.nome || "", conversas };
+      const blob = new Blob([JSON.stringify(arquivo, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `nordic-conversas-${hojeISO()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 1000);
+      const incompletas = conversas.filter((c) => !c.historico_completo).length;
+      est.aviso = {
+        tipo: "ok",
+        texto:
+          `Exportadas ${conversas.length} conversa${conversas.length === 1 ? "" : "s"} (${conversas.reduce((n, c) => n + c.total_mensagens, 0)} mensagens).` +
+          (incompletas ? ` Em ${incompletas}, o celular não entregou o histórico inteiro.` : ""),
+      };
+    } finally {
+      ap.progresso = null;
+    }
+  }
+
+  /** Chama a API e, no limite da IA, espera o tempo pedido e tenta de novo. */
+  async function comEspera(fn, rotulo) {
+    for (let tentativa = 0; ; tentativa++) {
+      try {
+        return await fn();
+      } catch (e) {
+        if (e.status !== 429 || tentativa >= 6 || est.aprender.parar) throw e;
+        const seg = (e.esperarSeg || 30) + 1;
+        const p = est.aprender.progresso;
+        progresso(p?.feito || 0, p?.total || 1, `Limite da IA: aguardando ${seg} s para continuar ${rotulo}…`);
+        await dormir(seg * 1000);
+      }
+    }
+  }
+
+  async function aprenderComConversas() {
+    const ap = est.aprender;
+    ap.parar = false;
+    ap.propostas = null;
+    ap.historico = null;
+    try {
+      const conversas = await coletar();
+      if (!conversas.length) throw new Error("Nenhuma mensagem encontrada para analisar.");
+      const regras = [];
+      const exemplos = [];
+      let puladas = 0;
+      for (let i = 0; i < conversas.length && !ap.parar; i++) {
+        const c = conversas[i];
+        progresso(i, conversas.length, `A RIA está lendo ${c.nome || c.telefone || "a conversa"}…`);
+        const r = await comEspera(() => api("ia/aprender", { conversa: c }), "a leitura");
+        if (r.pulada) puladas++;
+        regras.push(...r.regras);
+        exemplos.push(...r.exemplos);
+        if (ap.escopo === "esta" && vinculada() && r.historico) ap.historico = r.historico;
+      }
+      progresso(conversas.length, conversas.length, "Juntando o que se repete e tirando o que a base já tem…");
+      const final = await comEspera(() => api("ia/aprender/consolidar", { regras, exemplos }), "a consolidação");
+      ap.propostas = final;
+      ap.marcadas = { r: new Set(final.regras.map((_, i) => i)), e: new Set(final.exemplos.map((_, i) => i)) };
+      ap.relatorio = { conversas: conversas.length, puladas, incompletas: conversas.filter((c) => !c.historico_completo).length };
+      if (!final.regras.length && !final.exemplos.length && !ap.historico) {
+        est.aviso = { tipo: "alerta", texto: "A RIA não achou nada novo para aprender nessas conversas." };
+      }
+    } finally {
+      ap.progresso = null;
+    }
+  }
+
+  async function salvarAprendizado() {
+    const ap = est.aprender;
+    const regras = ap.propostas.regras.filter((_, i) => ap.marcadas.r.has(i));
+    const exemplos = ap.propostas.exemplos.filter((_, i) => ap.marcadas.e.has(i));
+    const r = await api("conhecimento/lote", { regras, exemplos });
+    ap.propostas = null;
+    est.aviso = { tipo: "ok", texto: `${r.salvos} ${r.salvos === 1 ? "item entrou" : "itens entraram"} na base de conhecimento da RIA.` };
+  }
+
+  async function salvarHistorico() {
+    await api("nota", { vinculo_id: est.vinculo.id, texto: `Histórico da conversa (RIA)\n${est.aprender.historico}` });
+    est.aprender.historico = null;
+    est.aviso = { tipo: "ok", texto: "Histórico salvo nas anotações do cliente." };
   }
 
   async function registrarVisita(form) {
@@ -494,6 +634,7 @@
     audio: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
     agenda: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
     livro: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
     joinha: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
   };
   const ic = (n, p) => `<svg class="ic${p ? " p" : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICONES[n] || ""}</svg>`;
@@ -540,7 +681,8 @@
     else if (!est.vinculo || est.trocando) corpo = telaVincular();
     else if (est.vinculo.nao_cliente) corpo = telaNaoCliente();
     else corpo = telaCliente();
-    return `${versao}${aviso()}${corpo}${rodapeStats()}`;
+    const aprender = est.waPronto && !est.erroWa ? secaoAprender() : "";
+    return `${versao}${aviso()}${corpo}${aprender}${rodapeStats()}`;
   }
 
   function rodapeStats() {
@@ -639,8 +781,7 @@
       ${secaoRia()}
       ${secaoAudios()}
       ${secaoNota()}
-      ${secaoVisita()}
-      ${secaoEnsinar()}`;
+      ${secaoVisita()}`;
   }
 
   function secaoRia() {
@@ -659,6 +800,7 @@
         <button class="dourado largo" ${est.ocupado.ria ? "disabled" : ""}>${girando("ria", "Pensando…") || "Sugerir resposta"}</button>
       </form>
       ${lista}
+      <div class="acoes"><button type="button" class="pequeno" data-acao="boa-resposta" ${est.ocupado.boa ? "disabled" : ""} title="Sua última mensagem vira exemplo para a RIA">${girando("boa", "Guardando…") || `${ic("joinha", true)} Minha última resposta foi boa`}</button></div>
     </details>`;
   }
 
@@ -701,16 +843,53 @@
       </form></details>`;
   }
 
-  function secaoEnsinar() {
-    return `<details class="cartao" id="d-ensinar"><summary><span>${ic("livro", true)} Ensinar a RIA</span></summary>
-      <button type="button" class="largo" data-acao="boa-resposta" ${est.ocupado.boa ? "disabled" : ""}>${girando("boa", "Guardando…") || `${ic("joinha", true)} Minha última resposta foi boa`}</button>
-      <hr class="separador" />
-      <form id="f-ensinar" data-form="ensinar">
-        <label>Tipo<select name="tipo"><option value="playbook">Regra / como eu trabalho</option><option value="example">Exemplo (cliente disse → eu respondo)</option></select></label>
-        <label>Situação<textarea name="situacao" rows="2" placeholder="Ex.: cliente pergunta se aceita FGTS"></textarea></label>
-        <label>Resposta ou regra<textarea name="resposta" rows="3" required placeholder="Ex.: Aceita sim, na entrada e para amortizar…"></textarea></label>
-        <button class="primario largo" ${est.ocupado.ensinar ? "disabled" : ""}>${girando("ensinar", "Guardando…") || "Guardar"}</button>
-      </form></details>`;
+  function secaoAprender() {
+    const ap = est.aprender;
+    const temConversa = est.conversa && !est.conversa.grupo;
+    let corpo;
+    if (ap.progresso) {
+      const p = ap.progresso;
+      const pct = p.total ? Math.round((p.feito / p.total) * 100) : 0;
+      corpo = `<p class="mudo"><span class="carregando" aria-hidden="true"></span> ${esc(p.texto)}</p>
+        <div class="progresso" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+        <p class="mudo">${p.feito} de ${p.total}</p>
+        <button type="button" class="pequeno" data-acao="parar-aprender" ${ap.parar ? "disabled" : ""}>${ap.parar ? "Parando…" : "Parar"}</button>`;
+    } else if (ap.propostas || ap.historico) {
+      const item = (k, x, i) =>
+        `<label class="check"><input type="checkbox" data-acao="marcar" data-k="${k}" data-i="${i}" ${ap.marcadas[k].has(i) ? "checked" : ""} />
+          <span>${x.situacao ? `<b>${esc(x.situacao)}</b><br />` : ""}${esc(x.resposta)}</span></label>`;
+      const pr = ap.propostas || { regras: [], exemplos: [] };
+      const n = ap.marcadas.r.size + ap.marcadas.e.size;
+      const rel = ap.relatorio;
+      const plural = (q, s, p) => `${q} ${q === 1 ? s : p}`;
+      corpo = `
+        ${rel ? `<p class="mudo">${plural(rel.conversas, "conversa lida", "conversas lidas")}${rel.puladas ? ` · ${plural(rel.puladas, "curta demais", "curtas demais")}` : ""}${rel.incompletas ? ` · ${rel.incompletas} sem o histórico inteiro` : ""}</p>` : ""}
+        ${ap.historico ? `<h2>Histórico desta conversa</h2><p class="historico">${esc(ap.historico)}</p>
+          <button type="button" class="pequeno largo" data-acao="salvar-historico" ${est.ocupado.historico ? "disabled" : ""}>${girando("historico", "Salvando…") || "Salvar histórico na anotação"}</button><hr class="separador" />` : ""}
+        ${pr.regras.length ? `<h2>Regras propostas (${pr.regras.length})</h2><div class="lista">${pr.regras.map((x, i) => item("r", x, i)).join("")}</div>` : ""}
+        ${pr.exemplos.length ? `<h2 style="margin-top:10px">Exemplos de resposta (${pr.exemplos.length})</h2><div class="lista">${pr.exemplos.map((x, i) => item("e", x, i)).join("")}</div>` : ""}
+        <div class="acoes">
+          ${pr.regras.length || pr.exemplos.length ? `<button type="button" class="primario" data-acao="salvar-aprendizado" ${!n || est.ocupado.salvarAp ? "disabled" : ""}>${girando("salvarAp", "Salvando…") || `Salvar ${n} na base`}</button>` : ""}
+          <button type="button" class="pequeno" data-acao="descartar-aprendizado">Descartar</button>
+        </div>`;
+    } else {
+      corpo = `
+        <form data-form="aprender">
+          <fieldset class="opcoes">
+            <label class="check"><input type="radio" name="escopo" value="esta" ${ap.escopo === "esta" ? "checked" : ""} ${temConversa ? "" : "disabled"} /> <span>Esta conversa${temConversa ? "" : " (abra uma conversa)"}</span></label>
+            <label class="check"><input type="radio" name="escopo" value="ultimas" ${ap.escopo === "ultimas" ? "checked" : ""} /> <span>Minhas últimas
+              <select name="quantas" aria-label="Quantas conversas">${[10, 30, 50, 100].map((q) => `<option ${ap.quantas === q ? "selected" : ""}>${q}</option>`).join("")}</select> conversas</span></label>
+          </fieldset>
+          <label class="check"><input type="checkbox" name="antigo" ${ap.antigo ? "checked" : ""} /> <span>Buscar o histórico antigo no celular (mais lento)</span></label>
+          <div class="acoes">
+            <button class="dourado" data-tipo="analisar">Analisar com a RIA</button>
+            <button class="pequeno" data-tipo="exportar">${ic("download", true)} Exportar JSON</button>
+          </div>
+          <p class="mudo">A RIA lê as conversas inteiras e propõe regras e exemplos do seu jeito de atender; você escolhe o que entra. Nomes, telefones e e-mails viram marcadores antes de ir para a IA, e as conversas não ficam guardadas.</p>
+        </form>`;
+    }
+    const aberta = ap.progresso || ap.propostas || ap.historico;
+    return `<details class="cartao" id="d-aprender"${aberta ? " open" : ""}><summary><span>${ic("livro", true)} Aprender com conversas</span></summary>${corpo}</details>`;
   }
 
   // ── eventos ──────────────────────────────────────────────────────────────
@@ -743,6 +922,33 @@
       const m = est.msgsWa.find((x) => x.id === b.dataset.id);
       if (m) acao(`tr-${m.id}`, () => transcrever(m));
     } else if (a === "boa-resposta") acao("boa", boaResposta);
+    else if (a === "parar-aprender") {
+      est.aprender.parar = true;
+      render();
+    } else if (a === "marcar") {
+      const marcadas = est.aprender.marcadas[b.dataset.k];
+      const i = Number(b.dataset.i);
+      if (b.checked) marcadas.add(i);
+      else marcadas.delete(i);
+      render();
+    } else if (a === "salvar-aprendizado") acao("salvarAp", salvarAprendizado);
+    else if (a === "descartar-aprendizado") {
+      Object.assign(est.aprender, { propostas: null, historico: null, relatorio: null });
+      render();
+    } else if (a === "salvar-historico") acao("historico", salvarHistorico);
+  });
+
+  // opções do "Aprender com conversas" ficam no estado (o painel é redesenhado inteiro)
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if (!el.closest?.('form[data-form="aprender"]')) return;
+    const ap = est.aprender;
+    if (el.name === "escopo") ap.escopo = el.value;
+    else if (el.name === "quantas") {
+      ap.quantas = Number(el.value);
+      ap.escopo = "ultimas";
+    } else if (el.name === "antigo") ap.antigo = el.checked;
+    render();
   });
 
   document.addEventListener("submit", (e) => {
@@ -756,7 +962,11 @@
     else if (tipo === "ria") acao("ria", () => sugerir(f.pedido.value.trim()));
     else if (tipo === "nota") acao("nota", () => salvarNota(f.texto.value));
     else if (tipo === "visita") acao("visita", () => registrarVisita(f));
-    else if (tipo === "ensinar") acao("ensinar", () => ensinar(f));
+    else if (tipo === "aprender") {
+      const quer = e.submitter?.dataset.tipo === "exportar" ? "exportar" : "analisar";
+      if (est.aprender.escopo === "esta" && (!est.conversa || est.conversa.grupo)) est.aprender.escopo = "ultimas";
+      acao("aprender", quer === "exportar" ? exportarConversas : aprenderComConversas);
+    }
   });
 
   iniciar();
