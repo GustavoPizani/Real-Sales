@@ -1,8 +1,8 @@
 // Ponte com o WhatsApp Web (roda no "mundo" da página, junto com a WA-JS).
 // Recebe pedidos do content script por eventos do documento e responde com JSON.
 // Lista fechada de ações: lê a conversa aberta, as mensagens e o histórico, lista
-// as conversas, baixa um áudio, abre uma conversa e coloca texto na caixa de
-// mensagem. NÃO envia nada.
+// as conversas, lê e marca etiquetas do WhatsApp Business, baixa um áudio, abre
+// uma conversa e coloca texto na caixa de mensagem. NÃO envia mensagem nenhuma.
 (() => {
   if (window.__nordicPonte) return;
   window.__nordicPonte = true;
@@ -119,8 +119,8 @@
     return { mensagens, completo };
   }
 
-  async function listarConversas(quantas) {
-    const chats = await WPP.chat.list({ onlyUsers: true, count: quantas });
+  async function listarConversas(quantas, etiqueta) {
+    const chats = await WPP.chat.list({ onlyUsers: true, count: quantas, ...(etiqueta ? { withLabels: [String(etiqueta)] } : {}) });
     return Promise.all(
       chats
         .filter((c) => !idDe(c.id).endsWith("@broadcast"))
@@ -145,7 +145,25 @@
     mensagens: ({ chatId, quantas }) => mensagens(chatId, Math.min(Math.max(Number(quantas) || 80, 1), 500)),
     baixarAudio: ({ msgId }) => baixarAudio(msgId),
     historico: ({ chatId, max, antigo }) => historico(chatId, Math.min(Math.max(Number(max) || 2000, 1), 10000), Boolean(antigo)),
-    listarConversas: ({ quantas }) => listarConversas(Math.min(Math.max(Number(quantas) || 30, 1), 500)),
+    listarConversas: ({ quantas, etiqueta }) => listarConversas(Math.min(Math.max(Number(quantas) || 30, 1), 1000), etiqueta),
+    // etiquetas do WhatsApp Business (o WhatsApp comum não tem: business = false)
+    etiquetasWa: async () => {
+      try {
+        const lista = await WPP.labels.getAllLabels();
+        return { business: true, etiquetas: lista.map((l) => ({ id: String(l.id), nome: l.name, cor: l.hexColor || null })) };
+      } catch (err) {
+        return { business: false, motivo: String(err?.code || err?.message || err) };
+      }
+    },
+    etiquetasDaConversa: async ({ chatId }) => (WPP.chat.get(chatId)?.labels || []).map(String),
+    marcarEtiquetaWa: async ({ chatId, labelId, marcar }) => {
+      await WPP.labels.addOrRemoveLabels(chatId, [{ labelId: String(labelId), type: marcar ? "add" : "remove" }]);
+      return true;
+    },
+    criarEtiquetaWa: async ({ nome }) => {
+      const l = await WPP.labels.addNewLabel(String(nome));
+      return { id: String(l.id), nome: l.name, cor: l.hexColor || null };
+    },
     abrirConversa: async ({ chatId }) => {
       await WPP.chat.openChatBottom(chatId);
       return true;

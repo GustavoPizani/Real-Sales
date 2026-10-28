@@ -4,6 +4,37 @@ import { sendTextViaWaha } from "@/lib/llm/waha-sender";
 import { Role } from "@prisma/client";
 import { getUserFromToken } from "@/lib/auth";
 
+/**
+ * GET: conversa do WhatsApp guardada pela extensão (bloco "WhatsApp" da ficha).
+ * Só o administrador. A conversa mais recente vinculada a este cliente.
+ */
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
+
+  const link = await prisma.waLink.findFirst({
+    where: { clientId: params.id, notClient: false, accountId: user.accountId ?? user.id },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (!link) return NextResponse.json({ vinculada: false });
+
+  const tarefa = link.followUpTaskId
+    ? await prisma.task.findUnique({ where: { id: link.followUpTaskId }, select: { dateTime: true, isCompleted: true, description: true } })
+    : null;
+  return NextResponse.json({
+    vinculada: true,
+    contato: link.contactName,
+    telefone: link.phone,
+    atualizada_em: link.updatedAt,
+    ultima_cliente_em: link.lastClientAt,
+    ultima_corretor_em: link.lastBrokerAt,
+    ultima_lado: link.lastSide,
+    prazo: tarefa && !tarefa.isCompleted ? { em: tarefa.dateTime, nota: tarefa.description } : null,
+    mensagens: Array.isArray(link.messages) ? link.messages : [],
+  });
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

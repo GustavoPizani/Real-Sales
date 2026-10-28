@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { getUserFromToken } from "@/lib/auth";
+
+// Depende do login de quem chama: nunca pré-renderizar no build.
+export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 
 /**

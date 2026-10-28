@@ -3,14 +3,14 @@ import { Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { ErroExt } from '@/lib/ext/auth';
-import { analisarConversa, consolidar, salvarPropostas } from '@/lib/ext/aprender';
+import { analisarConversa, consolidar, registrarConversa, registroConversas, salvarPropostas } from '@/lib/ext/aprender';
 
 export const maxDuration = 60;
 
 /**
  * Página "Extensão WhatsApp" do CRM (só MARKETING_ADMIN): maturidade da RIA
  * (o que foi feito das sugestões) e a base de conhecimento.
- *   GET    → { stats, itens }
+ *   GET    → { stats, itens, registro }
  *   POST   → aprender com conversas importadas (ver abaixo)
  *   PATCH  → { id, ativo }
  *   DELETE → ?id=
@@ -26,13 +26,14 @@ export async function GET() {
   const a = await admin();
   if ('erro' in a) return a.erro;
   const desde = new Date(Date.now() - 30 * 864e5);
-  const [grupos, itens, conversas] = await Promise.all([
+  const [grupos, itens, conversas, registro] = await Promise.all([
     prisma.aiSuggestion.groupBy({ by: ['outcome'], where: { accountId: a.accountId, createdAt: { gte: desde } }, _count: true }),
     prisma.knowledgeItem.findMany({ where: { accountId: a.accountId }, orderBy: { createdAt: 'desc' }, take: 300 }),
     prisma.waLink.count({ where: { accountId: a.accountId, notClient: false, clientId: { not: null } } }),
+    registroConversas(a.accountId),
   ]);
   const stats = Object.fromEntries(grupos.map((g) => [g.outcome, g._count]));
-  return NextResponse.json({ stats: { ...stats, conversas }, itens });
+  return NextResponse.json({ stats: { ...stats, conversas }, itens, registro });
 }
 
 /**
@@ -48,7 +49,9 @@ export async function POST(request: NextRequest) {
   try {
     if (body.acao === 'analisar') {
       if (!body.conversa || !Array.isArray(body.conversa.mensagens)) return NextResponse.json({ error: 'Conversa inválida.' }, { status: 400 });
-      return NextResponse.json(await analisarConversa(body.conversa));
+      const r = await analisarConversa(body.conversa);
+      if (!r.pulada) await registrarConversa(a.accountId, a.user.id, body.conversa, r.regras.length + r.exemplos.length, 'importacao');
+      return NextResponse.json(r);
     }
     if (body.acao === 'consolidar') return NextResponse.json(await consolidar(a.accountId, body));
     if (body.acao === 'salvar') return NextResponse.json(await salvarPropostas(a.accountId, a.user.id, body, 'importacao'));

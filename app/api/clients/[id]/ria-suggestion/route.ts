@@ -3,6 +3,8 @@ import { GROQ_MODEL, reasoningOptions } from '@/lib/llm/models';
 import OpenAI from 'openai';
 import { getUserFromToken } from '@/lib/auth';
 import { Role } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { conversaEmTexto, type MsgWa } from '@/lib/ext/conversa';
 import { z } from 'zod';
 
 // Groq é compatível com o formato OpenAI — só muda a baseURL
@@ -45,7 +47,7 @@ Siga sempre esta estrutura de resposta:
    * ... e assim por diante.
 Responda APENAS com a estrutura solicitada, começando por '[Análise Rápida]'.`;
 
-export async function POST(request: Request) {
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getUserFromToken();
     if (!user) {
@@ -88,6 +90,18 @@ export async function POST(request: Request) {
     } else {
       clientHistory += '- Nenhuma tarefa registrada.\n';
     }
+
+    // conversa do WhatsApp guardada pela extensão, quando houver
+    const link = await prisma.waLink.findFirst({
+      where: { clientId: params.id, notClient: false },
+      orderBy: { updatedAt: 'desc' },
+      select: { messages: true },
+    });
+    const conversa = conversaEmTexto(((link?.messages as unknown as MsgWa[]) ?? []), 30);
+    if (conversa) clientHistory += `
+Conversa recente no WhatsApp (mais recente por último):
+${conversa}
+`;
 
     const response = await groq.chat.completions.create({
       model: GROQ_MODEL,

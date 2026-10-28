@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { getUserFromToken } from "@/lib/auth";
+
+// Depende do login de quem chama: nunca pré-renderizar no build.
+export const dynamic = "force-dynamic";
 import { WahaAdapter } from "@/lib/channels/waha";
 
 export async function POST(req: Request) {

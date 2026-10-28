@@ -23,6 +23,10 @@ type Item = {
   createdAt: string;
 };
 type Stats = { used?: number; edited?: number; ignored?: number; pending?: number; conversas?: number };
+type Registro = {
+  chave: string; nome: string | null; telefone: string | null; analisada_em: string; ultima_msg_em: string | null;
+  mensagens: number; propostas: number; vezes: number; origem: string; novidades: boolean;
+};
 type Imovel = { id: string; title: string };
 
 const FONTE: Record<string, string> = { manual: "CRM", faixa: "Faixa", sugestao: "Sugestão", conversas: "Conversas (faixa)", importacao: "Conversas importadas" };
@@ -201,6 +205,7 @@ export default function ExtensaoPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [stats, setStats] = useState<Stats>({});
+  const [registro, setRegistro] = useState<Registro[]>([]);
   const [itens, setItens] = useState<Item[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
@@ -212,6 +217,7 @@ export default function ExtensaoPage() {
     if (r.ok) {
       const j = await r.json();
       setStats(j.stats ?? {});
+      setRegistro(j.registro ?? []);
       setItens(j.itens ?? []);
     }
     setCarregando(false);
@@ -354,6 +360,46 @@ export default function ExtensaoPage() {
                 <Button variant="outline" onClick={() => copiar(link)}><Copy className="h-4 w-4 mr-2" /> Copiar</Button>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Conversas já usadas para aprender</CardTitle>
+          <CardDescription>
+            Cada conversa que a RIA já leu, pela faixa ou por importação. &quot;Mensagens novas&quot; aparece quando a conversa
+            recebeu mensagens depois da análise (a faixa avisa ao listar as conversas): vale analisar de novo para atualizar o contexto.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {registro.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma conversa usada ainda.</p>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">
+                {registro.length} conversa{registro.length === 1 ? "" : "s"} · {registro.filter((r) => r.novidades).length} com mensagens novas
+              </p>
+              <ul className="divide-y max-h-[420px] overflow-y-auto">
+                {registro.map((r) => (
+                  <li key={r.chave} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{r.nome || r.telefone || "Conversa"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Usada em {new Date(r.analisada_em).toLocaleDateString("pt-BR")}
+                        {r.vezes > 1 ? ` (${r.vezes} vezes)` : ""} · {r.mensagens} mensagens · {r.propostas} propostas ·{" "}
+                        {r.origem === "importacao" ? "JSON importado" : r.origem === "zip" ? "ZIP do WhatsApp" : "pela faixa"}
+                      </p>
+                    </div>
+                    {r.novidades ? (
+                      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0">Mensagens novas</Badge>
+                    ) : (
+                      <Badge variant="secondary">Em dia</Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>

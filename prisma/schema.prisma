@@ -340,10 +340,12 @@ model Note {
 }
 
 model Tag {
-  id      String   @id @default(uuid())
-  name    String   @unique
-  color   String
-  clients Client[] @relation("ClientTags")
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String
+  // Etiqueta do WhatsApp Business espelhada (a faixa da extensão mantém as duas iguais)
+  waLabelId String?  @unique
+  clients   Client[] @relation("ClientTags")
 
   @@map("tags")
 }
@@ -738,6 +740,12 @@ model WaLink {
   lastClientAt DateTime?
   lastBrokerAt DateTime?
   lastSide     String?
+  // Etiquetas do WhatsApp (ids) na última sincronização: base da mescla em 3 vias
+  // entre o que mudou no WhatsApp e o que mudou no CRM desde então.
+  waLabels       String[]  @default([])
+  waLabelsSynced Boolean   @default(false)
+  // Prazo do próximo contato = tarefa do CRM (aparece em Tarefas e tem lembrete)
+  followUpTaskId String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -789,4 +797,28 @@ model KnowledgeItem {
 
   @@index([accountId, kind])
   @@map("knowledge_items")
+}
+
+// Conversas que já foram lidas pela RIA no "Aprender com conversas" (faixa ou
+// importação no CRM). "chave" = id da conversa no WhatsApp (ou tel:/nome: quando
+// o arquivo importado não traz). lastActivityAt vem da faixa: quando é mais nova
+// que lastMessageAt, a conversa tem mensagens novas e vale analisar de novo.
+model LearnedConversation {
+  id             String    @id @default(uuid())
+  accountId      String
+  userId         String
+  chave          String
+  nome           String?
+  telefone       String?
+  analyzedAt     DateTime
+  lastMessageAt  DateTime?
+  lastActivityAt DateTime?
+  messages       Int       @default(0)
+  proposals      Int       @default(0)
+  timesUsed      Int       @default(1)
+  source         String
+  createdAt      DateTime  @default(now())
+
+  @@unique([accountId, chave])
+  @@map("learned_conversations")
 }

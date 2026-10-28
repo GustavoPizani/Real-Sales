@@ -49,6 +49,12 @@
       aberta = !aberta;
       aplicar();
       responder(true);
+    } else if (m?.nordic === "abrir" && m.chatId) {
+      // clique na notificação de prazo: abre a conversa do cliente
+      document.dispatchEvent(
+        new CustomEvent("nordic-wa-pedido", { detail: JSON.stringify({ id: 0, acao: "abrirConversa", dados: { chatId: m.chatId } }) }),
+      );
+      responder(true);
     }
   });
   chrome.storage.local.get("faixaAberta", (v) => {

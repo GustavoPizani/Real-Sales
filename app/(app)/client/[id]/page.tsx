@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
 import { useAuth } from "@/contexts/auth-context";
+import { WhatsappCard } from "@/components/client/whatsapp-card";
 
 // --- Tipos e Constantes ---
 
@@ -1009,6 +1010,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               </Card>
             )
           })()}
+
+          {/* Conversa do WhatsApp guardada pela extensão (só administrador) */}
+          {isAdmin && <WhatsappCard clientId={clientId} waPhone={waPhone} tags={client.tags} onRia={handleOpenRiaModal} />}
 
           {/* Card de Histórico e Atividades */}
           <Card>

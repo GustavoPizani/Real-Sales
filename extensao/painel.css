@@ -244,3 +244,10 @@ label.check input[type="radio"], label.check input[type="checkbox"] { width: aut
 label.check select { display: inline-block; width: auto; min-height: 0; padding: 2px 6px; margin: 0 4px; }
 .lista label.check { border: 1px solid var(--borda); border-radius: 10px; padding: 8px 10px; margin: 0; font-size: 12.5px; }
 .historico { white-space: pre-wrap; font-size: 12.5px; margin: 0 0 8px; padding: 8px; border-radius: var(--raio-p); background: var(--campo); }
+
+/* ── lista, etiquetas e escolha de conversas ── */
+.lista.escolha { max-height: 280px; overflow-y: auto; padding-right: 2px; }
+.item-lista .chips { margin-top: 2px; }
+.item-lista .selo { white-space: normal; }
+.selo .ic, .aviso .ic, .mudo .ic { vertical-align: -2px; }
+.abas { position: sticky; top: -12px; z-index: 1; }

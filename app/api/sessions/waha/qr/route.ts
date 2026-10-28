@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { getUserFromToken } from "@/lib/auth";
 
+// Depende do login de quem chama: nunca pré-renderizar no build.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const user = await getUserFromToken();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

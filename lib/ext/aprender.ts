@@ -14,6 +14,8 @@ export interface ConversaExport {
   nome?: string;
   telefone?: string;
   historico_completo?: boolean;
+  /** total da conversa quando ela chega em partes (conversas longas são lidas em pedaços) */
+  total_mensagens?: number;
   mensagens: { id?: string; data: string; de: 'corretor' | 'cliente'; tipo?: string; duracao_seg?: number; texto?: string }[];
 }
 
@@ -151,4 +153,74 @@ export async function salvarPropostas(accountId: string, userId: string, aceitas
   if (!dados.length) throw new ErroExt(400, 'Nenhum item escolhido.');
   const r = await prisma.knowledgeItem.createMany({ data: dados });
   return { salvos: r.count };
+}
+
+// ── registro das conversas já usadas ────────────────────────────────────────
+/** Chave da conversa no registro: id do WhatsApp; sem ele, telefone ou nome. */
+export function chaveConversa(c: Pick<ConversaExport, 'chat_id' | 'telefone' | 'nome'>): string | null {
+  if (c.chat_id) return String(c.chat_id).slice(0, 120);
+  const tel = String(c.telefone ?? '').replace(/\D/g, '');
+  if (tel.length >= 8) return `tel:${tel}`;
+  const nome = String(c.nome ?? '').trim().toLowerCase();
+  return nome ? `nome:${nome.slice(0, 100)}` : null;
+}
+
+/** Marca a conversa como usada (ou usada de novo) pela RIA. */
+export async function registrarConversa(accountId: string, userId: string, c: ConversaExport, propostas: number, source: string) {
+  const chave = chaveConversa(c);
+  if (!chave) return;
+  const datas = (c.mensagens ?? []).map((m) => Date.parse(m.data)).filter((t) => t > 0);
+  const ultima = datas.length ? new Date(Math.max(...datas)) : null;
+  const dados = {
+    nome: c.nome?.slice(0, 120) || null,
+    telefone: c.telefone?.slice(0, 30) || null,
+    analyzedAt: new Date(),
+    lastMessageAt: ultima,
+    messages: c.total_mensagens ?? c.mensagens?.length ?? 0,
+    proposals: propostas,
+    source,
+  };
+  await prisma.learnedConversation.upsert({
+    where: { accountId_chave: { accountId, chave } },
+    create: { accountId, userId, chave, ...dados },
+    update: { ...dados, timesUsed: { increment: 1 } },
+  });
+}
+
+/**
+ * Registro das conversas usadas. atividade = última mensagem que a faixa vê em
+ * cada conversa agora (segundos): se for mais nova que a analisada, a conversa
+ * tem mensagens novas.
+ */
+export async function registroConversas(accountId: string, atividade?: { chat_id: string; t: number }[]) {
+  if (Array.isArray(atividade) && atividade.length) {
+    const porChave = new Map(
+      atividade.filter((a) => a?.chat_id && Number(a.t) > 0).slice(0, 1000).map((a) => [String(a.chat_id), new Date(Number(a.t) * 1000)]),
+    );
+    const existentes = await prisma.learnedConversation.findMany({
+      where: { accountId, chave: { in: Array.from(porChave.keys()) } },
+      select: { id: true, chave: true, lastActivityAt: true },
+    });
+    for (const r of existentes) {
+      const t = porChave.get(r.chave)!;
+      if (!r.lastActivityAt || t > r.lastActivityAt) {
+        await prisma.learnedConversation.update({ where: { id: r.id }, data: { lastActivityAt: t } });
+      }
+    }
+  }
+  const lista = await prisma.learnedConversation.findMany({ where: { accountId }, orderBy: { analyzedAt: 'desc' }, take: 1000 });
+  return lista.map((r) => ({
+    chave: r.chave,
+    nome: r.nome,
+    telefone: r.telefone,
+    analisada_em: r.analyzedAt,
+    ultima_msg_em: r.lastMessageAt,
+    ultima_atividade_em: r.lastActivityAt,
+    mensagens: r.messages,
+    propostas: r.proposals,
+    vezes: r.timesUsed,
+    origem: r.source,
+    // mensagens depois da que foi analisada (1 min de folga para relógios diferentes)
+    novidades: Boolean(r.lastActivityAt && r.lastMessageAt && r.lastActivityAt.getTime() > r.lastMessageAt.getTime() + 60_000),
+  }));
 }
