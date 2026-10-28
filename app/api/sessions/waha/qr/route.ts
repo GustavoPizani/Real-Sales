@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
+import { Role } from "@prisma/client";
+import { getUserFromToken } from "@/lib/auth";
 
 export async function GET() {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
   const base = process.env.WAHA_BASE_URL;
   const key  = process.env.WAHA_API_KEY ?? "";
 

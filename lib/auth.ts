@@ -9,7 +9,7 @@ import { isTestAccountEmail } from '@/lib/test-account';
 // Precisa bater exatamente com o header setado em lib/supabase/middleware.ts.
 // Só é confiável porque o middleware sempre apaga qualquer valor vindo do
 // client antes de escrever o seu (validado). Rotas fora do matcher do
-// middleware (api/webhooks, api/sessions, api/health) NUNCA podem confiar
+// middleware (api/webhooks, api/ext, api/health) NUNCA podem confiar
 // nesse header — hoje nenhuma delas chama getUserFromToken.
 const TRUSTED_USER_HEADER = 'x-mw-user-id';
 

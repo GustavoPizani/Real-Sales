@@ -80,6 +80,7 @@ model Client {
   tags                 Tag[]               @relation("ClientTags")
   stageEvents          ClientStageEvent[]
   sdrContact           Contact?
+  waLinks              WaLink[]
 
   @@index([accountId])
   @@index([brokerId])
@@ -714,4 +715,78 @@ model AIRule {
   createdAt   DateTime @default(now())
 
   @@map("sdr_ai_rules")
+}
+
+// =======================================================================
+// Extensão do WhatsApp (faixa no WhatsApp Web). Só o MARKETING_ADMIN usa.
+// Quem lê e grava é a API /api/ext (ver app/api/ext/[...path]/route.ts).
+// =======================================================================
+
+// Conversa do WhatsApp Web ligada a um cliente do CRM. Guarda só as últimas
+// 80 mensagens (texto; áudio vira transcrição), no formato compacto da faixa:
+// { id, ts, lado: ">" eu | "<" cliente, tipo?: a|i|v|d, seg?, texto }.
+model WaLink {
+  id           String         @id @default(uuid())
+  accountId    String
+  userId       String
+  waChatId     String
+  phone        String?
+  contactName  String?
+  clientId     String?
+  notClient    Boolean        @default(false)
+  messages     Json           @default("[]")
+  lastClientAt DateTime?
+  lastBrokerAt DateTime?
+  lastSide     String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  suggestions  AiSuggestion[]
+
+  @@unique([userId, waChatId])
+  @@index([clientId])
+  @@map("wa_links")
+}
+
+// Cada pedido de sugestão à RIA na faixa e o que aconteceu com ele. É o que
+// "matura" o bot: "used" = enviada sem editar, "edited" = escolhida e alterada
+// (sentText é o que foi de fato enviado), "ignored" = respondeu outra coisa,
+// "superseded" = pediu outra sugestão antes de responder (fica fora da conta).
+model AiSuggestion {
+  id          String    @id @default(uuid())
+  accountId   String
+  userId      String
+  linkId      String
+  request     String?
+  context     String?   @db.Text
+  options     Json
+  chosenIndex Int?
+  outcome     String    @default("pending")
+  sentText    String?   @db.Text
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+  link        WaLink    @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@index([linkId, outcome])
+  @@map("ai_suggestions")
+}
+
+// Base de conhecimento da RIA: "playbook" (regras, objeções, como você trabalha)
+// e "example" (situação do cliente → resposta ideal). Vai no prompt da RIA hoje
+// e no do bot de atendimento depois.
+model KnowledgeItem {
+  id        String   @id @default(uuid())
+  accountId String
+  userId    String
+  kind      String
+  situation String?  @db.Text
+  answer    String   @db.Text
+  active    Boolean  @default(true)
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, kind])
+  @@map("knowledge_items")
 }

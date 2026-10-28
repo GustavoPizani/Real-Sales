@@ -11,18 +11,6 @@ export async function GET(
 
   switch (service) {
     case 'google':
-// =================================================================
-      // INÍCIO DO BLOCO DE DEBUG ("SCAN")
-      // =================================================================
-      console.log('--- DEBUG GOOGLE CONNECT ---');
-      console.log('CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-      console.log('CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET);
-      console.log('REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
-      console.log('----------------------------');
-      // =================================================================
-      // FIM DO BLOCO DE DEBUG
-      // =================================================================
-
       const googleClientId = process.env.GOOGLE_CLIENT_ID;
       const redirectUri = process.env.GOOGLE_REDIRECT_URI;
       const googleScopes = [

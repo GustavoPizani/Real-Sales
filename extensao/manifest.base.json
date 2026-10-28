@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Nordic WhatsApp",
+  "short_name": "Nordic WA",
+  "version": "0.1.0",
+  "description": "Faixa do Nordic CRM no WhatsApp Web: cliente da conversa, RIA com sugestões de resposta, resumo nas anotações, transcrição de áudio e registro de visita.",
+  "icons": { "16": "icone.png", "48": "icone.png", "128": "icone.png" },
+  "action": { "default_title": "Abrir o WhatsApp Web", "default_icon": "icone.png" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["wppconnect-wa.js", "ponte.js"],
+      "world": "MAIN",
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["painel.html", "painel.css", "painel.js", "config.js"],
+      "matches": ["https://web.whatsapp.com/*"]
+    }
+  ]
+}

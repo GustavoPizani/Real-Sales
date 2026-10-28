@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
-import { cookies } from 'next/headers';
+import { Role } from '@prisma/client';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
-  const token = cookies().get('authToken')?.value;
-  const user = await getUserFromToken(token);
+  const user = await getUserFromToken();
   if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+  // Armazenamento de documentos é exclusivo do administrador.
+  if (user.role !== Role.MARKETING_ADMIN) {
+    return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
   const clientId = params.id;
@@ -31,11 +34,11 @@ export async function POST(
     );
 
     // Salva a referência do arquivo no banco de dados
-    const document = await prisma.documentoCliente.create({
+    const document = await prisma.clientDocument.create({
       data: {
-        fileName: file.name,
+        name: file.name,
         url: blob.url,
-        clienteId: clientId,
+        clientId,
       },
     });
 

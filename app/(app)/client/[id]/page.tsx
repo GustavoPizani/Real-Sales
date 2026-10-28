@@ -31,6 +31,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Skeleton } from "@/components/ui/skeleton";
 import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
+import { useAuth } from "@/contexts/auth-context";
 
 // --- Tipos e Constantes ---
 
@@ -111,6 +112,9 @@ export default function ClientDetailsPage() {
 function ClientDetailsContent({ clientId }: { clientId: string }) {
   const router = useRouter();
   const { toast } = useToast();
+  // RIA e documentos são exclusivos do administrador (corretores parceiros só recebem leads).
+  const { user: authUser } = useAuth();
+  const isAdmin = !!authUser?.isSuperAdmin;
 
   // --- Estados ---
   const [client, setClient] = useState<Cliente | null>(null);
@@ -460,7 +464,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   };
 
   const handleDownloadAllAsZip = async () => {
-    if (!client?.documentos || client.documents.length === 0) return;
+    if (!client?.documents || client.documents.length === 0) return;
     setIsDownloading(true);
     toast({ title: "Preparando download...", description: "Baixando e compactando arquivos." });
 
@@ -469,9 +473,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
       const filePromises = client.documents.map(async (doc) => {
         const response = await fetch(doc.url);
-        if (!response.ok) throw new Error(`Falha ao baixar ${doc.fileName}`);
+        if (!response.ok) throw new Error(`Falha ao baixar ${doc.name}`);
         const blob = await response.blob();
-        zip.file(doc.fileName, blob);
+        zip.file(doc.name, blob);
       });
 
       await Promise.all(filePromises);
@@ -898,19 +902,25 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <TabsContent value="actions" className="mt-4">
                 <Card>
                   <CardContent className="pt-6 space-y-2">
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsDocumentsModalOpen(true)}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Documentação
-                    </Button>
-                    <Separator />
+                    {isAdmin && (
+                      <>
+                        <Button variant="outline" className="w-full justify-start" onClick={() => setIsDocumentsModalOpen(true)}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Documentação
+                        </Button>
+                        <Separator />
+                      </>
+                    )}
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
                     <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
-                    <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
-                      <Bot className="h-4 w-4 mr-2 text-secondary-custom" />
-                      {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
-                    </Button>
+                    {isAdmin && (
+                      <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
+                        <Bot className="h-4 w-4 mr-2 text-secondary-custom" />
+                        {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
+                      </Button>
+                    )}
                     <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
                   </CardContent>
                 </Card>
@@ -924,15 +934,17 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Informações do Cliente</CardTitle>
               {/* ✅ Botão de Documentos movido para cá */}
-              <Dialog open={isDocumentsModalOpen} onOpenChange={setIsDocumentsModalOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Documentação
-                  </Button>
-                </DialogTrigger>
-                {/* O DialogContent para os documentos será adicionado no final do JSX */}
-              </Dialog>
+              {isAdmin && (
+                <Dialog open={isDocumentsModalOpen} onOpenChange={setIsDocumentsModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Documentação
+                    </Button>
+                  </DialogTrigger>
+                  {/* O DialogContent para os documentos será adicionado no final do JSX */}
+                </Dialog>
+              )}
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -1196,7 +1208,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
               <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button><Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button><Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>{isAdmin && <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button>}<Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
             </CardContent>
           </Card>
 
@@ -1406,9 +1418,9 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                 {client.documents.map(doc => (
                   <div key={doc.id} className="flex items-center justify-between p-2 border rounded-md">
                     <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate">
-                      {doc.fileName}
+                      {doc.name}
                     </a>
-                    <span className="text-xs text-muted-foreground">{format(new Date(doc.createdAt), 'dd/MM/yy')}</span>
+                    <span className="text-xs text-muted-foreground">{doc.createdAt ? format(new Date(doc.createdAt), 'dd/MM/yy') : ''}</span>
                   </div>
                 ))}
               </div>

@@ -56,6 +56,7 @@ const SYSTEMS: Record<SidebarSystem, { label: string; home: string; icon: Lucide
       { name: "Roleta", href: "/roleta", icon: RotateCcw },
       { name: "Qualificação", href: "/qualificacao", icon: Target, adminOnly: true },
       { name: "Oferta Ativa", href: "/active-offers", icon: Phone },
+      { name: "Extensão WhatsApp", href: "/extensao", icon: MessageCircle, adminOnly: true },
     ],
   },
   marketing: {

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { Role } from "@prisma/client";
+import { getUserFromToken } from "@/lib/auth";
 import { resolveGroqModel } from "@/lib/llm/models";
 import { prisma } from "@/lib/prisma";
 
@@ -7,6 +9,9 @@ import { prisma } from "@/lib/prisma";
  * POST /api/agents — Cria uma nova AgentSession
  */
 export async function GET() {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
   try {
     const agents = await prisma.agentSession.findMany({
       orderBy: { createdAt: "desc" },
@@ -25,6 +30,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
   try {
     const body = await req.json();
 

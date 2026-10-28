@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { Role } from "@prisma/client";
+import { getUserFromToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -10,6 +12,9 @@ export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
   try {
     const agent = await prisma.agentSession.findUnique({
       where: { id: params.id },
@@ -33,6 +38,9 @@ export async function PUT(
   req: Request,
   { params }: { params: { id: string } }
 ) {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
   try {
     const body = await req.json();
 
@@ -73,6 +81,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
   try {
     await prisma.agentSession.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

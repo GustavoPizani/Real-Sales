@@ -2,6 +2,7 @@ import { OpenAIStream, StreamingTextResponse } from 'ai';
 import { GROQ_MODEL, reasoningOptions } from '@/lib/llm/models';
 import OpenAI from 'openai';
 import { getUserFromToken } from '@/lib/auth';
+import { Role } from '@prisma/client';
 import { z } from 'zod';
 
 // Groq é compatível com o formato OpenAI — só muda a baseURL
@@ -49,6 +50,10 @@ export async function POST(request: Request) {
     const user = await getUserFromToken();
     if (!user) {
       return new Response('Não autorizado', { status: 401 });
+    }
+    // A RIA é exclusiva do administrador (corretores parceiros só recebem leads).
+    if (user.role !== Role.MARKETING_ADMIN) {
+      return new Response('A RIA é exclusiva do administrador.', { status: 403 });
     }
 
     if (!process.env.GROQ_API_KEY) {

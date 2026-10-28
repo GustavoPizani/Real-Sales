@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendTextViaWaha } from "@/lib/llm/waha-sender";
+import { Role } from "@prisma/client";
+import { getUserFromToken } from "@/lib/auth";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const user = await getUserFromToken();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (user.role !== Role.MARKETING_ADMIN) return NextResponse.json({ error: "Acesso restrito ao administrador" }, { status: 403 });
+
   try {
     const { agentId, message } = await request.json() as {
       agentId?: string;

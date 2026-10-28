@@ -13,8 +13,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - api/webhooks (webhook endpoints — Waha, etc.)
+     * - api/ext (extensão do WhatsApp: login por Bearer, ver lib/ext/auth.ts)
      * - api/health (health check endpoint)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/sessions|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/ext|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

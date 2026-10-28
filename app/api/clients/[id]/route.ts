@@ -177,6 +177,11 @@ export async function GET(
       return NextResponse.json({ error: "Cliente não encontrado." }, { status: 404 });
     }
 
+    // Documentos são exclusivos do administrador (corretores parceiros não veem).
+    if (!user.isSuperAdmin) {
+      return NextResponse.json({ client: { ...client, documents: [] } });
+    }
+
     return NextResponse.json({ client });
 
   } catch (error) {

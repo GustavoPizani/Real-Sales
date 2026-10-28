@@ -27,3 +27,6 @@ yarn-error.log*
 next-env.d.ts
 .vercel
 .env*
+
+# extensão do WhatsApp: pasta de teste gerada por scripts/empacotar-extensao.mjs
+/extensao/dist/
