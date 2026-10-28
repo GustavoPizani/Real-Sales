@@ -103,13 +103,29 @@ async function baseConhecimento(accountId: string): Promise<{ playbook: string; 
   return { playbook, exemplos };
 }
 
+// No Groq o limite (por minuto e por dia) é por modelo: quando o principal manda
+// esperar muito, o pedido vai para o reserva, que tem cota própria.
+const MODELO_RESERVA = 'openai/gpt-oss-20b';
+const ESPERA_MAXIMA_SEG = 20;
+
 export async function groq(corpo: Record<string, unknown>) {
   if (!process.env.GROQ_API_KEY) throw new ErroExt(503, 'GROQ_API_KEY não configurada no servidor.');
-  const r = await fetch(`${GROQ}/chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: GROQ_MODEL, ...reasoningOptions(GROQ_MODEL), ...corpo }),
-  });
+  const modelos = Array.from(new Set([GROQ_MODEL, MODELO_RESERVA]));
+  let r!: Response;
+  for (let i = 0; i < modelos.length; i++) {
+    const modelo = modelos[i];
+    r = await fetch(`${GROQ}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelo, ...reasoningOptions(modelo), ...corpo }),
+    });
+    const ultimo = i === modelos.length - 1;
+    if (r.status === 429 && !ultimo && (Number(r.headers.get('retry-after')) || 30) > ESPERA_MAXIMA_SEG) {
+      console.warn(`[EXT_RIA] ${modelo} no limite (espera ${r.headers.get('retry-after')} s): usando ${modelos[i + 1]}`);
+      continue;
+    }
+    break;
+  }
   if (r.status === 413) {
     console.error('[EXT_RIA] Groq 413', (await r.text()).slice(0, 300));
     throw new ErroExt(413, 'O pedido passou do limite da IA (8 mil tokens por minuto no plano grátis do Groq). Tente com menos conversa.');

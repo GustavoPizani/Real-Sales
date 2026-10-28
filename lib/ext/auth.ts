@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Versão da extensão publicada (tem de bater com extensao/manifest.base.json). */
-export const VERSAO_EXTENSAO = '0.3.2';
+export const VERSAO_EXTENSAO = '0.4.0';
 
 /**
  * ID fixo da extensão (vem da chave pública em extensao/chave-publica.txt; o

@@ -168,6 +168,18 @@
       await WPP.chat.openChatBottom(chatId);
       return true;
     },
+    // cliente do CRM: abre pelo telefone (cria a conversa se ainda não existe; não envia nada)
+    abrirPorTelefone: async ({ telefone }) => {
+      let num = String(telefone || "").replace(/\D/g, "");
+      if (num.length === 10 || num.length === 11) num = `55${num}`;
+      if (num.length < 12) throw new Error("Telefone inválido para o WhatsApp.");
+      const existe = await WPP.contact.queryWidExists(`${num}@c.us`).catch(() => null);
+      if (!existe) throw new Error("Este número não tem WhatsApp.");
+      const id = idDe(existe.wid) || `${num}@c.us`;
+      await WPP.chat.find(id);
+      await WPP.chat.openChatBottom(id);
+      return { id };
+    },
     porNaCaixa: async ({ chatId, texto }) => {
       await WPP.chat.setInputText(String(texto), chatId);
       return true;

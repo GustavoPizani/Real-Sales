@@ -42,6 +42,17 @@
     prazoAberto: false,
     // lista de clientes
     filtros: { etiqueta_id: "", situacao: "todas", sem_contato_dias: "", ordem: "sem_contato" },
+    // clientes e funis do CRM (aba Funil)
+    crm: {
+      funis: null,
+      imoveis: [],
+      filtros: { funil_id: "", etapa_id: "", produto_id: "", etiqueta_id: "", status: "ACTIVE", sem_atualizar_dias: "", busca: "" },
+      clientes: null,
+      total: null,
+      cliente: null, // cartão aberto
+    },
+    vincularAoAbrir: null, // { clientId, telefone }: conversa aberta pelo cartão do CRM
+    visitaAgenda: null, // { url, titulo }: última visita registrada, para salvar no Google Agenda
     itensLista: null,
     // "Aprender com conversas": exportar em JSON e a RIA propor regras e exemplos
     aprender: {
@@ -312,7 +323,8 @@
       const mudou = dados?.id !== est.conversa?.id;
       est.conversa = dados;
       // conversa aberta pelo usuário (não a do carregamento): mostra a aba Conversa
-      if (mudou && dados && !est.conversaInicial && est.aba !== "aprender") est.aba = "conversa";
+      if (mudou && dados && !est.conversaInicial && est.aba !== "aprender" && est.aba !== "crm") est.aba = "conversa";
+      if (mudou && dados && est.vincularAoAbrir) est.aba = "conversa";
       est.conversaInicial = false;
       if (mudou) {
         limparConversa();
@@ -382,6 +394,15 @@
         ...(etiquetasWa ? { etiquetas_wa: etiquetasWa } : {}),
       });
       if (est.conversa?.id !== c.id) return;
+      // aberta pelo cartão do CRM: vincula sozinha ao cliente (se ainda não está vinculada)
+      const alvo = est.vincularAoAbrir;
+      const sufixo = (t) => String(t || "").replace(/\D/g, "").slice(-8);
+      if (alvo && !buscando && !r.vinculo && sufixo(c.telefone) && sufixo(c.telefone) === sufixo(alvo.telefone)) {
+        est.vincularAoAbrir = null;
+        await vincular(alvo.clientId);
+        return;
+      }
+      if (alvo && r.vinculo) est.vincularAoAbrir = null;
       est.vinculo = r.vinculo;
       est.cliente = r.cliente;
       est.candidatos = r.candidatos || null;
@@ -556,8 +577,16 @@
       imovel_id: form.imovel.value || undefined,
       obs: form.obs.value || undefined,
     });
+    est.visitaAgenda = linkGoogleAgenda({
+      origem: form.origem.value,
+      inicio: new Date(quando),
+      imovel: est.imoveis.find((i) => i.id === form.imovel.value)?.title || est.cliente?.imovel || "",
+      cliente: est.cliente?.nome || est.conversa?.nome,
+      telefone: est.conversa?.telefone,
+      obs: form.obs.value,
+    });
     form.reset();
-    est.aviso = { tipo: "ok", texto: `${r.titulo} registrada para ${r.quando} (tarefa e anotação no CRM).` };
+    est.aviso = { tipo: "ok", texto: `${r.titulo} registrada para ${r.quando} (tarefa e anotação no CRM). Salve também no Google Agenda.` };
   }
 
   // ── etiquetas (espelhadas: WhatsApp Business ↔ faixa ↔ CRM) ──────────────
@@ -783,13 +812,14 @@
   }
 
   /** Chama a API e, no limite da IA, espera o tempo pedido e tenta de novo. */
-  async function comEspera(fn, rotulo) {
+  async function comEspera(fn, rotulo, esperaMaxSeg = Infinity) {
     for (let tentativa = 0; ; tentativa++) {
       try {
         return await fn();
       } catch (e) {
         if (e.status !== 429 || tentativa >= 6 || est.aprender.parar) throw e;
         const seg = (e.esperarSeg || 30) + 1;
+        if (seg > esperaMaxSeg) throw Object.assign(new Error("espera longa"), { esperaLonga: true });
         const p = est.aprender.progresso;
         progresso(p?.feito || 0, p?.total || 1, `Limite da IA: aguardando ${seg} s para continuar ${rotulo}…`);
         await dormir(seg * 1000);
@@ -835,8 +865,33 @@
     return partes.length ? partes : [[]];
   }
 
+  /**
+   * Junta as propostas sem a IA: tira as repetidas (mesmo texto, ignorando
+   * maiúsculas e acentos). Usado quando a IA está no limite ou você para a análise.
+   */
+  function juntarLocal(regras, exemplos) {
+    const chave = (x) => (x.resposta || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 90);
+    const unicos = (lista, max) => {
+      const vistos = new Set();
+      return lista.filter((x) => x?.resposta && !vistos.has(chave(x)) && vistos.add(chave(x))).slice(0, max);
+    };
+    return { regras: unicos(regras, 40), exemplos: unicos(exemplos, 20), local: true };
+  }
+
   /** Junta as propostas em lotes que cabem num pedido; repete até sobrar um só. */
   async function consolidarEmLotes(regras, exemplos, total) {
+    // sem esperar o limite da IA: se ela mandar esperar mais de 90 s, ou se você
+    // clicar em Parar, as propostas são juntadas aqui mesmo
+    try {
+      return await consolidarComIA(regras, exemplos, total);
+    } catch (e) {
+      if (!e.esperaLonga && !est.aprender.parar) throw e;
+      est.aprender.parar = false;
+      return juntarLocal(regras, exemplos);
+    }
+  }
+
+  async function consolidarComIA(regras, exemplos, total) {
     const itens = [...regras.map((x) => ["r", x]), ...exemplos.map((x) => ["e", x])];
     const tam = ([, x]) => (x.situacao || "").length + (x.resposta || "").length + 10;
     let rodada = 1;
@@ -855,13 +910,15 @@
       }
       if (atual.length) lotes.push(atual);
       const resultados = [];
-      for (let i = 0; i < lotes.length && !est.aprender.parar; i++) {
+      for (let i = 0; i < lotes.length; i++) {
+        if (est.aprender.parar) throw Object.assign(new Error("parado"), { esperaLonga: true });
         progresso(total, total, lotes.length > 1 ? `Juntando as propostas (lote ${i + 1} de ${lotes.length}${rodada > 1 ? `, rodada ${rodada}` : ""})…` : "Juntando o que se repete e tirando o que a base já tem…");
         const lote = lotes[i];
         resultados.push(
           await comEspera(
             () => api("ia/aprender/consolidar", { regras: lote.filter(([k]) => k === "r").map(([, x]) => x), exemplos: lote.filter(([k]) => k === "e").map(([, x]) => x) }),
             "a consolidação",
+            90,
           ),
         );
       }
@@ -910,7 +967,8 @@
             );
           } catch (e) {
             // uma parte que falhou não derruba a análise toda: segue e avisa no fim
-            if (e.status === 401 || e.status === 403 || ap.parar) throw e;
+            if (e.status === 401 || e.status === 403) throw e;
+            if (ap.parar) break;
             falhas++;
             feito++;
             continue;
@@ -934,6 +992,7 @@
       if (historicos.length && (origem === "zip" || (ap.escopo === "esta" && vinculada()))) ap.historico = historicos.join("\n\n");
       carregarRegistro([]).catch(() => {});
       const final = await consolidarEmLotes(regras, exemplos, total);
+      if (final.local) est.aviso = { tipo: "alerta", texto: "A IA estava no limite: as propostas foram juntadas sem ela (só tirei as repetidas). Revise antes de salvar." };
       ap.propostas = final;
       ap.marcadas = { r: new Set(final.regras.map((_, i) => i)), e: new Set(final.exemplos.map((_, i) => i)) };
       ap.relatorio = { conversas: conversas.length, puladas, falhas, incompletas: conversas.filter((c) => c.historico_completo === false).length };
@@ -1125,6 +1184,127 @@
     await analisarConversas([conversa], "zip");
   }
 
+  // ── CRM na faixa: funis, clientes, cartão e disparo ─────────────────────
+  async function carregarFunis() {
+    const r = await api("crm/funis", {});
+    est.crm.funis = r.funis;
+    est.crm.imoveis = r.imoveis;
+    // começa pelo funil com mais clientes em andamento
+    if (!est.crm.filtros.funil_id && r.funis.length) {
+      est.crm.filtros.funil_id = [...r.funis].sort((a, b) => b.total - a.total)[0].id;
+    }
+  }
+
+  const filtrosCrm = () => {
+    const f = est.crm.filtros;
+    return Object.fromEntries(Object.entries(f).filter(([, v]) => v !== "" && v != null));
+  };
+
+  async function carregarClientesCrm(mais) {
+    if (!est.crm.funis) await carregarFunis();
+    const limite = mais ? (est.crm.clientes?.length || 0) + 60 : 60;
+    const chave = JSON.stringify(est.crm.filtros);
+    const r = await api("crm/clientes", { ...filtrosCrm(), limite });
+    if (JSON.stringify(est.crm.filtros) !== chave) return; // o filtro mudou no meio do caminho
+    est.crm.clientes = r.clientes;
+    est.crm.total = r.total;
+  }
+
+  async function abrirCartaoCrm(id) {
+    est.crm.cliente = (await api("crm/cliente", { id })).cliente;
+  }
+
+  async function mudarEtapaCrm(etapaId) {
+    const c = est.crm.cliente;
+    const r = await api("crm/etapa", { client_id: c.id, etapa_id: etapaId });
+    c.etapa_id = etapaId;
+    c.etapa = r.etapa;
+    est.crm.clientes = null;
+    est.crm.funis = null; // contagens mudaram
+    est.aviso = { tipo: "ok", texto: `Movido para "${r.etapa}".` };
+  }
+
+  /** Abre a conversa do cliente no WhatsApp Web e já vincula ao cliente do CRM. */
+  async function whatsappDoCliente() {
+    const c = est.crm.cliente;
+    est.vincularAoAbrir = { clientId: c.id, telefone: c.telefone || "" };
+    if (c.wa_chat_id) await wa("abrirConversa", { chatId: c.wa_chat_id });
+    else await wa("abrirPorTelefone", { telefone: c.telefone });
+    est.aba = "conversa";
+  }
+
+  // Público para a Transmissão comercial do WhatsApp Business: CSV no modelo que o
+  // próprio app exporta, até 256 destinatários por arquivo.
+  function baixarPublicoCsv(publico, nomeBase) {
+    const celula = (s) => {
+      const t = String(s ?? "").replace(/[\r\n]+/g, " ").trim();
+      return /[",;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const partes = [];
+    for (let i = 0; i < publico.length; i += 256) partes.push(publico.slice(i, i + 256));
+    partes.forEach((parte, n) => {
+      const linhas = [
+        "Insira o nome completo e o telefone de cada destinatário em uma linha separada. Você pode adicionar até 256 destinatários a um público.",
+        "",
+        "Nome completo,Telefone",
+        ...parte.map((p) => `${celula(p.nome)},${p.telefone}`),
+      ];
+      const blob = new Blob(["﻿" + linhas.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = partes.length > 1 ? `${nomeBase}-parte-${n + 1}.csv` : `${nomeBase}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 1000);
+    });
+    return partes.length;
+  }
+
+  async function gerarPublico(form) {
+    const marcar = form.marcar.checked ? form.etiqueta.value.trim() : "";
+    const r = await api("crm/publico", { ...filtrosCrm(), marcar_etiqueta: marcar || undefined });
+    if (!r.publico.length) throw new Error("Nenhum cliente desse filtro tem telefone válido.");
+    if (r.etiquetas) est.etiquetas = r.etiquetas;
+    const f = est.crm.filtros;
+    const produto = est.crm.imoveis.find((i) => i.id === f.produto_id)?.title;
+    const base = `publico-${(produto || marcar || "clientes").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}`;
+    const arquivos = baixarPublicoCsv(r.publico, base);
+    est.crm.disparoFeito = true;
+    est.aviso = {
+      tipo: "ok",
+      texto:
+        `Público baixado: ${r.publico.length} destinatário${r.publico.length === 1 ? "" : "s"}` +
+        (arquivos > 1 ? ` em ${arquivos} arquivos (até 256 cada)` : "") +
+        (r.semTelefone ? `; ${r.semTelefone} sem telefone válido ficaram de fora` : "") +
+        (r.etiqueta ? `; marcados com a etiqueta "${marcar}"` : "") +
+        ". Siga o passo 3 do guia.",
+    };
+  }
+
+  // ── visita no Google Agenda ──
+  /** Link do Google Agenda já preenchido (um clique em Salvar). Visitas do QuintoAndar com [QA] no título. */
+  function linkGoogleAgenda({ origem, inicio, imovel, cliente, telefone, obs }) {
+    const fim = new Date(inicio.getTime() + 60 * 60000);
+    const fmt = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const prefixo = origem === "quintoandar" ? "[QA] " : origem === "lancamento" ? "[Lançamento] " : "";
+    const titulo = `${prefixo}Visita${imovel ? ` ${imovel}` : ""} — ${cliente || "cliente"}`;
+    const detalhes = [
+      `Cliente: ${cliente || "-"}`,
+      telefone ? `WhatsApp: +${String(telefone).replace(/\D/g, "")}` : "",
+      imovel ? `Imóvel: ${imovel}` : "",
+      origem === "quintoandar" ? "Agendada pela vitrine do QuintoAndar." : "",
+      obs ? `Obs.: ${obs}` : "",
+      "Registrada pela extensão do Nordic CRM.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const p = new URLSearchParams({ action: "TEMPLATE", text: titulo, dates: `${fmt(inicio)}/${fmt(fim)}`, details: detalhes, ctz: "America/Sao_Paulo" });
+    return { url: `https://calendar.google.com/calendar/render?${p.toString()}`, titulo };
+  }
+
   // ── telas ────────────────────────────────────────────────────────────────
   function render() {
     $topo.innerHTML =
@@ -1217,8 +1397,9 @@
     if (!est.waPronto) return `${versao}<p class="aviso"><span class="carregando" aria-hidden="true"></span> Carregando o WhatsApp Web…</p>`;
     const aba = (id, rotulo) =>
       `<button type="button" role="tab" aria-selected="${est.aba === id}" class="${est.aba === id ? "ativa" : ""}" data-acao="aba" data-aba="${id}">${rotulo}</button>`;
-    const abas = `<div class="abas" role="tablist">${aba("clientes", "Clientes")}${aba("conversa", "Conversa")}${aba("aprender", "Aprender")}</div>`;
-    const corpo = est.aba === "clientes" ? telaLista() : est.aba === "aprender" ? secaoAprender() : telaConversa();
+    const abas = `<div class="abas" role="tablist">${aba("clientes", "Clientes")}${aba("crm", "Funil")}${aba("conversa", "Conversa")}${aba("aprender", "Aprender")}</div>`;
+    const corpo =
+      est.aba === "clientes" ? telaLista() : est.aba === "crm" ? telaCrm() : est.aba === "aprender" ? secaoAprender() : telaConversa();
     return `${versao}${abas}${aviso()}${corpo}${rodapeStats()}`;
   }
 
@@ -1476,7 +1657,13 @@
     const opcoes = `<option value="">—</option>${est.imoveis
       .map((i) => `<option value="${esc(i.id)}">${esc(i.title)}</option>`)
       .join("")}`;
-    return `<details class="cartao" id="d-visita"><summary><span>${ic("agenda", true)} Registrar visita</span></summary>
+    const agenda = est.visitaAgenda
+      ? `<p class="aviso ok" style="margin-bottom:8px">${esc(est.visitaAgenda.titulo)}</p>
+        <a class="botao dourado largo" href="${esc(est.visitaAgenda.url)}" target="_blank" rel="noopener" data-acao="agenda-aberta">${ic("agenda", true)} Salvar no Google Agenda</a>
+        <hr class="separador" />`
+      : "";
+    return `<details class="cartao" id="d-visita"${est.visitaAgenda ? " open" : ""}><summary><span>${ic("agenda", true)} Registrar visita</span></summary>
+      ${agenda}
       <form id="f-visita" data-form="visita">
         <label>Onde<select name="origem"><option value="quintoandar">QuintoAndar (agendada pela vitrine)</option><option value="lancamento">Lançamento (estande/decorado)</option><option value="outro">Outro</option></select></label>
         <div class="grade2"><label>Data<input name="data" type="date" min="${hojeISO()}" required /></label><label>Hora<input name="hora" type="time" step="900" required /></label></div>
@@ -1484,6 +1671,100 @@
         <label>Observação<input name="obs" placeholder="Ex.: vai com a esposa" /></label>
         <button class="primario largo" ${est.ocupado.visita ? "disabled" : ""}>${girando("visita", "Registrando…") || "Registrar visita"}</button>
       </form></details>`;
+  }
+
+  // ── aba Funil (clientes do CRM) ──
+  const reais = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  const dataBR = (iso) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
+  function telaCrm() {
+    const crm = est.crm;
+    if (crm.cliente) return cartaoCrm();
+    if (!crm.funis) return `<p class="aviso"><span class="carregando" aria-hidden="true"></span> Carregando os funis…</p>`;
+    const f = crm.filtros;
+    const funil = crm.funis.find((x) => x.id === f.funil_id);
+    const sel = (nome, valor, opcoes, rotulo) =>
+      `<label>${rotulo}<select name="${nome}">${opcoes.map(([v, t]) => `<option value="${esc(v)}" ${String(valor) === String(v) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
+    const filtros = `
+      <form id="f-crm" data-form="crm-filtros" class="filtros">
+        ${sel("funil_id", f.funil_id, crm.funis.map((x) => [x.id, `${x.nome} (${x.total})`]), "Funil")}
+        ${sel("etapa_id", f.etapa_id, [["", "Todas as etapas"], ...(funil?.etapas || []).map((e) => [e.id, `${e.nome} (${e.total})`])], "Etapa")}
+        ${sel("produto_id", f.produto_id, [["", "Todos"], ["none", "Sem produto"], ...crm.imoveis.map((i) => [i.id, i.title])], "Produto")}
+        ${sel("etiqueta_id", f.etiqueta_id, [["", "Todas"], ...est.etiquetas.map((e) => [e.id, e.nome])], "Etiqueta")}
+        ${sel("status", f.status, [["ACTIVE", "Em andamento"], ["WON", "Ganhos"], ["LOST", "Perdidos"], ["todos", "Todos"]], "Situação")}
+        ${sel("sem_atualizar_dias", f.sem_atualizar_dias, [["", "Qualquer"], ["7", "7+ dias"], ["15", "15+ dias"], ["30", "30+ dias"], ["60", "60+ dias"], ["90", "90+ dias"]], "Sem atualizar há")}
+        <label style="grid-column:1/-1">Buscar<input name="busca" placeholder="Nome, e-mail ou telefone" value="${esc(f.busca)}" /></label>
+      </form>`;
+    const itens = crm.clientes;
+    const lista = !itens
+      ? `<p class="mudo"><span class="carregando" aria-hidden="true"></span> Carregando…</p>`
+      : !itens.length
+        ? `<p class="mudo">Nenhum cliente com esses filtros.</p>`
+        : `<div class="lista">${itens
+            .map(
+              (c) => `<button type="button" class="botao item-lista" data-acao="crm-abrir" data-id="${esc(c.id)}">
+                <b>${esc(c.nome)}</b>
+                <span class="mudo"><span class="chip" style="--cor:${esc(c.cor || "#888")}">${esc(c.etapa)}</span>${c.imovel ? ` · ${esc(c.imovel)}` : ""}</span>
+                <span class="mudo">Atualizado há ${esc(ha(c.atualizado_em))}${c.wa_chat_id ? " · conversa vinculada" : ""}</span>
+              </button>`,
+            )
+            .join("")}</div>
+          ${itens.length < crm.total ? `<button type="button" class="pequeno largo" style="margin-top:8px" data-acao="crm-mais" ${est.ocupado.crm ? "disabled" : ""}>${girando("crm", "Carregando…") || `Mostrar mais (${itens.length} de ${crm.total})`}</button>` : ""}`;
+    return `<section class="cartao">
+        <div class="linha"><h2 style="margin:0">Clientes do CRM ${itens ? `(${crm.total})` : ""}</h2>
+          <button type="button" class="pequeno" data-acao="crm-atualizar" aria-label="Atualizar" ${est.ocupado.crm ? "disabled" : ""}>${est.ocupado.crm ? `<span class="carregando" aria-hidden="true"></span>` : ic("atualizar", true)}</button></div>
+        ${filtros}
+        ${lista}
+      </section>
+      ${secaoDisparo()}`;
+  }
+
+  function cartaoCrm() {
+    const c = est.crm.cliente;
+    const etapas = c.etapas.map((e) => `<option value="${esc(e.id)}" ${e.id === c.etapa_id ? "selected" : ""}>${esc(e.nome)}</option>`).join("");
+    const status = { WON: `<span class="selo ok">Ganho</span>`, LOST: `<span class="selo erro">Perdido</span>` }[c.status] || "";
+    return `<section class="cartao">
+        <button type="button" class="pequeno" data-acao="crm-voltar">← Voltar à lista</button>
+        <div class="cliente" style="margin-top:10px"><span class="avatar" aria-hidden="true">${esc(iniciais(c.nome))}</span>
+          <div class="info"><h3>${esc(c.nome)}</h3><span class="mudo">${esc(c.telefone || "sem telefone")}</span> ${status}</div></div>
+        <dl class="dados">
+          <dt>Funil</dt><dd>${esc(c.funil)}</dd>
+          ${c.imovel ? `<dt>Produto</dt><dd>${esc(c.imovel)}</dd>` : ""}
+          ${c.origem ? `<dt>Origem</dt><dd>${esc(c.origem)}</dd>` : ""}
+          <dt>Corretor</dt><dd>${esc(c.corretor)}</dd>
+          ${c.vendas ? `<dt>Vendido</dt><dd>${esc(reais(c.vendido))} (${c.vendas})</dd>` : ""}
+          <dt>Atualizado</dt><dd>há ${esc(ha(c.atualizado_em))}</dd>
+        </dl>
+        ${c.etiquetas.length ? `<div class="chips" style="margin-top:8px">${c.etiquetas.map((id) => chip(etiqueta(id))).join("")}</div>` : ""}
+        <form id="f-crm-etapa" data-form="crm-etapa" style="margin-top:10px"><label>Etapa<select name="etapa">${etapas}</select></label></form>
+        <div class="acoes">
+          <button type="button" class="dourado" data-acao="crm-whatsapp" ${!c.telefone || est.ocupado.crmWa ? "disabled" : ""}>${girando("crmWa", "Abrindo…") || "Abrir conversa"}</button>
+          <a class="botao pequeno" href="${esc(est.sessao.servidor)}/client/${esc(c.id)}" target="_blank" rel="noopener">${ic("abrir", true)} Abrir no CRM</a>
+        </div>
+      </section>
+      ${c.tarefas.length ? `<section class="cartao"><h2>Tarefas abertas</h2><ul class="lista">${c.tarefas.map((t) => `<li class="item"><div class="info"><div class="nome">${esc(t.titulo)}</div><div class="mudo">${esc(dataCurta(t.em))}${vencido(t.em) ? " · atrasada" : ""}</div></div></li>`).join("")}</ul></section>` : ""}
+      ${c.anotacoes.length ? `<section class="cartao"><h2>Últimas anotações</h2>${c.anotacoes.map((n) => `<p class="historico"><span class="mudo">${esc(dataBR(n.em))}</span><br />${esc(n.texto)}</p>`).join("")}</section>` : ""}`;
+  }
+
+  /** Guia de disparo: Transmissão comercial do WhatsApp Business com o público do filtro. */
+  function secaoDisparo() {
+    const total = est.crm.total;
+    return `<details class="cartao" id="d-disparo"><summary><span>${ic("download", true)} Disparo</span></summary>
+      <p class="mudo">Usa os clientes do filtro acima${total != null ? ` (${total})` : ""}. Quem envia é o WhatsApp Business, pela Transmissão comercial (paga por créditos); a extensão não envia nada.</p>
+      <ol class="passos">
+        <li><b>Filtre os clientes</b> acima: produto, etapa, etiqueta, tempo sem atualizar.</li>
+        <li><b>Baixe o público</b> (CSV no modelo do WhatsApp, até 256 por arquivo):
+          <form id="f-disparo" data-form="disparo" style="margin-top:6px">
+            <label class="check"><input type="checkbox" name="marcar" checked /> <span>Marcar esses clientes com a etiqueta</span></label>
+            <input name="etiqueta" maxlength="40" value="Disparo ${esc(new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }))}" aria-label="Nome da etiqueta do disparo" />
+            <button class="primario largo" style="margin-top:6px" ${est.ocupado.disparo ? "disabled" : ""}>${girando("disparo", "Gerando…") || "Baixar público (CSV)"}</button>
+          </form></li>
+        <li><b>Importe no WhatsApp Web</b>: Ferramentas comerciais › Transmissão comercial › Públicos › Novo público › Importar.</li>
+        <li><b>Créditos</b>: confira o saldo; a compra é pelo app do celular.</li>
+        <li><b>Crie a transmissão</b>: escolha o público, escreva a mensagem (com o link do imóvel), veja o custo e envie.</li>
+        <li><b>Acompanhe</b>: quem responder aparece na aba Clientes depois de vinculado; marque prazo de retorno para quem não responder.</li>
+      </ol>
+    </details>`;
   }
 
   // ── aba Aprender ──
@@ -1667,10 +1948,25 @@
     else if (a === "aba") {
       est.aba = b.dataset.aba;
       est.aviso = null;
+      if (est.aba === "crm" && !est.crm.clientes) acao("crm", () => carregarClientesCrm());
       if (est.aba === "clientes" && !est.itensLista) acao("lista", carregarLista);
       if (est.aba === "aprender" && !est.aprender.registro) acao("registro", () => carregarRegistro([]));
       render();
     } else if (a === "atualizar-lista") acao("lista", carregarLista);
+    else if (a === "crm-atualizar") {
+      est.crm.funis = null;
+      acao("crm", () => carregarClientesCrm());
+    } else if (a === "crm-mais") acao("crm", () => carregarClientesCrm(true));
+    else if (a === "crm-abrir") acao("crmCartao", () => abrirCartaoCrm(b.dataset.id));
+    else if (a === "crm-voltar") {
+      est.crm.cliente = null;
+      if (!est.crm.clientes) acao("crm", () => carregarClientesCrm());
+      render();
+    } else if (a === "crm-whatsapp") acao("crmWa", whatsappDoCliente);
+    else if (a === "agenda-aberta") {
+      est.visitaAgenda = null;
+      setTimeout(render, 300);
+    }
     else if (a === "abrir-lista") acao("abrirLista", () => abrirDaLista(b.dataset.chat));
     else if (a === "vincular") acao("vincular", () => vincular(b.dataset.id));
     else if (a === "nao-cliente") acao("vincular", naoCliente);
@@ -1744,6 +2040,19 @@
 
   document.addEventListener("change", (e) => {
     const el = e.target;
+    // filtros dos clientes do CRM
+    if (el.closest?.('form[data-form="crm-filtros"]')) {
+      const f = est.crm.filtros;
+      f[el.name] = el.value;
+      if (el.name === "funil_id") f.etapa_id = ""; // etapas são do funil
+      est.crm.clientes = null;
+      acao("crm", () => carregarClientesCrm());
+      return;
+    }
+    if (el.closest?.('form[data-form="crm-etapa"]')) {
+      acao("crmEtapa", () => mudarEtapaCrm(el.value));
+      return;
+    }
     // filtros da lista
     if (el.closest?.('form[data-form="filtros"]')) {
       est.filtros = { ...est.filtros, [el.name]: el.value };
@@ -1804,6 +2113,12 @@
       });
     } else if (tipo === "prazo") {
       if (f.data.value) acao("prazo", () => definirPrazo(`${f.data.value}T${f.hora.value || "09:00"}:00`, f.nota.value.trim()));
+    } else if (tipo === "crm-filtros") {
+      est.crm.filtros.busca = f.busca.value.trim();
+      est.crm.clientes = null;
+      acao("crm", () => carregarClientesCrm());
+    } else if (tipo === "disparo") {
+      acao("disparo", () => gerarPublico(f));
     } else if (tipo === "cliente-historico") {
       const termo = f.termo.value.trim();
       if (termo) acao("buscarHist", async () => {

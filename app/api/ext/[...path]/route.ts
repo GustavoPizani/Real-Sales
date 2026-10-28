@@ -2,7 +2,7 @@
 // pelo caminho: /api/ext/<rota>. Login por "Authorization: Bearer <token do
 // Supabase>" (lib/ext/auth.ts) e só para o MARKETING_ADMIN. Erros: { erro }.
 import { NextResponse } from 'next/server';
-import { TaskType } from '@prisma/client';
+import { Prisma, TaskType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -80,6 +80,31 @@ async function linkDoUsuario(u: UsuarioExt, id: unknown) {
   const link = await prisma.waLink.findFirst({ where: { id: texto(id, 60), userId: u.id } });
   if (!link) throw new ErroExt(404, 'Conversa não encontrada. Abra a conversa de novo.');
   return link;
+}
+
+/** Filtros dos clientes do CRM na faixa (lista e público do disparo). */
+function filtroClientes(u: UsuarioExt, c: Corpo): Prisma.ClientWhereInput {
+  const busca = texto(c.busca, 80);
+  const dias = Number(c.sem_atualizar_dias) || 0;
+  const status = ['ACTIVE', 'WON', 'LOST'].includes(c.status) ? c.status : c.status === 'todos' ? undefined : 'ACTIVE';
+  return {
+    accountId: u.accountId,
+    ...(status ? { overallStatus: status } : {}),
+    ...(texto(c.funil_id, 60) ? { funnelId: texto(c.funil_id, 60) } : {}),
+    ...(texto(c.etapa_id, 60) ? { funnelStageId: texto(c.etapa_id, 60) } : {}),
+    ...(c.produto_id === 'none' ? { propertyOfInterestId: null } : texto(c.produto_id, 60) ? { propertyOfInterestId: texto(c.produto_id, 60) } : {}),
+    ...(texto(c.etiqueta_id, 60) ? { tags: { some: { id: texto(c.etiqueta_id, 60) } } } : {}),
+    ...(dias > 0 ? { updatedAt: { lte: new Date(Date.now() - dias * 864e5) } } : {}),
+    ...(busca
+      ? {
+          OR: [
+            { fullName: { contains: busca, mode: 'insensitive' as const } },
+            { email: { contains: busca, mode: 'insensitive' as const } },
+            ...(busca.replace(/\D/g, '').length >= 4 ? [{ phone: { contains: busca.replace(/\D/g, '').slice(-8) } }] : []),
+          ],
+        }
+      : {}),
+  };
 }
 
 const mensagensDe = (link: { messages: unknown }) => (link.messages as unknown as MsgWa[]) ?? [];
@@ -297,6 +322,160 @@ const ROTAS: Record<string, Handler> = {
     }
     await prisma.waLink.update({ where: { id: link.id }, data: { messages: jsonMsgs(juntar([], msgs)) } });
     return { texto: resultado };
+  },
+
+  // ── CRM na faixa: funis, clientes, cartão do cliente e público do disparo ──
+  /** Funis com as etapas e quantos clientes em andamento cada uma tem; imóveis e etiquetas para os filtros. */
+  async 'crm/funis'(u) {
+    const [funis, contagem, imoveis] = await Promise.all([
+      prisma.funnel.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, stages: { orderBy: { order: 'asc' }, select: { id: true, name: true, color: true } } },
+      }),
+      prisma.client.groupBy({ by: ['funnelStageId'], where: { accountId: u.accountId, overallStatus: 'ACTIVE' }, _count: true }),
+      prisma.property.findMany({ orderBy: { title: 'asc' }, select: { id: true, title: true } }),
+    ]);
+    const porEtapa = new Map(contagem.map((c) => [c.funnelStageId, c._count]));
+    return {
+      funis: funis
+        .map((f) => ({
+          id: f.id,
+          nome: f.name,
+          etapas: f.stages.map((s) => ({ id: s.id, nome: s.name, cor: s.color, total: porEtapa.get(s.id) ?? 0 })),
+        }))
+        .map((f) => ({ ...f, total: f.etapas.reduce((n, e) => n + e.total, 0) })),
+      imoveis,
+    };
+  },
+
+  /** Clientes do CRM com filtros (lista da faixa). */
+  async 'crm/clientes'(u, c) {
+    const where = filtroClientes(u, c);
+    const [total, lista] = await Promise.all([
+      prisma.client.count({ where }),
+      prisma.client.findMany({
+        where,
+        orderBy: { updatedAt: c.ordem === 'antigos' ? 'asc' : 'desc' },
+        take: Math.min(Number(c.limite) || 60, 200),
+        select: {
+          id: true, fullName: true, phone: true, updatedAt: true, campaignSource: true, overallStatus: true,
+          funnelStage: { select: { name: true, color: true } },
+          propertyOfInterest: { select: { title: true } },
+          tags: { select: { id: true } },
+          waLinks: { where: { notClient: false }, select: { waChatId: true }, take: 1 },
+        },
+      }),
+    ]);
+    return {
+      total,
+      clientes: lista.map((x) => ({
+        id: x.id,
+        nome: x.fullName,
+        telefone: x.phone,
+        etapa: x.funnelStage.name,
+        cor: x.funnelStage.color,
+        imovel: x.propertyOfInterest?.title ?? null,
+        origem: x.campaignSource,
+        status: x.overallStatus,
+        atualizado_em: x.updatedAt,
+        etiquetas: x.tags.map((t) => t.id),
+        wa_chat_id: x.waLinks[0]?.waChatId ?? null,
+      })),
+    };
+  },
+
+  /** Cartão do cliente: dados, últimas anotações, tarefas abertas e vendas. */
+  async 'crm/cliente'(u, c) {
+    const x = await prisma.client.findFirst({
+      where: { id: texto(c.id, 60), accountId: u.accountId },
+      select: {
+        id: true, fullName: true, phone: true, email: true, campaignSource: true, overallStatus: true, createdAt: true, updatedAt: true,
+        funnelId: true, funnelStageId: true,
+        funnel: { select: { name: true, stages: { orderBy: { order: 'asc' }, select: { id: true, name: true } } } },
+        funnelStage: { select: { name: true, color: true } },
+        propertyOfInterest: { select: { title: true } },
+        broker: { select: { name: true } },
+        tags: { select: { id: true } },
+        notes: { orderBy: { createdAt: 'desc' }, take: 3, select: { content: true, createdAt: true } },
+        tasks: { where: { isCompleted: false }, orderBy: { dateTime: 'asc' }, take: 3, select: { title: true, dateTime: true } },
+        sales: { select: { saleValue: true } },
+        waLinks: { where: { notClient: false }, select: { waChatId: true }, take: 1 },
+      },
+    });
+    if (!x) throw new ErroExt(404, 'Cliente não encontrado.');
+    return {
+      cliente: {
+        id: x.id,
+        nome: x.fullName,
+        telefone: x.phone,
+        email: x.email,
+        origem: x.campaignSource,
+        status: x.overallStatus,
+        corretor: x.broker.name,
+        criado_em: x.createdAt,
+        atualizado_em: x.updatedAt,
+        funil: x.funnel.name,
+        etapa_id: x.funnelStageId,
+        etapa: x.funnelStage.name,
+        cor: x.funnelStage.color,
+        etapas: x.funnel.stages.map((s) => ({ id: s.id, nome: s.name })),
+        imovel: x.propertyOfInterest?.title ?? null,
+        etiquetas: x.tags.map((t) => t.id),
+        anotacoes: x.notes.map((n) => ({ texto: n.content.slice(0, 400), em: n.createdAt })),
+        tarefas: x.tasks.map((t) => ({ titulo: t.title, em: t.dateTime })),
+        vendido: x.sales.reduce((s, v) => s + v.saleValue, 0),
+        vendas: x.sales.length,
+        wa_chat_id: x.waLinks[0]?.waChatId ?? null,
+      },
+    };
+  },
+
+  /** Muda a etapa do cliente (o histórico de etapas é gravado pelo trigger do banco). */
+  async 'crm/etapa'(u, c) {
+    const cliente = await prisma.client.findFirst({ where: { id: texto(c.client_id, 60), accountId: u.accountId }, select: { id: true, funnelId: true } });
+    if (!cliente) throw new ErroExt(404, 'Cliente não encontrado.');
+    const etapa = await prisma.funnelStage.findFirst({ where: { id: texto(c.etapa_id, 60), funnelId: cliente.funnelId }, select: { id: true, name: true } });
+    if (!etapa) throw new ErroExt(400, 'Etapa inválida para o funil do cliente.');
+    await prisma.client.update({ where: { id: cliente.id }, data: { funnelStageId: etapa.id } });
+    return { ok: true, etapa: etapa.name };
+  },
+
+  /**
+   * Público do disparo: todos os clientes do filtro com telefone válido, já no
+   * formato do WhatsApp (+55…). Opcionalmente marca todos com uma etiqueta.
+   */
+  async 'crm/publico'(u, c) {
+    const lista = await prisma.client.findMany({
+      where: filtroClientes(u, c),
+      orderBy: { updatedAt: 'desc' },
+      take: 5000,
+      select: { id: true, fullName: true, phone: true },
+    });
+    const vistos = new Set<string>();
+    const publico = [];
+    let semTelefone = 0;
+    for (const x of lista) {
+      let tel = (x.phone ?? '').replace(/\D/g, '');
+      if (tel.length === 10 || tel.length === 11) tel = `55${tel}`;
+      if (tel.length < 12 || tel.length > 13) {
+        semTelefone++;
+        continue;
+      }
+      if (vistos.has(tel)) continue;
+      vistos.add(tel);
+      publico.push({ id: x.id, nome: x.fullName.trim() || 'Cliente', telefone: `+${tel}` });
+    }
+    let etiqueta: string | null = null;
+    const nomeEtiqueta = texto(c.marcar_etiqueta, 40);
+    if (nomeEtiqueta && publico.length) {
+      etiqueta = await criarEtiqueta(nomeEtiqueta);
+      for (let i = 0; i < publico.length; i += 200) {
+        await prisma.$transaction(
+          publico.slice(i, i + 200).map((p) => prisma.client.update({ where: { id: p.id }, data: { tags: { connect: { id: etiqueta! } } } })),
+        );
+      }
+    }
+    return { publico: publico.map(({ nome, telefone }) => ({ nome, telefone })), semTelefone, etiqueta, etiquetas: etiqueta ? await listarEtiquetas() : undefined };
   },
 
   // ── etiquetas (espelhadas com o WhatsApp Business) ──
