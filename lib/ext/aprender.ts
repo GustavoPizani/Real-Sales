@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { conversaEmTexto, type MsgWa } from './conversa';
 import { ErroExt } from './auth';
 import { groq } from './ria';
+import { lerJsonTolerante } from './json-tolerante';
 
 /** Uma conversa no arquivo exportado (ver extensao/painel.js, exportar). */
 export interface ConversaExport {
@@ -70,11 +71,9 @@ const lista = (v: unknown, max: number): Proposta[] =>
     .map((x: any) => ({ situacao: String(x.situacao ?? '').trim().slice(0, 600), resposta: String(x.resposta).trim().slice(0, 1500) }));
 
 function lerJson(texto: string) {
-  try {
-    return JSON.parse(texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1));
-  } catch {
-    throw new ErroExt(502, 'A IA respondeu num formato inesperado. Tente de novo.');
-  }
+  const j = lerJsonTolerante(texto);
+  if (!j) throw new ErroExt(502, 'A IA respondeu num formato inesperado. Tente de novo.');
+  return j;
 }
 
 /** Lê uma conversa inteira: histórico resumido + regras e exemplos propostos. */
@@ -93,7 +92,7 @@ export async function analisarConversa(c: ConversaExport): Promise<Propostas & {
         content: `Você analisa uma conversa de WhatsApp entre um corretor de imóveis ("Você") e um cliente, para ensinar uma assistente de IA a atender do jeito DESTE corretor.
 
 Extraia:
-1. "historico": resumo da conversa para o CRM (interesse, perfil — região, dormitórios, vagas, faixa de preço, momento de compra, forma de pagamento —, objeções, o que foi combinado e em que pé ficou). Até 8 linhas.
+1. "historico": resumo da conversa para o CRM (interesse, perfil — região, dormitórios, vagas, faixa de preço, momento de compra, forma de pagamento —, objeções, o que foi combinado e em que pé ficou). Até 6 frases curtas, numa string só.
 2. "regras": como o corretor trabalha, de forma geral e reaproveitável para outros clientes: como abre a conversa, que perguntas faz para qualificar e em que ordem, como conduz para a visita, como responde objeções, informações do negócio que ele afirma (condições, regiões, documentos, processo). Cada regra: {"situacao": "quando…", "resposta": "o que ele faz/diz"}. Até 8. Não invente: só o que a conversa mostra.
 3. "exemplos": até 4 trechos em que a resposta do corretor foi boa (fez o cliente avançar). {"situacao": "o que o cliente disse", "resposta": "o texto do corretor, copiado como ele escreveu"}.
 
@@ -103,7 +102,7 @@ Responda só com JSON: {"historico": "...", "regras": [...], "exemplos": [...]}`
       { role: 'user', content: conversa },
     ],
     temperature: 0.2,
-    max_tokens: 1800,
+    max_tokens: 2400,
     response_format: { type: 'json_object' },
   });
   const j = lerJson(texto);

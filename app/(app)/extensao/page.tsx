@@ -137,21 +137,30 @@ function AprenderComConversas({ aoSalvar }: { aoSalvar: () => void }) {
       const partesPor = conversas.map((c) => partesDe(c.mensagens));
       const total = partesPor.reduce((n, p) => n + p.length, 0);
       let feito = 0;
+      let falhas = 0;
       for (let i = 0; i < conversas.length; i++) {
         const c = conversas[i];
         let propostas = 0;
         for (let p = 0; p < partesPor[i].length; p++) {
           const partes = partesPor[i].length;
           setProgresso({ feito, total, texto: `A RIA está lendo ${c.nome || c.telefone || "a conversa"}${partes > 1 ? ` (parte ${p + 1} de ${partes})` : ""}…` });
-          const r = await chamar(
-            {
-              acao: "analisar",
-              conversa: { ...c, mensagens: partesPor[i][p], total_mensagens: c.mensagens.length },
-              registrar: p === partes - 1,
-              propostas_antes: propostas,
-            },
-            (seg) => setProgresso({ feito, total, texto: `Limite da IA: aguardando ${seg} s…` }),
-          );
+          let r: Propostas;
+          try {
+            r = await chamar(
+              {
+                acao: "analisar",
+                conversa: { ...c, mensagens: partesPor[i][p], total_mensagens: c.mensagens.length },
+                registrar: p === partes - 1,
+                propostas_antes: propostas,
+              },
+              (seg) => setProgresso({ feito, total, texto: `Limite da IA: aguardando ${seg} s…` }),
+            );
+          } catch {
+            // uma parte que falhou não derruba a análise toda
+            falhas++;
+            feito++;
+            continue;
+          }
           feito++;
           propostas += r.regras.length + r.exemplos.length;
           juntas.regras.push(...r.regras);
@@ -162,6 +171,7 @@ function AprenderComConversas({ aoSalvar }: { aoSalvar: () => void }) {
       setPropostas(final);
       setMarcadas(new Set([...final.regras.map((_, i) => `r${i}`), ...final.exemplos.map((_, i) => `e${i}`)]));
       if (!final.regras.length && !final.exemplos.length) toast({ title: "A RIA não achou nada novo nessas conversas." });
+      if (falhas) toast({ title: `${falhas} ${falhas === 1 ? "parte não foi lida" : "partes não foram lidas"} por erro da IA`, description: "O resto da conversa foi analisado." });
     } catch (e: any) {
       toast({ title: "Não foi possível analisar", description: e.message, variant: "destructive" });
     } finally {

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { GROQ_MODEL, reasoningOptions } from '@/lib/llm/models';
 import { conversaEmTexto, type MsgWa } from './conversa';
 import { ErroExt } from './auth';
+import { lerJsonTolerante } from './json-tolerante';
 
 const GROQ = 'https://api.groq.com/openai/v1';
 
@@ -118,7 +119,19 @@ export async function groq(corpo: Record<string, unknown>) {
     throw new ErroExt(429, `Limite da IA atingido. Tente de novo em ${seg} s.`, seg);
   }
   if (!r.ok) {
-    console.error('[EXT_RIA] Groq', r.status, (await r.text()).slice(0, 500));
+    const corpoErro = await r.text();
+    // JSON com defeito (em geral cortado no fim): o Groq recusa, mas devolve o que
+    // o modelo escreveu; o leitor tolerante aproveita até o último item completo
+    try {
+      const e = JSON.parse(corpoErro)?.error;
+      if (e?.code === 'json_validate_failed' && typeof e.failed_generation === 'string') {
+        console.warn('[EXT_RIA] Groq json_validate_failed: aproveitando a resposta parcial');
+        return e.failed_generation as string;
+      }
+    } catch {
+      /* não era JSON */
+    }
+    console.error('[EXT_RIA] Groq', r.status, corpoErro.slice(0, 500));
     throw new ErroExt(502, 'A IA não respondeu. Tente de novo.');
   }
   const j = await r.json();
@@ -176,7 +189,8 @@ ${params.pedido ? `\nPEDIDO DO CORRETOR PARA ESTA RESPOSTA: ${params.pedido}` : 
     response_format: { type: 'json_object' },
   });
   try {
-    const j = JSON.parse(texto.slice(texto.indexOf('{'), texto.lastIndexOf('}') + 1));
+    const j = lerJsonTolerante(texto);
+    if (!j) throw new Error('formato');
     const sugestoes = (Array.isArray(j.sugestoes) ? j.sugestoes : [])
       .filter((s: any) => typeof s?.texto === 'string' && s.texto.trim())
       .slice(0, 3)

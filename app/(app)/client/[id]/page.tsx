@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Mail, Calendar, Clock, User, MessageCircle, Plus, CheckCircle, XCircle, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2
+  ArrowLeft, Mail, Calendar, Clock, User, MessageCircle, Plus, CheckCircle, XCircle, Pencil, Loader2, AlertTriangle, Users, Sparkles, Bot, Save, FileText, Download, UploadCloud, Tag as TagIcon, Trash2, Phone, MoreHorizontal, Building2
 } from "lucide-react";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { useToast } from "@/components/ui/use-toast";
@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
 import { useAuth } from "@/contexts/auth-context";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { WhatsappCard } from "@/components/client/whatsapp-card";
 import { SalesCard, VendaDialog, type Venda } from "@/components/client/sales-card";
 
@@ -779,188 +780,299 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const rawPhone = client.phone?.replace(/\D/g, '') ?? '';
   const waPhone = rawPhone.startsWith('55') && rawPhone.length >= 12 ? rawPhone : `55${rawPhone}`;
 
+  const vendas = ((client as any).sales ?? []) as Venda[];
+  const totalVendido = vendas.reduce((s, v) => s + v.saleValue, 0);
+  const tarefasPendentes = (client.tasks ?? []).filter(t => !t.isCompleted).sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+  const proximaTarefa = tarefasPendentes[0];
+  const iniciaisCliente = client.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+  const corEtapa = stagesForCurrentFunnel.find(s => s.id === client.funnelStageId)?.color;
+  const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  const STATUS_CLIENTE = {
+    [ClientOverallStatus.WON]: { rotulo: "Ganho", icone: CheckCircle, classe: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+    [ClientOverallStatus.LOST]: { rotulo: "Perdido", icone: XCircle, classe: "bg-red-500/15 text-red-700 dark:text-red-300" },
+  } as Record<string, { rotulo: string; icone: typeof CheckCircle; classe: string }>;
+  const statusCliente = STATUS_CLIENTE[client.overallStatus] ?? { rotulo: "Em atendimento", icone: Clock, classe: "bg-muted text-foreground" };
+  const IconeStatus = statusCliente.icone;
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      {/* Cabeçalho da Página */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.push("/pipeline")}><ArrowLeft className="h-4 w-4" /></Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{client.fullName}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge {...getStatusProps(client.funnelStage?.name ?? '')}>
-                {client.funnel?.name} &gt; {client.funnelStage?.name}
-              </Badge>
-              <span className="hidden sm:block text-sm text-muted-foreground">|</span>
-              <span className="text-sm text-muted-foreground">Corretor: {client.broker?.name ?? 'N/A'}</span>
+    <div className="mx-auto w-full max-w-7xl space-y-5 p-4 md:p-6">
+      {/* Cabeçalho: quem é, em que pé está e as ações principais */}
+      <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+        <Button variant="ghost" size="sm" className="-ml-2 mb-3 h-9 text-muted-foreground" onClick={() => router.push("/pipeline")}>
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> Pipeline
+        </Button>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <span
+              className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-lg font-bold text-[var(--accent-primary)]"
+              style={{ background: "color-mix(in srgb, var(--accent-primary) 16%, transparent)" }}
+              aria-hidden
+            >
+              {iniciaisCliente || <User className="h-6 w-6" />}
+            </span>
+            <div className="min-w-0 space-y-2">
+              <h1 className="text-2xl font-bold leading-tight text-foreground sm:text-3xl">{client.fullName}</h1>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${statusCliente.classe}`}>
+                  <IconeStatus className="h-3.5 w-3.5" aria-hidden /> {statusCliente.rotulo}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: corEtapa || "currentColor" }} aria-hidden />
+                  {client.funnel?.name} › {client.funnelStage?.name}
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" aria-hidden /> {client.broker?.name ?? "Sem corretor"}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {client.phone && (
+                  <a href={`tel:${client.phone}`} className="inline-flex items-center gap-1.5 text-foreground underline-offset-4 hover:underline">
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> {client.phone}
+                  </a>
+                )}
+                {client.email && (
+                  <a href={`mailto:${client.email}`} className="inline-flex min-w-0 items-center gap-1.5 break-all text-foreground underline-offset-4 hover:underline">
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden /> {client.email}
+                  </a>
+                )}
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Calendar className="h-3.5 w-3.5" aria-hidden /> Cliente desde {format(new Date(client.createdAt), "dd/MM/yyyy")}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {client.overallStatus === ClientOverallStatus.ACTIVE && (
-            <>
-              <Button variant="outline" className="text-green-600 hover:text-green-700 flex-grow sm:flex-grow-0" onClick={() => setIsWonDialogOpen(true)}><CheckCircle className="h-4 w-4 mr-2" /> Cliente Ganho</Button>
-              <Button variant="outline" className="text-red-600 hover:text-red-700 flex-grow sm:flex-grow-0" onClick={() => setIsLostDialogOpen(true)}><XCircle className="h-4 w-4 mr-2" /> Cliente Perdido</Button>
-            </>
-          )}
-        </div>
-      </div>
 
-      {/* Barra de Progresso do Funil */}
-      {stagesForCurrentFunnel.length > 0 && client.overallStatus === ClientOverallStatus.ACTIVE && (
-        <div className="w-full overflow-x-auto rounded-xl border border-border bg-card">
-          <div className="flex min-w-max">
-            {stagesForCurrentFunnel.map((stage, idx) => {
-              const currentIdx = stagesForCurrentFunnel.findIndex(s => s.id === client.funnelStageId)
-              const isActive = idx === currentIdx
-              const isPast = idx < currentIdx
-              const isFirst = idx === 0
-              const isLast = idx === stagesForCurrentFunnel.length - 1
-              const clipPath = isFirst
-                ? 'polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%)'
-                : isLast
-                ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 14px 50%)'
-                : 'polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%)'
-              return (
-                <button
-                  key={stage.id}
-                  onClick={() => {
-                    if (!isActive) {
-                      setClient(prev => prev ? { ...prev, funnelStageId: stage.id, funnelStage: { ...prev.funnelStage, id: stage.id, name: stage.name } } : null);
-                      handleUpdateClient({ funnelStageId: stage.id }, { successMessage: `Movido para "${stage.name}".`, skipRefresh: true });
-                    }
-                  }}
-                  style={{ clipPath, zIndex: idx + 1, marginLeft: idx > 0 ? '-12px' : '0' }}
-                  className={[
-                    'relative flex flex-1 min-w-[90px] h-11 items-center justify-center px-5 text-xs font-medium transition-colors select-none',
-                    isActive
-                      ? 'bg-[#023863] text-white'
-                      : isPast
-                      ? 'bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer'
-                      : 'bg-muted/40 text-muted-foreground/50 hover:bg-muted/60 cursor-pointer',
-                  ].join(' ')}
-                >
-                  {stage.name}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Layout Principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
-
-        {/* Coluna Esquerda (Principal) */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Abas para Mobile: Informações e Ações Rápidas */}
-          <div className="lg:hidden">
-            <Tabs defaultValue="info" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="info">Informações</TabsTrigger>
-                <TabsTrigger value="actions">Ações Rápidas</TabsTrigger>
-              </TabsList>
-              <TabsContent value="info" className="mt-4 space-y-3">
-                <Card>
-                  <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><Label>Nome Completo</Label><p className="font-medium">{client.fullName}</p></div>
-                    <div><Label>Telefone</Label><p className="font-medium">{client.phone || "N/A"}</p></div>
-                    <div><Label>Email</Label><p className="font-medium">{client.email || "N/A"}</p></div>
-                    <div><Label>Data de Cadastro</Label><p className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p></div>
-                  </CardContent>
-                </Card>
-                {stagesForCurrentFunnel.length > 0 && client.overallStatus === ClientOverallStatus.ACTIVE && (
-                  <Card>
-                    <CardContent className="pt-4 pb-4">
-                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Etapa do Funil</Label>
-                      <Select
-                        value={client.funnelStageId ?? ""}
-                        onValueChange={(v) => {
-                          const stage = stagesForCurrentFunnel.find(s => s.id === v);
-                          if (stage) setClient(prev => prev ? { ...prev, funnelStageId: v, funnelStage: { ...prev.funnelStage, id: v, name: stage.name } } : null);
-                          handleUpdateClient({ funnelStageId: v }, { successMessage: "Etapa do funil alterada.", skipRefresh: true });
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Selecione uma etapa..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {stagesForCurrentFunnel.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </CardContent>
-                  </Card>
+          <div className="flex flex-wrap gap-2 lg:max-w-md lg:justify-end">
+            <Button asChild className="h-11 flex-1 sm:flex-none">
+              <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noopener noreferrer"><MessageCircle className="mr-2 h-4 w-4" /> WhatsApp</a>
+            </Button>
+            <Button variant="outline" className="h-11 flex-1 sm:flex-none" onClick={() => setIsScheduleVisitOpen(true)}>
+              <Calendar className="mr-2 h-4 w-4" /> Agendar visita
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-11 w-11 p-0" aria-label="Mais ações">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onSelect={() => setIsEditClientDialogOpen(true)}><Pencil className="mr-2 h-4 w-4" /> Editar cliente</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsTransferDialogOpen(true)}><Users className="mr-2 h-4 w-4" /> Transferir lead</DropdownMenuItem>
+                {client.email && (
+                  <DropdownMenuItem asChild><a href={`mailto:${client.email}`}><Mail className="mr-2 h-4 w-4" /> Enviar e-mail</a></DropdownMenuItem>
                 )}
-              </TabsContent>
-              <TabsContent value="actions" className="mt-4">
-                <Card>
-                  <CardContent className="pt-6 space-y-2">
-                    {isAdmin && (
-                      <>
-                        <Button variant="outline" className="w-full justify-start" onClick={() => setIsDocumentsModalOpen(true)}>
-                          <FileText className="h-4 w-4 mr-2" />
-                          Documentação
-                        </Button>
-                        <Separator />
-                      </>
-                    )}
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
-                    <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
-                    <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>
-                    {isAdmin && (
-                      <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}>
-                        <Bot className="h-4 w-4 mr-2 text-secondary-custom" />
-                        {isRiaLoading ? "Analisando..." : "Sugestão da RIA"}
-                      </Button>
-                    )}
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={handleOpenRiaModal} disabled={isRiaLoading}><Bot className="mr-2 h-4 w-4" /> Sugestão da RIA</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsDocumentsModalOpen(true)}><FileText className="mr-2 h-4 w-4" /> Documentação</DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {client.overallStatus === ClientOverallStatus.ACTIVE && (
+              <div className="flex w-full gap-2 sm:w-auto">
+                <Button variant="outline" className="h-11 flex-1 border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 hover:text-emerald-800 dark:text-emerald-300" onClick={() => setIsWonDialogOpen(true)}>
+                  <CheckCircle className="mr-2 h-4 w-4" /> Ganho
+                </Button>
+                <Button variant="outline" className="h-11 flex-1 border-red-600/40 text-red-700 hover:bg-red-500/10 hover:text-red-800 dark:text-red-300" onClick={() => setIsLostDialogOpen(true)}>
+                  <XCircle className="mr-2 h-4 w-4" /> Perdido
+                </Button>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Card de Informações para Desktop */}
-          {/* ✅ --- CARD DE INFORMAÇÕES ATUALIZADO (DESKTOP) --- ✅ */}
-          <Card className="hidden lg:block">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Informações do Cliente</CardTitle>
-              {/* ✅ Botão de Documentos movido para cá */}
-              {isAdmin && (
-                <Dialog open={isDocumentsModalOpen} onOpenChange={setIsDocumentsModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Documentação
-                    </Button>
-                  </DialogTrigger>
-                  {/* O DialogContent para os documentos será adicionado no final do JSX */}
-                </Dialog>
-              )}
+        {/* Etapas do funil: clicar muda a etapa */}
+        {stagesForCurrentFunnel.length > 0 && client.overallStatus === ClientOverallStatus.ACTIVE && (
+          <nav aria-label="Etapas do funil" className="mt-5 -mx-1 overflow-x-auto px-1 pb-1">
+            <ol className="flex min-w-max gap-1.5">
+              {stagesForCurrentFunnel.map((stage, idx) => {
+                const atual = stagesForCurrentFunnel.findIndex(s => s.id === client.funnelStageId);
+                const ativa = idx === atual;
+                const passada = idx < atual;
+                return (
+                  <li key={stage.id}>
+                    <button
+                      type="button"
+                      aria-current={ativa ? "step" : undefined}
+                      onClick={() => {
+                        if (ativa) return;
+                        setClient(prev => prev ? { ...prev, funnelStageId: stage.id, funnelStage: { ...prev.funnelStage, id: stage.id, name: stage.name } } : null);
+                        handleUpdateClient({ funnelStageId: stage.id }, { successMessage: `Movido para "${stage.name}".`, skipRefresh: true });
+                      }}
+                      className={[
+                        "flex h-10 items-center gap-1.5 rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]",
+                        ativa
+                          ? "bg-[#171C26] text-white dark:bg-[var(--accent-primary)] dark:text-[#171C26]"
+                          : passada
+                            ? "bg-muted text-foreground hover:bg-muted/70"
+                            : "border border-dashed text-muted-foreground hover:bg-muted/60",
+                      ].join(" ")}
+                    >
+                      {passada && <CheckCircle className="h-3.5 w-3.5" aria-hidden />}
+                      {stage.name}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+        )}
+      </section>
+
+      {/* Números do cliente */}
+      <section aria-label="Resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Vendido</p>
+          <p className="mt-1 text-lg font-bold">{vendas.length ? reais(totalVendido) : "—"}</p>
+          <p className="text-xs text-muted-foreground">{vendas.length ? `${vendas.length} ${vendas.length === 1 ? "imóvel" : "imóveis"}` : "Nenhuma venda"}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Próxima tarefa</p>
+          <p className="mt-1 truncate text-sm font-semibold">{proximaTarefa?.title ?? "—"}</p>
+          <p className={`text-xs ${proximaTarefa && new Date(proximaTarefa.dateTime) < new Date() ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+            {proximaTarefa ? `${new Date(proximaTarefa.dateTime) < new Date() ? "Atrasada · " : ""}${format(new Date(proximaTarefa.dateTime), "dd/MM HH:mm")}` : `${tarefasPendentes.length} pendentes`}
+          </p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Imóvel de interesse</p>
+          <p className="mt-1 truncate text-sm font-semibold">{client.propertyOfInterest?.title ?? "—"}</p>
+          <p className="text-xs text-muted-foreground">{client.notes?.length ?? 0} anotações</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-xs font-medium text-muted-foreground">Origem</p>
+          <p className="mt-1 truncate text-sm font-semibold">{(client as any).campaignSource ?? "Orgânico"}</p>
+          <p className="truncate text-xs text-muted-foreground">Gerente: {(client.broker as any)?.supervisor?.name ?? "—"}</p>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-start">
+        {/* Coluna lateral: no celular vem primeiro (etiquetas e imóvel ficam à mão) */}
+        <aside className="space-y-5 lg:order-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base"><TagIcon className="h-4 w-4" aria-hidden /> Etiquetas</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Nome Completo</p>
-                  <p className="font-semibold text-foreground">{client.fullName}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Telefone</p>
-                  <p className="font-semibold text-foreground">{client.phone || "N/A"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Email</p>
-                  <p className="font-semibold text-foreground break-all">{client.email || "N/A"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Data de Cadastro</p>
-                  <p className="font-semibold text-foreground">{format(new Date(client.createdAt), "dd/MM/yyyy")}</p>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {client.tags?.length ? client.tags.map(tag => (
+                  <span key={tag.id} className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} aria-hidden />
+                    {tag.name}
+                  </span>
+                )) : <span className="text-sm text-muted-foreground">Nenhuma etiqueta.</span>}
+                <Popover open={isTagPopoverOpen} onOpenChange={(isOpen) => {
+                  setIsTagPopoverOpen(isOpen);
+                  if (!isOpen) {
+                    setTimeout(() => { setTagPopoverView('list'); setEditingTag(null); }, 150);
+                  }
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 rounded-full" aria-label="Adicionar ou editar etiquetas">
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Etiqueta
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0">
+                    {tagPopoverView === 'list' ? (
+                      <div>
+                        <div className="p-2 text-center border-b"><span className="text-sm font-semibold">Etiquetas</span></div>
+                        <div className="p-2"><Input type="text" placeholder="Buscar etiquetas..." value={tagSearch} onChange={e => setTagSearch(e.target.value)} className="h-8 text-sm" /></div>
+                        <Command>
+                          <CommandList className="max-h-40">
+                            <CommandGroup>
+                              {allTags.filter(t => t.name.toLowerCase().includes(tagSearch.toLowerCase())).map(tag => (
+                                <div key={tag.id} className="flex items-center pr-2">
+                                  <CommandItem onSelect={() => handleToggleTag(tag.id)} className="flex-grow flex items-center cursor-pointer">
+                                    <div className="w-5 h-5 rounded-sm mr-2" style={{ backgroundColor: tag.color }}></div>
+                                    <span className="flex-grow text-sm">{tag.name}</span>
+                                    {client.tags?.some(t => t.id === tag.id) && <CheckCircle className="h-4 w-4 text-primary" />}
+                                  </CommandItem>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTag(tag)}><Pencil className="h-3 w-3 text-muted-foreground" /></Button>
+                                </div>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                        <div className="p-2 border-t">
+                          <Button onClick={() => setTagPopoverView('create')} className="w-full h-8 text-sm" variant="ghost">Criar uma nova etiqueta</Button>
+                        </div>
+                      </div>
+                    ) : tagPopoverView === 'create' ? (
+                      <div>
+                        <div className="flex items-center p-2 text-center border-b relative">
+                          <Button onClick={() => setTagPopoverView('list')} className="absolute left-1 h-6 w-6" variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+                          <span className="text-sm font-semibold flex-1">Criar Etiqueta</span>
+                        </div>
+                        <form onSubmit={handleCreateTag} className="p-3 space-y-3">
+                          <div>
+                            <Label htmlFor="new-tag-name" className="text-sm font-medium text-gray-700">Título</Label>
+                            <Input id="new-tag-name" type="text" value={newTagData.name} onChange={e => setNewTagData({ ...newTagData, name: e.target.value })} className="mt-1 w-full h-8 text-sm" />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Selecionar uma cor</Label>
+                            <div className="grid grid-cols-6 gap-2 mt-2">
+                              {TAG_COLORS.map(color => (
+                                <button key={color} type="button" onClick={() => setNewTagData({ ...newTagData, color })} className={`w-full h-7 rounded-md border-2 ${newTagData.color === color ? 'border-primary' : 'border-transparent'}`} style={{ backgroundColor: color }} />
+                              ))}
+                            </div>
+                          </div>
+                          <Button type="submit" disabled={!newTagData.name} className="w-full h-9 text-sm">Criar</Button>
+                        </form>
+                      </div>
+                    ) : ( // 'edit' view
+                      <div>
+                        <div className="flex items-center p-2 text-center border-b relative">
+                          <Button onClick={() => setTagPopoverView('list')} className="absolute left-1 h-6 w-6" variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+                          <span className="text-sm font-semibold flex-1">Editar Etiqueta</span>
+                        </div>
+                        <form onSubmit={handleUpdateTag} className="p-3 space-y-3">
+                          <div>
+                            <Label htmlFor="edit-tag-name" className="text-sm font-medium text-gray-700">Título</Label>
+                            <Input id="edit-tag-name" type="text" value={newTagData.name} onChange={e => setNewTagData({ ...newTagData, name: e.target.value })} className="mt-1 w-full h-8 text-sm" />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Selecionar uma cor</Label>
+                            <div className="grid grid-cols-6 gap-2 mt-2">
+                              {TAG_COLORS.map(color => (
+                                <button key={color} type="button" onClick={() => setNewTagData({ ...newTagData, color })} className={`w-full h-7 rounded-md border-2 ${newTagData.color === color ? 'border-primary' : 'border-transparent'}`} style={{ backgroundColor: color }} />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="button" variant="destructive" size="icon" onClick={handleDeleteTag}><Trash2 className="h-4 w-4" /></Button>
+                            <Button type="submit" disabled={!newTagData.name} className="w-full h-9 text-sm">Salvar</Button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base"><Building2 className="h-4 w-4" aria-hidden /> Imóvel de interesse</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {client.propertyOfInterest ? (
+                <>
+                  <div>
+                    <p className="font-semibold">{client.propertyOfInterest.title}</p>
+                    <p className="text-sm text-muted-foreground">{client.propertyOfInterest.address || "Endereço não disponível"}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-10 flex-1" onClick={() => router.push(`/properties/${client.propertyOfInterestId}/view`)}>Ver imóvel</Button>
+                    <Button variant="outline" size="sm" className="h-10 flex-1" onClick={() => setIsEditPropertyDialogOpen(true)}>Trocar</Button>
+                  </div>
+                </>
+              ) : (
+                <Button variant="outline" className="h-10 w-full" onClick={() => setIsEditPropertyDialogOpen(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" /> Escolher imóvel
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -989,7 +1101,7 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <span>📋</span> Respostas do Formulário
+                    <FileText className="h-4 w-4" aria-hidden /> Respostas do formulário
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1006,9 +1118,13 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             )
           })()}
 
+        </aside>
+
+        {/* Coluna principal */}
+        <div className="space-y-5 lg:order-1 lg:col-span-2">
           {/* Vendas: cada imóvel vendido, com planta e valor */}
-          {(client.overallStatus === ClientOverallStatus.WON || ((client as any).sales?.length ?? 0) > 0) && (
-            <SalesCard clientId={clientId} vendas={((client as any).sales ?? []) as Venda[]} onAlterado={refreshClient} />
+          {(client.overallStatus === ClientOverallStatus.WON || vendas.length > 0) && (
+            <SalesCard clientId={clientId} vendas={vendas} onAlterado={refreshClient} />
           )}
 
           {/* Conversa do WhatsApp guardada pela extensão (só administrador) */}
@@ -1099,161 +1215,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
                   </div>
                 </TabsContent>
               </Tabs>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Coluna Direita (Sidebar) */}
-        <div className="hidden lg:flex lg:flex-col lg:space-y-6">
-          {/* ✅ --- CARD DE ETIQUETAS --- ✅ */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Etiquetas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2 items-center">
-                {client.tags?.map(tag => (
-                  <Badge key={tag.id} style={{ backgroundColor: tag.color, color: '#fff' }} className="text-white">
-                    {tag.name}
-                  </Badge>
-                ))}
-                <Popover open={isTagPopoverOpen} onOpenChange={(isOpen) => {
-                  setIsTagPopoverOpen(isOpen);
-                  if (!isOpen) {
-                    setTimeout(() => { setTagPopoverView('list'); setEditingTag(null); }, 150);
-                  }
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-6 w-6 rounded-full">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0">
-                    {tagPopoverView === 'list' ? (
-                      <div>
-                        <div className="p-2 text-center border-b"><span className="text-sm font-semibold">Etiquetas</span></div>
-                        <div className="p-2"><Input type="text" placeholder="Buscar etiquetas..." value={tagSearch} onChange={e => setTagSearch(e.target.value)} className="h-8 text-sm" /></div>
-                        <Command>
-                          <CommandList className="max-h-40">
-                            <CommandGroup>
-                              {allTags.filter(t => t.name.toLowerCase().includes(tagSearch.toLowerCase())).map(tag => (
-                                <div key={tag.id} className="flex items-center pr-2">
-                                  <CommandItem onSelect={() => handleToggleTag(tag.id)} className="flex-grow flex items-center cursor-pointer">
-                                    <div className="w-5 h-5 rounded-sm mr-2" style={{ backgroundColor: tag.color }}></div>
-                                    <span className="flex-grow text-sm">{tag.name}</span>
-                                    {client.tags?.some(t => t.id === tag.id) && <CheckCircle className="h-4 w-4 text-primary" />}
-                                  </CommandItem>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTag(tag)}><Pencil className="h-3 w-3 text-muted-foreground" /></Button>
-                                </div>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                        <div className="p-2 border-t">
-                          <Button onClick={() => setTagPopoverView('create')} className="w-full h-8 text-sm" variant="ghost">Criar uma nova etiqueta</Button>
-                        </div>
-                      </div>
-                    ) : tagPopoverView === 'create' ? (
-                      <div>
-                        <div className="flex items-center p-2 text-center border-b relative">
-                          <Button onClick={() => setTagPopoverView('list')} className="absolute left-1 h-6 w-6" variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-                          <span className="text-sm font-semibold flex-1">Criar Etiqueta</span>
-                        </div>
-                        <form onSubmit={handleCreateTag} className="p-3 space-y-3">
-                          <div>
-                            <Label htmlFor="new-tag-name" className="text-sm font-medium text-gray-700">Título</Label>
-                            <Input id="new-tag-name" type="text" value={newTagData.name} onChange={e => setNewTagData({ ...newTagData, name: e.target.value })} className="mt-1 w-full h-8 text-sm" />
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium text-gray-700">Selecionar uma cor</Label>
-                            <div className="grid grid-cols-6 gap-2 mt-2">
-                              {TAG_COLORS.map(color => (
-                                <button key={color} type="button" onClick={() => setNewTagData({ ...newTagData, color })} className={`w-full h-7 rounded-md border-2 ${newTagData.color === color ? 'border-primary' : 'border-transparent'}`} style={{ backgroundColor: color }} />
-                              ))}
-                            </div>
-                          </div>
-                          <Button type="submit" disabled={!newTagData.name} className="w-full h-9 text-sm">Criar</Button>
-                        </form>
-                      </div>
-                    ) : ( // 'edit' view
-                      <div>
-                        <div className="flex items-center p-2 text-center border-b relative">
-                          <Button onClick={() => setTagPopoverView('list')} className="absolute left-1 h-6 w-6" variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-                          <span className="text-sm font-semibold flex-1">Editar Etiqueta</span>
-                        </div>
-                        <form onSubmit={handleUpdateTag} className="p-3 space-y-3">
-                          <div>
-                            <Label htmlFor="edit-tag-name" className="text-sm font-medium text-gray-700">Título</Label>
-                            <Input id="edit-tag-name" type="text" value={newTagData.name} onChange={e => setNewTagData({ ...newTagData, name: e.target.value })} className="mt-1 w-full h-8 text-sm" />
-                          </div>
-                          <div>
-                            <Label className="text-sm font-medium text-gray-700">Selecionar uma cor</Label>
-                            <div className="grid grid-cols-6 gap-2 mt-2">
-                              {TAG_COLORS.map(color => (
-                                <button key={color} type="button" onClick={() => setNewTagData({ ...newTagData, color })} className={`w-full h-7 rounded-md border-2 ${newTagData.color === color ? 'border-primary' : 'border-transparent'}`} style={{ backgroundColor: color }} />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button type="button" variant="destructive" size="icon" onClick={handleDeleteTag}><Trash2 className="h-4 w-4" /></Button>
-                            <Button type="submit" disabled={!newTagData.name} className="w-full h-9 text-sm">Salvar</Button>
-                          </div>
-                        </form>
-                      </div>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditClientDialogOpen(true)}><Pencil className="h-4 w-4 mr-2" />Editar Cliente</Button>
-              <Button variant="outline" className="w-full justify-start" asChild><a href={`mailto:${client.email}`}><Mail className="h-4 w-4 mr-2" />Enviar E-mail</a></Button>
-              <Button variant="outline" className="w-full justify-start" asChild><a href={`https://wa.me/${waPhone}`} target="_blank"><MessageCircle className="h-4 w-4 mr-2" />Enviar WhatsApp</a></Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setIsTransferDialogOpen(true)}><Users className="h-4 w-4 mr-2" />Transferir Lead</Button>{isAdmin && <Button variant="outline" type="button" onClick={handleOpenRiaModal} className="w-full justify-start" disabled={isRiaLoading}><Bot className="h-4 w-4 mr-2 text-secondary-custom" />{isRiaLoading ? "Analisando..." : "Sugestão da RIA"}</Button>}<Button variant="outline" className="w-full justify-start" onClick={() => setIsScheduleVisitOpen(true)}><Calendar className="h-4 w-4 mr-2" />Agendar Visita</Button>
-            </CardContent>
-          </Card>
-
-          {/* Imóvel de Interesse (compacto) */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold">Imóvel de Interesse</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              {client.propertyOfInterest ? (
-                <>
-                  <p className="text-sm font-medium">{client.propertyOfInterest.title}</p>
-                  <p className="text-xs text-muted-foreground">{client.propertyOfInterest.address || "Endereço não disponível"}</p>
-                  <div className="flex gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="flex-1 text-xs h-8" onClick={() => router.push(`/properties/${client.propertyOfInterestId}/view`)}>Ver</Button>
-                    <Button variant="outline" size="sm" className="flex-1 text-xs h-8" onClick={() => setIsEditPropertyDialogOpen(true)}>Editar</Button>
-                  </div>
-                </>
-              ) : (
-                <Button variant="outline" className="w-full h-8 text-xs" onClick={() => setIsEditPropertyDialogOpen(true)}>
-                  <Plus className="h-3 w-3 mr-1" />Inserir Imóvel
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Resumo</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center justify-between"><span>Status Atual</span><Badge {...getStatusProps(client.overallStatus)}>{client.overallStatus ?? 'N/A'}</Badge></div>
-              <div className="flex justify-between"><span>Corretor</span><span className="font-medium">{client.broker?.name ?? 'N/A'}</span></div>
-              <div className="flex justify-between"><span>Gerente</span><span className="font-medium">{(client.broker as any)?.supervisor?.name ?? 'N/A'}</span></div>
-              <Separator />
-              <div className="flex justify-between"><span>Funil</span><span className="font-medium">{client.funnel?.name ?? 'N/A'}</span></div>
-              <div className="flex justify-between"><span>Etapa</span><span className="font-medium">{client.funnelStage?.name ?? 'N/A'}</span></div>
-              <div className="flex justify-between"><span>Campanha de Origem</span><span className="font-medium text-muted-foreground">{(client as any).campaignSource ?? 'Orgânico'}</span></div>
-              <Separator />
-              <div className="flex justify-between"><span>Anotações</span><span className="font-bold">{client.notes?.length ?? 0}</span></div>
-              <div className="flex justify-between"><span>Tarefas Pendentes</span><span className="font-bold">{client.tasks?.filter(t => !t.isCompleted).length ?? 0}</span></div>
-              <Separator />
-              <div className="flex justify-between"><span>Cliente desde</span><span className="font-medium">{format(new Date(client.createdAt), "dd/MM/yyyy")}</span></div>
             </CardContent>
           </Card>
         </div>

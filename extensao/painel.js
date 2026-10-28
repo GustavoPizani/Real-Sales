@@ -884,6 +884,7 @@
       const exemplos = [];
       const historicos = [];
       let puladas = 0;
+      let falhas = 0;
       const partesPor = conversas.map((c) => partesDe(c.mensagens));
       const pedidos = partesPor.map((p) => p.length);
       const total = pedidos.reduce((a, b) => a + b, 0);
@@ -895,16 +896,25 @@
           const parte = partesPor[i][p];
           const ultima = p === pedidos[i] - 1;
           progresso(feito, total, `A RIA está lendo ${c.nome || c.telefone || "a conversa"}${pedidos[i] > 1 ? ` (parte ${p + 1} de ${pedidos[i]})` : ""}…`);
-          const r = await comEspera(
-            () =>
-              api("ia/aprender", {
-                conversa: { ...c, mensagens: parte, total_mensagens: c.mensagens.length },
-                registrar: ultima,
-                propostas_antes: propostas,
-                origem,
-              }),
-            "a leitura",
-          );
+          let r;
+          try {
+            r = await comEspera(
+              () =>
+                api("ia/aprender", {
+                  conversa: { ...c, mensagens: parte, total_mensagens: c.mensagens.length },
+                  registrar: ultima,
+                  propostas_antes: propostas,
+                  origem,
+                }),
+              "a leitura",
+            );
+          } catch (e) {
+            // uma parte que falhou não derruba a análise toda: segue e avisa no fim
+            if (e.status === 401 || e.status === 403 || ap.parar) throw e;
+            falhas++;
+            feito++;
+            continue;
+          }
           feito++;
           if (r.pulada) {
             if (pedidos[i] === 1) puladas++;
@@ -926,7 +936,7 @@
       const final = await consolidarEmLotes(regras, exemplos, total);
       ap.propostas = final;
       ap.marcadas = { r: new Set(final.regras.map((_, i) => i)), e: new Set(final.exemplos.map((_, i) => i)) };
-      ap.relatorio = { conversas: conversas.length, puladas, incompletas: conversas.filter((c) => c.historico_completo === false).length };
+      ap.relatorio = { conversas: conversas.length, puladas, falhas, incompletas: conversas.filter((c) => c.historico_completo === false).length };
       if (!final.regras.length && !final.exemplos.length && !ap.historico) {
         est.aviso = { tipo: "alerta", texto: "A RIA não achou nada novo para aprender nessas conversas." };
       }
@@ -1497,7 +1507,7 @@
       const rel = ap.relatorio;
       const plural = (q, s, p) => `${q} ${q === 1 ? s : p}`;
       corpo = `
-        ${rel ? `<p class="mudo">${plural(rel.conversas, "conversa lida", "conversas lidas")}${rel.puladas ? ` · ${plural(rel.puladas, "curta demais", "curtas demais")}` : ""}${rel.incompletas ? ` · ${rel.incompletas} sem o histórico inteiro` : ""}</p>` : ""}
+        ${rel ? `<p class="mudo">${plural(rel.conversas, "conversa lida", "conversas lidas")}${rel.puladas ? ` · ${plural(rel.puladas, "curta demais", "curtas demais")}` : ""}${rel.incompletas ? ` · ${rel.incompletas} sem o histórico inteiro` : ""}${rel.falhas ? ` · ${plural(rel.falhas, "parte não foi lida (erro da IA)", "partes não foram lidas (erro da IA)")}` : ""}</p>` : ""}
         ${ap.historico ? `<h2>Histórico desta conversa</h2><p class="historico">${esc(ap.historico)}</p>${blocoSalvarHistorico()}<hr class="separador" />` : ""}
         ${pr.regras.length ? `<h2>Regras propostas (${pr.regras.length})</h2><div class="lista">${pr.regras.map((x, i) => item("r", x, i)).join("")}</div>` : ""}
         ${pr.exemplos.length ? `<h2 style="margin-top:10px">Exemplos de resposta (${pr.exemplos.length})</h2><div class="lista">${pr.exemplos.map((x, i) => item("e", x, i)).join("")}</div>` : ""}
