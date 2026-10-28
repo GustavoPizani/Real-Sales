@@ -377,7 +377,12 @@ interface PipelineFilters {
   brokerId: string;
   managerId: string;
   tagId: string;
+  /** imóvel de interesse do cliente: 'all', 'none' (sem produto) ou o id do imóvel */
+  propertyId: string;
 }
+
+/** Produto (imóvel de interesse) que aparece no filtro, com quantos clientes tem. */
+type ProdutoFiltro = { id: string; title: string; total: number };
 
 const defaultFilters: PipelineFilters = {
   searchTerm: '',
@@ -386,6 +391,7 @@ const defaultFilters: PipelineFilters = {
   brokerId: 'all',
   managerId: 'all',
   tagId: 'all',
+  propertyId: 'all',
 };
 
 function loadCachedFilters(): PipelineFilters {
@@ -618,6 +624,8 @@ function FilterControls({
   brokers,
   currentUserId,
   tags,
+  produtos,
+  semProduto,
 }: {
   inModal?: boolean;
   filters: PipelineFilters;
@@ -629,6 +637,8 @@ function FilterControls({
   brokers: Broker[];
   currentUserId?: string;
   tags: Tag[];
+  produtos: ProdutoFiltro[];
+  semProduto: number;
 }) {
   return (
     <div className={`flex ${inModal ? 'flex-col' : 'flex-wrap items-center'} gap-2`}>
@@ -672,6 +682,14 @@ function FilterControls({
         <SelectContent>
           <SelectItem value="all">Todas as etiquetas</SelectItem>
           {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filters.propertyId} onValueChange={value => setFilters(f => ({ ...f, propertyId: value }))}>
+        <SelectTrigger className={`${FIELD} ${inModal ? 'w-full' : 'w-[200px]'}`} aria-label="Produto"><SelectValue placeholder="Produto" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os produtos</SelectItem>
+          {produtos.map(p => <SelectItem key={p.id} value={p.id}>{p.title} ({p.total})</SelectItem>)}
+          {semProduto > 0 && <SelectItem value="none">Sem produto ({semProduto})</SelectItem>}
         </SelectContent>
       </Select>
       <Button variant="ghost" className={`rounded-full ${inModal ? 'w-full' : ''}`} onClick={() => setFilters(defaultFilters)}>
@@ -882,9 +900,31 @@ export default function PipelinePage() {
 
       const matchesTag = filters.tagId === 'all' || client.tags?.some(tag => tag.id === filters.tagId);
 
-      return matchesSearch && matchesBroker && matchesManager && matchesDate && matchesTag;
+      const produtoId = client.propertyOfInterest?.id ?? (client as { propertyOfInterestId?: string | null }).propertyOfInterestId ?? null;
+      const matchesProduto =
+        filters.propertyId === 'all' ||
+        (filters.propertyId === 'none' ? !produtoId : produtoId === filters.propertyId);
+
+      return matchesSearch && matchesBroker && matchesManager && matchesDate && matchesTag && matchesProduto;
     });
   }, [allClients, filters, brokers]);
+
+  // Produtos para o filtro: os imóveis de interesse dos clientes carregados, com a contagem
+  const { produtos, semProduto } = useMemo(() => {
+    const porId = new Map<string, ProdutoFiltro>();
+    let sem = 0;
+    for (const c of allClients) {
+      const p = c.propertyOfInterest;
+      if (!p?.id) {
+        sem++;
+        continue;
+      }
+      const atual = porId.get(p.id) ?? { id: p.id, title: p.title, total: 0 };
+      atual.total++;
+      porId.set(p.id, atual);
+    }
+    return { produtos: Array.from(porId.values()).sort((a, b) => a.title.localeCompare(b.title, 'pt-BR')), semProduto: sem };
+  }, [allClients]);
 
   const selectedClients = useMemo(
     () => allClients.filter(c => selectedClientIds.has(c.id)),
@@ -1212,6 +1252,8 @@ export default function PipelinePage() {
           brokers={brokers}
           currentUserId={user?.id}
           tags={tags}
+          produtos={produtos}
+          semProduto={semProduto}
         />
       </div>
       
@@ -1379,6 +1421,8 @@ export default function PipelinePage() {
               brokers={brokers}
               currentUserId={user?.id}
               tags={tags}
+              produtos={produtos}
+              semProduto={semProduto}
             />
           </div>
           <DialogFooter className="flex-shrink-0 pt-2">
