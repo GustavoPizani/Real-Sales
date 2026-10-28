@@ -50,7 +50,11 @@ export async function POST(request: NextRequest) {
     if (body.acao === 'analisar') {
       if (!body.conversa || !Array.isArray(body.conversa.mensagens)) return NextResponse.json({ error: 'Conversa inválida.' }, { status: 400 });
       const r = await analisarConversa(body.conversa);
-      if (!r.pulada) await registrarConversa(a.accountId, a.user.id, body.conversa, r.regras.length + r.exemplos.length, 'importacao');
+      // conversa longa chega em partes: só a última registra, com o total das propostas
+      if (body.registrar !== false && !r.pulada) {
+        const propostas = (Number(body.propostas_antes) || 0) + r.regras.length + r.exemplos.length;
+        await registrarConversa(a.accountId, a.user.id, body.conversa, propostas, 'importacao');
+      }
       return NextResponse.json(r);
     }
     if (body.acao === 'consolidar') return NextResponse.json(await consolidar(a.accountId, body));

@@ -8,6 +8,16 @@ import { conversaEmTexto, type MsgWa } from './conversa';
 import { ErroExt } from './auth';
 
 const GROQ = 'https://api.groq.com/openai/v1';
+
+/**
+ * O plano grátis do Groq aceita 8 mil tokens por minuto por modelo, e um pedido
+ * sozinho (entrada + max_tokens) não pode passar disso. Português dá uns 3,5
+ * caracteres por token: cada pedido fica perto de 6 mil tokens.
+ */
+export const LIMITE_CHARS = { catalogo: 6000, playbook: 3000, exemplos: 3000, conversa: 7000 };
+const corta = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}\n…` : s);
+/** Fica com o fim do texto (o mais recente) quando passa do limite. */
+const cortaInicio = (s: string, max: number) => (s.length > max ? `…\n${s.slice(-max)}` : s);
 const MODELO_AUDIO = 'whisper-large-v3-turbo';
 
 const STATUS = { LANCAMENTO: 'lançamento', EM_OBRAS: 'em obras', PRONTO: 'pronto' } as const;
@@ -99,6 +109,10 @@ export async function groq(corpo: Record<string, unknown>) {
     headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: GROQ_MODEL, ...reasoningOptions(GROQ_MODEL), ...corpo }),
   });
+  if (r.status === 413) {
+    console.error('[EXT_RIA] Groq 413', (await r.text()).slice(0, 300));
+    throw new ErroExt(413, 'O pedido passou do limite da IA (8 mil tokens por minuto no plano grátis do Groq). Tente com menos conversa.');
+  }
   if (r.status === 429) {
     const seg = Number(r.headers.get('retry-after')) || 30;
     throw new ErroExt(429, `Limite da IA atingido. Tente de novo em ${seg} s.`, seg);
@@ -140,25 +154,25 @@ Regras:
 7. Responda só com JSON: {"analise":"1 a 2 frases sobre o momento do cliente e o próximo passo","sugestoes":[{"texto":"mensagem pronta","porque":"motivo curto"}]} com exatamente 3 sugestões diferentes entre si.
 
 CATÁLOGO:
-${catalogo}
+${corta(catalogo, LIMITE_CHARS.catalogo)}
 
 PLAYBOOK DO CORRETOR:
-${base.playbook || '(vazio)'}
+${corta(base.playbook, LIMITE_CHARS.playbook) || '(vazio)'}
 
 EXEMPLOS DE COMO O CORRETOR RESPONDE:
-${base.exemplos || '(nenhum ainda)'}`;
+${corta(base.exemplos, LIMITE_CHARS.exemplos) || '(nenhum ainda)'}`;
 
   const usuario = `FICHA DO CLIENTE NO CRM:
 ${ficha}
 
 CONVERSA (mais recente por último):
-${conversaEmTexto(params.mensagens, 30) || '(sem mensagens)'}
+${cortaInicio(conversaEmTexto(params.mensagens, 30), 3500) || '(sem mensagens)'}
 ${params.pedido ? `\nPEDIDO DO CORRETOR PARA ESTA RESPOSTA: ${params.pedido}` : ''}`;
 
   const texto = await groq({
     messages: [{ role: 'system', content: sistema }, { role: 'user', content: usuario }],
     temperature: 0.6,
-    max_tokens: 1500,
+    max_tokens: 1200,
     response_format: { type: 'json_object' },
   });
   try {
@@ -188,7 +202,7 @@ Objeções/dúvidas: ...
 Combinado: ...
 Próximo passo: ...`,
       },
-      { role: 'user', content: `Cliente: ${nomeCliente}\n\n${conversaEmTexto(mensagens, 80)}` },
+      { role: 'user', content: `Cliente: ${nomeCliente}\n\n${cortaInicio(conversaEmTexto(mensagens, 80), 15000)}` },
     ],
     temperature: 0.2,
     max_tokens: 900,

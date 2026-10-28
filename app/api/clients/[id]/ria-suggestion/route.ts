@@ -97,18 +97,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
       orderBy: { updatedAt: 'desc' },
       select: { messages: true },
     });
-    const conversa = conversaEmTexto(((link?.messages as unknown as MsgWa[]) ?? []), 30);
-    if (conversa) clientHistory += `
-Conversa recente no WhatsApp (mais recente por último):
-${conversa}
-`;
+    const conversa = conversaEmTexto(((link?.messages as unknown as MsgWa[]) ?? []), 30).slice(-5000);
+    if (conversa) clientHistory += `\nConversa recente no WhatsApp (mais recente por último):\n${conversa}\n`;
+    // limite grátis do Groq: 8 mil tokens por minuto (entrada + resposta) num pedido só
+    if (clientHistory.length > 14000) clientHistory = `${clientHistory.slice(0, 9000)}\n…\n${clientHistory.slice(-5000)}`;
 
     const response = await groq.chat.completions.create({
       model: GROQ_MODEL,
       ...reasoningOptions(GROQ_MODEL),
       stream: true,
       temperature: 0.7,
-      max_tokens: 2048,
+      max_tokens: 1500,
       messages: [
         { role: 'system', content: riaSystemPrompt },
         { role: 'user', content: clientHistory },

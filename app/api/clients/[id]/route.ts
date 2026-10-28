@@ -43,6 +43,11 @@ async function getClientWithDetails(id: string) {
                 },
             },
             documents: true,
+            saleDetails: { select: { saleValue: true } },
+            sales: {
+                orderBy: [{ saleDate: 'asc' }, { createdAt: 'asc' }],
+                include: { property: { select: { id: true, title: true } } },
+            },
             notes: {
                 orderBy: { createdAt: 'desc' },
                 include: {
@@ -116,7 +121,11 @@ export async function PUT(
         data: updateData,
       });
 
-      if (overallStatus === 'WON' && detalhesDeVenda) {
+      // com vendas cadastradas (várias por cliente), o total vem delas (lib/client-sales.ts)
+      const temVendas = overallStatus === 'WON' && detalhesDeVenda
+        ? await tx.clientSale.count({ where: { clientId: params.id } })
+        : 0;
+      if (overallStatus === 'WON' && detalhesDeVenda && !temVendas) {
         await tx.clientWonDetails.upsert({
           where: { clientId: params.id },
           update: { saleValue: parseFloat(detalhesDeVenda.sale_value) || 0 },

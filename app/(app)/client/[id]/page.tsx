@@ -33,6 +33,7 @@ import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { TaskReminderFields } from "@/components/tasks/task-reminder-fields";
 import { useAuth } from "@/contexts/auth-context";
 import { WhatsappCard } from "@/components/client/whatsapp-card";
+import { SalesCard, VendaDialog, type Venda } from "@/components/client/sales-card";
 
 // --- Tipos e Constantes ---
 
@@ -176,7 +177,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
   const riaSuggestion = messages.find(m => m.role === 'assistant')?.content || '';
 
   // Estados dos Formulários
-  const [wonDetails, setWonDetails] = useState({ sale_value: "", sale_date: "" });
   const [lostDetails, setLostDetails] = useState({ reason: "", feedback: "" });
   const [newFunnelStageId, setNewFunnelStageId] = useState(""); // Alterado de newFunnelStatus para newFunnelStageId
   const [newNote, setNewNote] = useState("");
@@ -572,11 +572,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
     setIsScheduleVisitOpen(false);
     setVisitDate(undefined);
     setVisitTime("09:00");
-  };
-
-  const handleMarkAsWon = async () => {
-    const success = await handleUpdateClient({ overallStatus: ClientOverallStatus.WON, currentFunnelStage: "Ganho", detalhesDeVenda: { sale_value: parseFloat(wonDetails.sale_value), sale_date: new Date(wonDetails.sale_date), } }, { successMessage: "Cliente marcado como 'Ganho'!" });
-    if (success) setIsWonDialogOpen(false);
   };
 
   const handleMarkAsLost = async () => {
@@ -1011,6 +1006,11 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             )
           })()}
 
+          {/* Vendas: cada imóvel vendido, com planta e valor */}
+          {(client.overallStatus === ClientOverallStatus.WON || ((client as any).sales?.length ?? 0) > 0) && (
+            <SalesCard clientId={clientId} vendas={((client as any).sales ?? []) as Venda[]} onAlterado={refreshClient} />
+          )}
+
           {/* Conversa do WhatsApp guardada pela extensão (só administrador) */}
           {isAdmin && <WhatsappCard clientId={clientId} waPhone={waPhone} tags={client.tags} onRia={handleOpenRiaModal} />}
 
@@ -1260,7 +1260,18 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
       </div>
 
       {/* Modais */}
-      <Dialog open={isWonDialogOpen} onOpenChange={setIsWonDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Ganho</DialogTitle></DialogHeader><div className="space-y-4 py-4"><Label htmlFor="sale_value">Valor da Venda</Label><Input id="sale_value" type="number" value={wonDetails.sale_value} onChange={e => setWonDetails({ ...wonDetails, sale_value: e.target.value })} /><Label htmlFor="sale_date">Data da Venda</Label><Input id="sale_date" type="date" value={wonDetails.sale_date} onChange={e => setWonDetails({ ...wonDetails, sale_date: e.target.value })} /></div><DialogFooter><Button variant="outline" onClick={() => setIsWonDialogOpen(false)}>Cancelar</Button><Button onClick={handleMarkAsWon}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
+      <VendaDialog
+        clientId={clientId}
+        aberto={isWonDialogOpen}
+        onFechar={() => setIsWonDialogOpen(false)}
+        titulo="Cliente ganho: registrar a venda"
+        onSalvo={async (total, venda) => {
+          await handleUpdateClient(
+            { overallStatus: ClientOverallStatus.WON, currentFunnelStage: "Ganho", detalhesDeVenda: { sale_value: total, sale_date: venda.saleDate ?? new Date().toISOString() } },
+            { successMessage: "Cliente marcado como 'Ganho'!" },
+          );
+        }}
+      />
       <Dialog open={isLostDialogOpen} onOpenChange={setIsLostDialogOpen}><DialogContent><DialogHeader><DialogTitle>Marcar Cliente como Perdido</DialogTitle></DialogHeader>
         <div className="space-y-4 py-4">
           <div>

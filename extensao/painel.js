@@ -809,7 +809,67 @@
     await analisarConversas(conversas, "faixa");
   }
 
-  const PARTE = 350; // mensagens por pedido à IA: conversa longa é lida inteira, em partes
+  // Limite grátis do Groq: 8 mil tokens por minuto, e um pedido sozinho não pode
+  // passar disso. A conversa vai em partes de ~11 mil caracteres (~6 mil tokens com
+  // a resposta) e a consolidação, em lotes do mesmo tamanho.
+  const PARTE_CHARS = 11000;
+  const LOTE_CHARS = 9000;
+  const tamanhoMsg = (m) => (m.texto || "").length + 40;
+
+  /** Divide as mensagens em partes que cabem num pedido à IA. */
+  function partesDe(mensagens) {
+    const partes = [];
+    let atual = [];
+    let soma = 0;
+    for (const m of mensagens) {
+      const t = Math.min(tamanhoMsg(m), PARTE_CHARS);
+      if (atual.length && soma + t > PARTE_CHARS) {
+        partes.push(atual);
+        atual = [];
+        soma = 0;
+      }
+      atual.push(m);
+      soma += t;
+    }
+    if (atual.length) partes.push(atual);
+    return partes.length ? partes : [[]];
+  }
+
+  /** Junta as propostas em lotes que cabem num pedido; repete até sobrar um só. */
+  async function consolidarEmLotes(regras, exemplos, total) {
+    const itens = [...regras.map((x) => ["r", x]), ...exemplos.map((x) => ["e", x])];
+    const tam = ([, x]) => (x.situacao || "").length + (x.resposta || "").length + 10;
+    let rodada = 1;
+    for (;;) {
+      const lotes = [];
+      let atual = [];
+      let soma = 0;
+      for (const it of itens.splice(0)) {
+        if (atual.length && soma + tam(it) > LOTE_CHARS) {
+          lotes.push(atual);
+          atual = [];
+          soma = 0;
+        }
+        atual.push(it);
+        soma += tam(it);
+      }
+      if (atual.length) lotes.push(atual);
+      const resultados = [];
+      for (let i = 0; i < lotes.length && !est.aprender.parar; i++) {
+        progresso(total, total, lotes.length > 1 ? `Juntando as propostas (lote ${i + 1} de ${lotes.length}${rodada > 1 ? `, rodada ${rodada}` : ""})…` : "Juntando o que se repete e tirando o que a base já tem…");
+        const lote = lotes[i];
+        resultados.push(
+          await comEspera(
+            () => api("ia/aprender/consolidar", { regras: lote.filter(([k]) => k === "r").map(([, x]) => x), exemplos: lote.filter(([k]) => k === "e").map(([, x]) => x) }),
+            "a consolidação",
+          ),
+        );
+      }
+      if (lotes.length <= 1) return resultados[0] || { regras: [], exemplos: [] };
+      resultados.forEach((r) => itens.push(...r.regras.map((x) => ["r", x]), ...r.exemplos.map((x) => ["e", x])));
+      rodada++;
+    }
+  }
 
   /** A RIA lê cada conversa (em partes, se longa), junta as propostas e monta o histórico. */
   async function analisarConversas(conversas, origem) {
@@ -824,14 +884,15 @@
       const exemplos = [];
       const historicos = [];
       let puladas = 0;
-      const pedidos = conversas.map((c) => Math.max(1, Math.ceil(c.mensagens.length / PARTE)));
+      const partesPor = conversas.map((c) => partesDe(c.mensagens));
+      const pedidos = partesPor.map((p) => p.length);
       const total = pedidos.reduce((a, b) => a + b, 0);
       let feito = 0;
       for (let i = 0; i < conversas.length && !ap.parar; i++) {
         const c = conversas[i];
         let propostas = 0;
         for (let p = 0; p < pedidos[i] && !ap.parar; p++) {
-          const parte = c.mensagens.slice(p * PARTE, (p + 1) * PARTE);
+          const parte = partesPor[i][p];
           const ultima = p === pedidos[i] - 1;
           progresso(feito, total, `A RIA está lendo ${c.nome || c.telefone || "a conversa"}${pedidos[i] > 1 ? ` (parte ${p + 1} de ${pedidos[i]})` : ""}…`);
           const r = await comEspera(
@@ -862,8 +923,7 @@
       // histórico: conversa aberta e vinculada, ou uma conversa importada
       if (historicos.length && (origem === "zip" || (ap.escopo === "esta" && vinculada()))) ap.historico = historicos.join("\n\n");
       carregarRegistro([]).catch(() => {});
-      progresso(total, total, "Juntando o que se repete e tirando o que a base já tem…");
-      const final = await comEspera(() => api("ia/aprender/consolidar", { regras, exemplos }), "a consolidação");
+      const final = await consolidarEmLotes(regras, exemplos, total);
       ap.propostas = final;
       ap.marcadas = { r: new Set(final.regras.map((_, i) => i)), e: new Set(final.exemplos.map((_, i) => i)) };
       ap.relatorio = { conversas: conversas.length, puladas, incompletas: conversas.filter((c) => c.historico_completo === false).length };
@@ -1526,7 +1586,7 @@
         <button type="button" class="pequeno" data-acao="exportar-importado">${ic("download", true)} JSON</button>
         <button type="button" class="pequeno" data-acao="cancelar-importado">Cancelar</button>
       </div>
-      <p class="mudo">Conversas longas são lidas inteiras, em partes, e o histórico sai por período.</p>`;
+      <p class="mudo">Conversas longas são lidas inteiras, em partes, e o histórico sai por período. No plano grátis da IA cada parte leva cerca de 1 minuto.</p>`;
   }
 
   /** Onde salvar o histórico: na conversa vinculada, ou num cliente escolhido (importação). */

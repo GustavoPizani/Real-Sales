@@ -52,6 +52,63 @@ async function chamar(corpo: object, aoEsperar: (seg: number) => void): Promise<
   }
 }
 
+// Limite grátis do Groq: 8 mil tokens por minuto, e um pedido sozinho não pode
+// passar disso. Mesmos tamanhos da faixa (extensao/painel.js).
+const PARTE_CHARS = 11000;
+const LOTE_CHARS = 9000;
+
+function partesDe(mensagens: { texto?: string }[]) {
+  const partes: (typeof mensagens)[] = [];
+  let atual: typeof mensagens = [];
+  let soma = 0;
+  for (const m of mensagens) {
+    const t = Math.min((m.texto ?? "").length + 40, PARTE_CHARS);
+    if (atual.length && soma + t > PARTE_CHARS) {
+      partes.push(atual);
+      atual = [];
+      soma = 0;
+    }
+    atual.push(m);
+    soma += t;
+  }
+  if (atual.length) partes.push(atual);
+  return partes;
+}
+
+/** Junta as propostas em lotes que cabem num pedido; repete até sobrar um só. */
+async function consolidarEmLotes(juntas: Propostas, aviso: (texto: string) => void): Promise<Propostas> {
+  let itens: [("r" | "e"), Proposta][] = [...juntas.regras.map((x) => ["r", x] as ["r", Proposta]), ...juntas.exemplos.map((x) => ["e", x] as ["e", Proposta])];
+  const tam = ([, x]: [string, Proposta]) => (x.situacao ?? "").length + x.resposta.length + 10;
+  for (let rodada = 1; ; rodada++) {
+    const lotes: (typeof itens)[] = [];
+    let atual: typeof itens = [];
+    let soma = 0;
+    for (const it of itens) {
+      if (atual.length && soma + tam(it) > LOTE_CHARS) {
+        lotes.push(atual);
+        atual = [];
+        soma = 0;
+      }
+      atual.push(it);
+      soma += tam(it);
+    }
+    if (atual.length) lotes.push(atual);
+    const resultados: Propostas[] = [];
+    for (let i = 0; i < lotes.length; i++) {
+      aviso(lotes.length > 1 ? `Juntando as propostas (lote ${i + 1} de ${lotes.length}${rodada > 1 ? `, rodada ${rodada}` : ""})…` : "Juntando o que se repete e tirando o que a base já tem…");
+      const lote = lotes[i];
+      resultados.push(
+        await chamar(
+          { acao: "consolidar", regras: lote.filter(([k]) => k === "r").map(([, x]) => x), exemplos: lote.filter(([k]) => k === "e").map(([, x]) => x) },
+          (seg) => aviso(`Limite da IA: aguardando ${seg} s…`),
+        ),
+      );
+    }
+    if (lotes.length <= 1) return resultados[0] ?? { regras: [], exemplos: [] };
+    itens = resultados.flatMap((r) => [...r.regras.map((x) => ["r", x] as ["r", Proposta]), ...r.exemplos.map((x) => ["e", x] as ["e", Proposta])]);
+  }
+}
+
 /**
  * Importa o arquivo JSON exportado pela faixa ("Exportar JSON"), a RIA lê cada
  * conversa inteira e propõe regras e exemplos; você escolhe o que entra na base.
@@ -76,19 +133,32 @@ function AprenderComConversas({ aoSalvar }: { aoSalvar: () => void }) {
     setPropostas(null);
     const juntas: Propostas = { regras: [], exemplos: [] };
     try {
+      // conversa longa vai em partes que cabem no limite grátis da IA
+      const partesPor = conversas.map((c) => partesDe(c.mensagens));
+      const total = partesPor.reduce((n, p) => n + p.length, 0);
+      let feito = 0;
       for (let i = 0; i < conversas.length; i++) {
         const c = conversas[i];
-        setProgresso({ feito: i, total: conversas.length, texto: `A RIA está lendo ${c.nome || c.telefone || "a conversa"}…` });
-        const r = await chamar({ acao: "analisar", conversa: c }, (seg) =>
-          setProgresso({ feito: i, total: conversas.length, texto: `Limite da IA: aguardando ${seg} s…` }),
-        );
-        juntas.regras.push(...r.regras);
-        juntas.exemplos.push(...r.exemplos);
+        let propostas = 0;
+        for (let p = 0; p < partesPor[i].length; p++) {
+          const partes = partesPor[i].length;
+          setProgresso({ feito, total, texto: `A RIA está lendo ${c.nome || c.telefone || "a conversa"}${partes > 1 ? ` (parte ${p + 1} de ${partes})` : ""}…` });
+          const r = await chamar(
+            {
+              acao: "analisar",
+              conversa: { ...c, mensagens: partesPor[i][p], total_mensagens: c.mensagens.length },
+              registrar: p === partes - 1,
+              propostas_antes: propostas,
+            },
+            (seg) => setProgresso({ feito, total, texto: `Limite da IA: aguardando ${seg} s…` }),
+          );
+          feito++;
+          propostas += r.regras.length + r.exemplos.length;
+          juntas.regras.push(...r.regras);
+          juntas.exemplos.push(...r.exemplos);
+        }
       }
-      setProgresso({ feito: conversas.length, total: conversas.length, texto: "Juntando o que se repete e tirando o que a base já tem…" });
-      const final: Propostas = await chamar({ acao: "consolidar", ...juntas }, (seg) =>
-        setProgresso({ feito: conversas.length, total: conversas.length, texto: `Limite da IA: aguardando ${seg} s…` }),
-      );
+      const final = await consolidarEmLotes(juntas, (texto) => setProgresso({ feito: total, total, texto }));
       setPropostas(final);
       setMarcadas(new Set([...final.regras.map((_, i) => `r${i}`), ...final.exemplos.map((_, i) => `e${i}`)]));
       if (!final.regras.length && !final.exemplos.length) toast({ title: "A RIA não achou nada novo nessas conversas." });

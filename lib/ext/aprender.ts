@@ -24,7 +24,13 @@ export interface Propostas { regras: Proposta[]; exemplos: Proposta[] }
 
 const TIPOS: Record<string, MsgWa['tipo']> = { audio: 'a', imagem: 'i', video: 'v', documento: 'd' };
 const MAX_MSGS = 400;
-const MAX_CHARS = 45_000;
+/**
+ * Texto de conversa por pedido. Cabe no limite grátis do Groq (8 mil tokens por
+ * minuto, entrada + resposta). A faixa e a página do CRM já mandam conversas
+ * longas em partes deste tamanho (PARTE_CHARS); aqui é só a trava de segurança.
+ */
+export const PARTE_CHARS = 11_000;
+const MAX_CHARS = 12_000;
 
 /** Converte para o formato interno, mantendo só o fim da conversa se for grande demais para a IA. */
 function paraMsgs(c: ConversaExport): MsgWa[] {
@@ -97,7 +103,7 @@ Responda só com JSON: {"historico": "...", "regras": [...], "exemplos": [...]}`
       { role: 'user', content: conversa },
     ],
     temperature: 0.2,
-    max_tokens: 2500,
+    max_tokens: 1800,
     response_format: { type: 'json_object' },
   });
   const j = lerJson(texto);
@@ -113,11 +119,13 @@ export async function consolidar(accountId: string, propostas: Propostas): Promi
   const base = await prisma.knowledgeItem.findMany({
     where: { accountId, active: true },
     orderBy: { updatedAt: 'desc' },
-    take: 80,
+    take: 40,
     select: { kind: true, situation: true, answer: true },
   });
   const linha = (p: { situacao?: string | null; resposta: string }) => `- ${p.situacao ? `${p.situacao} → ` : ''}${p.resposta}`;
-  const ja = base.map((b) => linha({ situacao: b.situation, resposta: b.answer })).join('\n');
+  const ja = base.map((b) => linha({ situacao: b.situation, resposta: b.answer })).join('\n').slice(0, 3000);
+  // a faixa manda em lotes que cabem no limite; aqui só a trava de segurança
+  const propostasTexto = `REGRAS PROPOSTAS:\n${regras.map(linha).join('\n') || '(nenhuma)'}\n\nEXEMPLOS PROPOSTOS:\n${exemplos.map(linha).join('\n') || '(nenhum)'}`.slice(0, 11_000);
 
   const texto = await groq({
     messages: [
@@ -133,11 +141,11 @@ Responda só com JSON: {"regras": [...], "exemplos": [...]}`,
       },
       {
         role: 'user',
-        content: `BASE ATUAL:\n${ja || '(vazia)'}\n\nREGRAS PROPOSTAS:\n${regras.map(linha).join('\n') || '(nenhuma)'}\n\nEXEMPLOS PROPOSTOS:\n${exemplos.map(linha).join('\n') || '(nenhum)'}`.slice(0, 90_000),
+        content: `BASE ATUAL:\n${ja || '(vazia)'}\n\n${propostasTexto}`,
       },
     ],
     temperature: 0.2,
-    max_tokens: 4000,
+    max_tokens: 2200,
     response_format: { type: 'json_object' },
   });
   const j = lerJson(texto);

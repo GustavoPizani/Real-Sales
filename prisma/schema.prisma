@@ -81,6 +81,7 @@ model Client {
   stageEvents          ClientStageEvent[]
   sdrContact           Contact?
   waLinks              WaLink[]
+  sales                ClientSale[]
 
   @@index([accountId])
   @@index([brokerId])
@@ -186,6 +187,7 @@ model Property {
   updater              User?                 @relation("UpdatedProperties", fields: [updaterId], references: [id])
   images               PropertyImage[]
   propertyTypes        PropertyType[]
+  sales                ClientSale[]
 
   @@map("properties")
 }
@@ -432,6 +434,34 @@ model ActiveOfferClient {
   @@index([status])
   @@index([clientId])
   @@map("active_offer_clients")
+}
+
+// Uma venda do cliente (pode ter várias). O imóvel é do CRM (propertyId + tipologia)
+// ou de fora (propertyName + planta). ClientWonDetails.saleValue guarda a soma,
+// para o dashboard (ver lib/client-sales.ts).
+model ClientSale {
+  id             String    @id @default(uuid())
+  clientId       String
+  propertyId     String?
+  propertyTypeId String?
+  propertyName   String?
+  unit           String?
+  typology       String?
+  area           Float?
+  bedrooms       Int?
+  floorPlanUrl   String?
+  saleValue      Float
+  saleDate       DateTime?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  property       Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([propertyId])
+  @@map("client_sales")
 }
 
 model ClientWonDetails {
