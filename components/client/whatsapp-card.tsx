@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CalendarClock, Clock, FileText, Image as ImageIcon, MessageCircle, Mic, RefreshCw, Video } from "lucide-react";
+import { Bot, CalendarClock, ChevronDown, Clock, FileText, Image as ImageIcon, MessageCircle, Mic, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -108,6 +108,21 @@ export function WhatsappCard({ clientId, waPhone, tags, onRia }: { clientId: str
   const [erro, setErro] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const rolagem = useRef<HTMLDivElement>(null);
+  // recolhido por padrão (a ficha não fica comprida); lembra a escolha neste navegador
+  const [aberto, setAberto] = useState(false);
+  useEffect(() => {
+    try {
+      setAberto(localStorage.getItem("ficha.whatsappAberto") === "1");
+    } catch {}
+  }, []);
+  const alternar = () => {
+    setAberto((v) => {
+      try {
+        localStorage.setItem("ficha.whatsappAberto", v ? "0" : "1");
+      } catch {}
+      return !v;
+    });
+  };
 
   const carregar = () => {
     setCarregando(true);
@@ -135,7 +150,7 @@ export function WhatsappCard({ clientId, waPhone, tags, onRia }: { clientId: str
   // abre na mensagem mais recente
   useEffect(() => {
     if (rolagem.current) rolagem.current.scrollTop = rolagem.current.scrollHeight;
-  }, [grupos]);
+  }, [grupos, aberto]);
 
   const vencido = dados?.vinculada && dados.prazo ? Date.parse(dados.prazo.em) <= Date.now() : false;
 
@@ -143,7 +158,13 @@ export function WhatsappCard({ clientId, waPhone, tags, onRia }: { clientId: str
     <Card>
       <CardHeader className="space-y-3 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={alternar}
+            aria-expanded={aberto}
+            aria-controls="whatsapp-conversa"
+            className="-m-1 flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+          >
             <span
               className="grid h-10 w-10 place-items-center rounded-full text-[var(--accent-primary)]"
               style={{ background: "color-mix(in srgb, var(--accent-primary) 16%, transparent)" }}
@@ -155,11 +176,13 @@ export function WhatsappCard({ clientId, waPhone, tags, onRia }: { clientId: str
               <CardTitle className="text-lg">WhatsApp</CardTitle>
               <p className="text-xs text-muted-foreground">
                 {dados?.vinculada
-                  ? `Conversa guardada pela extensão · atualizada há ${ha(dados.atualizada_em)}`
+                  ? `${mensagens.length} mensagens guardadas · atualizada há ${ha(dados.atualizada_em)}`
                   : "Conversa guardada pela extensão do WhatsApp Web"}
               </p>
             </div>
-          </div>
+            <ChevronDown className={cn("ml-auto h-5 w-5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none", aberto && "rotate-180")} aria-hidden />
+            <span className="sr-only">{aberto ? "Recolher a conversa" : "Mostrar a conversa"}</span>
+          </button>
           <Button variant="ghost" size="icon" className="h-11 w-11" onClick={carregar} disabled={carregando} aria-label="Atualizar a conversa">
             <RefreshCw className={cn("h-4 w-4", carregando && "animate-spin motion-reduce:animate-none")} />
           </Button>
@@ -199,7 +222,7 @@ export function WhatsappCard({ clientId, waPhone, tags, onRia }: { clientId: str
         )}
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent id="whatsapp-conversa" className={cn("space-y-4", !aberto && "hidden")}>
         {carregando && !dados ? (
           <div className="space-y-3" aria-label="Carregando a conversa">
             <Skeleton className="h-12 w-2/3" />

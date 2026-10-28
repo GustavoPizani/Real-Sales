@@ -1076,6 +1076,11 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
             </CardContent>
           </Card>
 
+          {/* Vendas: cada imóvel vendido, com planta e valor (logo abaixo do imóvel de interesse) */}
+          {(client.overallStatus === ClientOverallStatus.WON || vendas.length > 0) && (
+            <SalesCard clientId={clientId} vendas={vendas} onAlterado={refreshClient} />
+          )}
+
           {/* Card de Observações do Formulário Facebook (apenas campos extras com valor real) */}
           {(() => {
             const STANDARD = new Set([
@@ -1122,11 +1127,6 @@ function ClientDetailsContent({ clientId }: { clientId: string }) {
 
         {/* Coluna principal */}
         <div className="space-y-5 lg:order-1 lg:col-span-2">
-          {/* Vendas: cada imóvel vendido, com planta e valor */}
-          {(client.overallStatus === ClientOverallStatus.WON || vendas.length > 0) && (
-            <SalesCard clientId={clientId} vendas={vendas} onAlterado={refreshClient} />
-          )}
-
           {/* Conversa do WhatsApp guardada pela extensão (só administrador) */}
           {isAdmin && <WhatsappCard clientId={clientId} waPhone={waPhone} tags={client.tags} onRia={handleOpenRiaModal} />}
 

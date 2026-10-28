@@ -32,7 +32,20 @@ type Tipologia = { id: string; name: string; value: number; area: number | null;
 type Imovel = { id: string; title: string; propertyTypes?: Tipologia[] };
 
 const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const dataBR = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+// data da venda é só dia: lida em UTC para não "voltar" um dia no fuso de Brasília
+const dataBR = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+
+/** Planta, área, dormitórios e unidade sem repetir o que a planta já diz. */
+function descricao(v: Venda) {
+  const planta = v.typology ?? "";
+  const partes = [
+    planta,
+    v.area && !/m²|m2/i.test(planta) ? `${v.area} m²` : null,
+    v.bedrooms && !/dorm|su[ií]te|quarto/i.test(planta) ? `${v.bedrooms} dorm.` : null,
+    v.unit ? `unid. ${v.unit}` : null,
+  ];
+  return partes.filter(Boolean).join(" · ");
+}
 
 const VAZIO = {
   origem: "crm" as "crm" | "fora",
@@ -61,7 +74,7 @@ function formDaVenda(v: Venda): typeof VAZIO {
     bedrooms: v.bedrooms != null ? String(v.bedrooms) : "",
     floorPlanUrl: v.floorPlanUrl ?? "",
     saleValue: String(v.saleValue),
-    saleDate: v.saleDate ? new Date(v.saleDate).toISOString().slice(0, 10) : "",
+    saleDate: v.saleDate ? v.saleDate.slice(0, 10) : "",
     notes: v.notes ?? "",
   };
 }
@@ -319,7 +332,7 @@ export function SalesCard({ clientId, vendas, onAlterado }: { clientId: string; 
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{v.property?.title ?? v.propertyName ?? "Imóvel"}</p>
                   <p className="text-sm text-muted-foreground">
-                    {[v.typology, v.area && `${v.area} m²`, v.bedrooms && `${v.bedrooms} dorm.`, v.unit && `unid. ${v.unit}`].filter(Boolean).join(" · ") || "Sem planta informada"}
+                    {descricao(v) || "Sem planta informada"}
                   </p>
                   <p className="mt-1 text-sm">
                     <b>{reais(v.saleValue)}</b>
