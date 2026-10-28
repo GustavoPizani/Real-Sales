@@ -8,7 +8,7 @@ import { useTheme } from "next-themes";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   ArrowRight, Bot, Building, CheckSquare, Home, Kanban, LayoutDashboard, LogOut, Megaphone, MessageCircle,
-  Moon, PanelLeftClose, PanelLeftOpen, Phone, RotateCcw, Settings, SlidersHorizontal, Slack, Sun, Target, X, Zap,
+  Moon, PanelLeftClose, PanelLeftOpen, Phone, RotateCcw, Settings, SlidersHorizontal, Sun, Target, X, Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
@@ -56,7 +56,6 @@ const SYSTEMS: Record<SidebarSystem, { label: string; home: string; icon: Lucide
       { name: "Roleta", href: "/roleta", icon: RotateCcw },
       { name: "Qualificação", href: "/qualificacao", icon: Target, adminOnly: true },
       { name: "Oferta Ativa", href: "/active-offers", icon: Phone },
-      { name: "Extensão WhatsApp", href: "/extensao", icon: MessageCircle, adminOnly: true },
     ],
   },
   marketing: {
@@ -68,8 +67,8 @@ const SYSTEMS: Record<SidebarSystem, { label: string; home: string; icon: Lucide
       { name: "Config. do dashboard", href: "/marketing/settings", icon: SlidersHorizontal },
       { name: "Integrações", href: "/marketing/integrations", icon: Zap },
       { name: "WhatsApp", href: "/marketing/whatsapp", icon: MessageCircle },
+      { name: "Extensão WhatsApp", href: "/extensao", icon: MessageCircle, adminOnly: true },
       { name: "Agentes SDR", href: "/marketing/agents", icon: Bot },
-      { name: "Slack", href: "/marketing/slack", icon: Slack },
     ],
   },
 };

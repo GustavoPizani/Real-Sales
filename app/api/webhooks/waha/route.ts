@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueForDebounce } from "@/lib/debounce";
-import { sendSlackSDRNotification } from "@/lib/slack";
 
 /**
  * POST /api/webhooks/waha
@@ -121,10 +120,6 @@ export async function POST(req: Request) {
             : {}),
         },
       });
-
-      await sendSlackSDRNotification(
-        `🚀 Novo lead capturado e Bot SDR iniciou o atendimento: ${identity.contact?.name ?? externalId}`
-      );
     }
 
     // 5. Salvar a Mensagem Inbound no Banco

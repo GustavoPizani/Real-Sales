@@ -1,7 +1,6 @@
 import { prisma } from './prisma'
 import { graphGet, extractLeadFields, type FbLead } from './facebook-graph'
 import { notifyNewLead } from './notifications'
-import { sendSlackLeadNotification } from './slack'
 import { ClientOverallStatus } from '@prisma/client'
 import { findDuplicateClient, registerRecadastro, reopenLostClient } from './lead-dedup'
 import { claimNextRouletteUser } from './public-lead-link'
@@ -147,7 +146,7 @@ export async function ingestLead(
 
   const broker = await prisma.user.findUnique({
     where: { id: brokerId },
-    select: { name: true, accountId: true, slackWebhookUrl: true },
+    select: { name: true, accountId: true },
   })
   // Admin raiz não tem accountId preenchido (o próprio id É a conta) — sem esse
   // fallback, leads atribuídos a ele ficavam sem tenant e sumiam do pipeline.
@@ -204,26 +203,6 @@ export async function ingestLead(
     data: { leadCount: { increment: 1 }, lastSyncedAt: new Date() },
   })
 
-  // Lê mensagem de primeiro contato configurada pelo usuário
-  const firstMessageSetting = await prisma.apiSetting.findFirst({
-    where: { setting_key: 'WHATSAPP_FIRST_MESSAGE' },
-    select: { encrypted_value: true },
-  }).catch(() => null)
-
-  // A mensagem de primeiro contato é salva como texto puro (não é dado sensível)
-  let firstMessage: string | null = firstMessageSetting?.encrypted_value ?? null
-
-  // Substitui variáveis na mensagem
-  if (firstMessage) {
-    const propertyName = (mapping as any).property?.title ?? mapping.formName ?? ''
-    firstMessage = firstMessage
-      .replace(/\{\{nome\}\}/gi, fullName)
-      .replace(/\{\{produto\}\}/gi, propertyName)
-      .replace(/\{\{corretor\}\}/gi, broker?.name ?? 'Corretor')
-  }
-
-  const hasSdrAgent = !!(mapping as any).agentId
-
   await Promise.allSettled([
     // Lead recuperado (reopenLostClient) já notificou o corretor — evita duplicar o push.
     duplicate
@@ -236,17 +215,6 @@ export async function ingestLead(
           campaignSource: campaign,
           accountId: clientAccountId,
         }).catch(err => console.error('[NOTIFY] Falha ao enviar push para lead', client.id, ':', err?.message ?? err)),
-    sendSlackLeadNotification({
-      clientId: client.id,
-      clientName: fullName,
-      phone,
-      email,
-      brokerName: broker?.name ?? 'Corretor',
-      brokerWebhookUrl: broker?.slackWebhookUrl,
-      campaignSource: campaign,
-      hasSdrAgent,
-      firstMessage,
-    }),
   ])
 
   console.log(`[LEAD_INGEST] Cliente criado: ${client.id} (lead FB ${lead.id})`)

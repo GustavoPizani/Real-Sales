@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Cliente } from '@prisma/client';
-
-// Função auxiliar movida para fora do handler principal para melhor estrutura
-async function sendSlackNotification(brokerId: string, client: Cliente) {
-  // Lógica para enviar notificação para o Slack
-  console.log(`Notificando Slack para o BROKER ${brokerId} sobre o cliente ${client.fullName}`);
-}
 
 export async function POST(
   request: NextRequest,
@@ -27,10 +20,6 @@ export async function POST(
         BROKER: true,
       },
     });
-
-    if (result && result.brokerId) {
-      await sendSlackNotification(result.brokerId, result);
-    }
 
     // O `return` agora está corretamente posicionado dentro do bloco `try`
     return NextResponse.json({

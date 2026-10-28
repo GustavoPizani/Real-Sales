@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { reasoningOptions, resolveGroqModel } from "./models";
 import { sendTextViaWaha } from "./waha-sender";
-import { sendSlackSDRNotification } from "@/lib/slack";
 import type { NormalizedMessage } from "@/lib/debounce";
 
 /**
@@ -215,7 +214,6 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
     if (toolCalls.length > 0) {
       for (const tool of toolCalls) {
         if (tool.function.name === "qualify_lead") {
-          const args = JSON.parse(tool.function.arguments || "{}");
           
           // Encerrar o atendimento da IA
           await prisma.conversation.update({
@@ -225,12 +223,6 @@ Assim que coletar essas informações ou o cliente atingir esse ponto, você DEV
               aiEnabled: false 
             }
           });
-
-          // Enviar pro Slack
-          const leadName = crmClient?.fullName || conversation.contact.name || "Desconhecido";
-          await sendSlackSDRNotification(
-            `✅ *Lead Qualificado pelo Bot SDR!*\nO cliente *${leadName}* atingiu o objetivo de qualificação e o bot encerrou o atendimento automático.\n\n*Resumo coletado:* ${args.summary || "Sem resumo."}`
-          );
         }
       }
     }
