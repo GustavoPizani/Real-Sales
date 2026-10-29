@@ -776,6 +776,10 @@ model WaLink {
   waLabelsSynced Boolean   @default(false)
   // Prazo do próximo contato = tarefa do CRM (aparece em Tarefas e tem lembrete)
   followUpTaskId String?
+  // Produto que o corretor está oferecendo agora nesta conversa (pode ser
+  // diferente do imóvel de interesse do cliente): do catálogo ou texto livre
+  offerPropertyId String?
+  offerText       String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)

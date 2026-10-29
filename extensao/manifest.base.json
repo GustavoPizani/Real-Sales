@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Nordic WhatsApp",
   "short_name": "Nordic WA",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Faixa do Nordic CRM no WhatsApp Web: cliente da conversa, lista de clientes, funis do CRM, disparo, etiquetas espelhadas, prazos de contato, RIA com sugestões de resposta, transcrição de áudio e registro de visita.",
   "icons": { "16": "icone.png", "48": "icone.png", "128": "icone.png" },
   "action": { "default_title": "Abrir o WhatsApp Web", "default_icon": "icone.png" },

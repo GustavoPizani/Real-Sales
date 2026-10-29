@@ -107,6 +107,14 @@ function filtroClientes(u: UsuarioExt, c: Corpo): Prisma.ClientWhereInput {
   };
 }
 
+async function salvarOferta(linkId: string, c: Corpo) {
+  const propertyId = texto(c.produto_id, 60) || null;
+  const imovel = propertyId ? await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, title: true } }) : null;
+  const offerText = imovel ? null : texto(c.produto_texto, 300) || null;
+  await prisma.waLink.update({ where: { id: linkId }, data: { offerPropertyId: imovel?.id ?? null, offerText } });
+  return { property_id: imovel?.id ?? null, titulo: imovel?.title ?? null, texto: offerText };
+}
+
 const mensagensDe = (link: { messages: unknown }) => (link.messages as unknown as MsgWa[]) ?? [];
 
 /** Grava as mensagens novas na janela da conversa e resolve as sugestões pendentes. */
@@ -145,6 +153,7 @@ async function respostaVinculo(u: UsuarioExt, link: WaLink, mensagens: MsgWa[], 
       ultima_lado: link.lastSide,
       etiquetas: etiquetas.etiquetas,
       prazo,
+      oferta: { property_id: link.offerPropertyId, texto: link.offerText },
     },
     cliente: cartao(cliente),
     acoesWa: etiquetas.acoesWa,
@@ -256,7 +265,16 @@ const ROTAS: Record<string, Handler> = {
     const link = await linkDoUsuario(u, c.vinculo_id);
     const msgs = await gravarMensagens(link.id, mensagensDe(link), c.mensagens);
     const pedido = texto(c.pedido, 300);
-    const r = await sugerir({ accountId: u.accountId, clientId: link.clientId, mensagens: msgs, pedido });
+    // produto em oferta: o que veio agora (e fica salvo) ou o que já estava salvo na conversa
+    if (c.produto_id !== undefined || c.produto_texto !== undefined) await salvarOferta(link.id, c);
+    const atual = await prisma.waLink.findUnique({ where: { id: link.id }, select: { offerPropertyId: true, offerText: true } });
+    const r = await sugerir({
+      accountId: u.accountId,
+      clientId: link.clientId,
+      mensagens: msgs,
+      pedido,
+      oferta: { propertyId: atual?.offerPropertyId, texto: atual?.offerText },
+    });
     // o que o cliente disse desde a sua última mensagem: vira a "situação" do exemplo
     const ultEu = msgs.findLastIndex((m) => m.lado === '>');
     const contexto = msgs.slice(ultEu + 1).filter((m) => m.lado === '<').map((m) => m.texto).join('\n').slice(0, 1500);
@@ -274,6 +292,12 @@ const ROTAS: Record<string, Handler> = {
       },
     });
     return { id: s.id, ...r };
+  },
+
+  /** Produto que o corretor está oferecendo nesta conversa (catálogo ou texto livre; vazio = detectar). */
+  async 'vinculo/produto'(u, c) {
+    const link = await linkDoUsuario(u, c.vinculo_id);
+    return { oferta: await salvarOferta(link.id, c) };
   },
 
   async 'ia/sugestao/usar'(u, c) {

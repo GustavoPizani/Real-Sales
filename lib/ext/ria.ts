@@ -25,14 +25,15 @@ const STATUS = { LANCAMENTO: 'lançamento', EM_OBRAS: 'em obras', PRONTO: 'pront
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 // Catálogo: uma linha por imóvel. Muda pouco: guarda 10 min.
-let catalogo: { linhas: string[]; ate: number } | null = null;
-async function catalogoLinhas(): Promise<string[]> {
+type ImovelCatalogo = { id: string; titulo: string; linha: string };
+let catalogo: { linhas: ImovelCatalogo[]; ate: number } | null = null;
+async function catalogoLinhas(): Promise<ImovelCatalogo[]> {
   if (catalogo && catalogo.ate > Date.now()) return catalogo.linhas;
   const imoveis = await prisma.property.findMany({
     orderBy: { updatedAt: 'desc' },
     take: 120,
     select: {
-      title: true, address: true, price: true, status: true, type: true,
+      id: true, title: true, address: true, price: true, status: true, type: true,
       propertyTypes: { select: { name: true, value: true, area: true, dormitorios: true, suites: true, vagas: true } },
     },
   });
@@ -40,7 +41,8 @@ async function catalogoLinhas(): Promise<string[]> {
     const tipologias = p.propertyTypes
       .map((t) => [t.name, t.area && `${t.area} m²`, t.dormitorios && `${t.dormitorios} dorm`, t.suites && `${t.suites} suíte`, t.vagas && `${t.vagas} vaga`, t.value > 0 && `a partir de ${reais(t.value)}`].filter(Boolean).join(' '))
       .join('; ');
-    return `- ${[p.title, p.address, STATUS[p.status], p.type, !tipologias && p.price ? `a partir de ${reais(p.price)}` : '', tipologias].filter(Boolean).join(' | ')}`;
+    const linha = `- ${[p.title, p.address, STATUS[p.status], p.type, !tipologias && p.price ? `a partir de ${reais(p.price)}` : '', tipologias].filter(Boolean).join(' | ')}`;
+    return { id: p.id, titulo: p.title, linha };
   });
   catalogo = { linhas, ate: Date.now() + 10 * 60_000 };
   return linhas;
@@ -99,6 +101,34 @@ async function itensDaBase(accountId: string): Promise<{ playbook: string[]; exe
     ...corrigidas.map((c) => ({ s: c.context, r: c.sentText! })),
   ].map((e) => `Situação: ${(e.s ?? '').slice(0, 220)}\nEle escreveu: ${e.r.slice(0, 450)}`);
   return { playbook, exemplos };
+}
+
+/**
+ * Imóvel do catálogo que o corretor está oferecendo: procura o nome no pedido e,
+ * se não achar, nas últimas mensagens dele (da mais recente para trás).
+ */
+function detectarProduto(imoveis: ImovelCatalogo[], pedido: string | undefined, mensagens: MsgWa[]): ImovelCatalogo | undefined {
+  const marcas = imoveis.map((i) => ({ i, chaves: Array.from(palavras(i.titulo)) })).filter((x) => x.chaves.length);
+  const achar = (texto: string) => {
+    const t = palavras(texto);
+    let melhor: { i: ImovelCatalogo; nota: number } | undefined;
+    for (const { i, chaves } of marcas) {
+      const acertos = chaves.filter((c) => t.has(c)).length;
+      // nome inteiro, ou a marca (1ª palavra) e mais uma; só o bairro ("vila mariana") não conta
+      const nota = acertos === chaves.length ? acertos + 10 : acertos >= 2 && t.has(chaves[0]) ? acertos : 0;
+      if (nota && (!melhor || nota > melhor.nota)) melhor = { i, nota };
+    }
+    return melhor?.i;
+  };
+  if (pedido) {
+    const p = achar(pedido);
+    if (p) return p;
+  }
+  for (const m of [...mensagens].reverse().filter((x) => x.lado === '>').slice(0, 25)) {
+    const p = achar(m.texto);
+    if (p) return p;
+  }
+  return undefined;
 }
 
 // ── escolher o que entra no pedido (o limite é pequeno) ──
@@ -188,7 +218,9 @@ export async function sugerir(params: {
   clientId: string | null;
   mensagens: MsgWa[];
   pedido?: string;
-}): Promise<{ analise: string; sugestoes: Sugestao[] }> {
+  /** produto que o corretor está oferecendo agora (escolhido na faixa) */
+  oferta?: { propertyId?: string | null; texto?: string | null };
+}): Promise<{ analise: string; sugestoes: Sugestao[]; produto: { titulo: string; origem: 'escolhido' | 'detectado' } | null }> {
   const [perfil, ficha, base, imoveis] = await Promise.all([
     perfilDaConta(params.accountId),
     fichaCliente(params.clientId),
@@ -198,6 +230,21 @@ export async function sugerir(params: {
   // o que o cliente disse por último (+ o pedido): guia a escolha do que entra
   const consulta = [params.pedido ?? '', ...params.mensagens.slice(-8).map((m) => m.texto)].join(' ');
   const interesse = ficha.imovel ? norm(ficha.imovel) : '';
+
+  // Produto em oferta: o escolhido na faixa; senão, o imóvel do catálogo citado
+  // no pedido ou nas últimas mensagens do corretor (o mais recente vale).
+  const escolhido = params.oferta?.propertyId ? imoveis.find((i) => i.id === params.oferta!.propertyId) : undefined;
+  const textoOferta = params.oferta?.texto?.trim() || '';
+  const detectado = !escolhido && !textoOferta ? detectarProduto(imoveis, params.pedido, params.mensagens) : undefined;
+  const emOferta = escolhido ?? detectado;
+  const produto = escolhido || textoOferta
+    ? { titulo: escolhido?.titulo ?? textoOferta, origem: 'escolhido' as const }
+    : detectado
+      ? { titulo: detectado.titulo, origem: 'detectado' as const }
+      : null;
+  const blocoOferta = escolhido || textoOferta || detectado
+    ? `\n\nPRODUTO QUE O CORRETOR ESTÁ OFERECENDO AGORA (${escolhido || textoOferta ? 'escolhido por ele' : 'detectado nas mensagens dele'}):\n${[emOferta?.linha, textoOferta].filter(Boolean).join('\n')}`
+    : '';
 
   // Limite grátis do Groq: 8 mil tokens por minuto, entrada + resposta num pedido
   // só. Se mesmo assim passar (413), tenta de novo com menos de tudo.
@@ -210,7 +257,10 @@ export async function sugerir(params: {
       conversa: Math.round(5200 * escala),
     };
     const catalogo = escolherAte(
-      imoveis.map((l) => ({ texto: l, peso: (interesse && norm(l).includes(interesse) ? 100 : 0) + afinidade(l, consulta) })),
+      imoveis.map((l) => ({
+        texto: l.linha,
+        peso: (emOferta?.id === l.id ? 1000 : 0) + (interesse && norm(l.titulo).includes(interesse) ? 100 : 0) + afinidade(l.linha, consulta),
+      })),
       L.catalogo,
     );
     const playbook = escolherAte(base.playbook.map((t) => ({ texto: t, peso: afinidade(t, consulta) })), L.playbook);
@@ -222,9 +272,10 @@ REGRAS DESTA TAREFA
 1. Leia a conversa INTEIRA e a situação no tempo antes de escrever. Considere o que já foi enviado, prometido ou combinado (fluxo, planta, visita, documentos) e as transcrições de áudio. Não repita o que já foi dito.
 2. Se faz tempo que não se falam, reconheça isso com naturalidade e retome do ponto em que pararam; nada de "vi que recebeu" sobre algo antigo como se fosse recente.
 3. NUNCA INVENTE: unidade disponível, condição, desconto, valor de parcela, entrada, prazo, aprovação ou "consegui liberar". Só cite o que está na CONVERSA, na FICHA ou no CATÁLOGO (imóveis com o nome exato; valores só como referência, "a partir de"). Se não há novidade real, não crie uma: retome o ponto pendente, pergunte o que mudou para ele ou ofereça refazer/ajustar o fluxo e uma ligação.
-4. Escreva como o corretor (veja o tom e os EXEMPLOS reais dele). Use o nome do cliente. Nunca deixe marcadores como [seu nome] ou [cliente] no texto.
-5. As 3 sugestões devem ser abordagens DIFERENTES (ex.: retomar o ponto pendente, entender o que mudou para o cliente, propor ligação/visita com dois horários). Cada uma pronta para enviar, curta. Se faltar um dado que só o corretor sabe (uma condição nova, por exemplo), diga isso no "porque" em vez de inventar no texto.
-6. Responda só com JSON: {"analise":"2 a 3 frases: em que momento o cliente está, o que ficou pendente e qual o próximo passo","sugestoes":[{"texto":"mensagem pronta","porque":"motivo curto"}]}
+4. O imóvel de interesse da FICHA pode estar desatualizado. Se houver PRODUTO EM OFERTA, ou se na conversa o corretor passou a oferecer outro imóvel, as sugestões falam do mais recente.
+5. Escreva como o corretor (veja o tom e os EXEMPLOS reais dele). Use o nome do cliente. Nunca deixe marcadores como [seu nome] ou [cliente] no texto.
+6. As 3 sugestões devem ser abordagens DIFERENTES (ex.: retomar o ponto pendente, entender o que mudou para o cliente, propor ligação/visita com dois horários). Cada uma pronta para enviar, curta. Se faltar um dado que só o corretor sabe (uma condição nova, por exemplo), diga isso no "porque" em vez de inventar no texto.
+7. Responda só com JSON: {"analise":"2 a 3 frases: em que momento o cliente está, o que ficou pendente e qual o próximo passo","sugestoes":[{"texto":"mensagem pronta","porque":"motivo curto"}]}
 
 CATÁLOGO (imóveis do CRM):
 ${catalogo || '(nenhum imóvel cadastrado)'}
@@ -246,7 +297,7 @@ ATENÇÃO: a conversa está parada há ${diasParado} dias. Não pergunte se ele 
 ${situacaoNoTempo(params.mensagens)}${avisoTempo}
 
 FICHA DO CLIENTE NO CRM:
-${ficha.texto}
+${ficha.texto}${blocoOferta}
 
 CONVERSA (mais recente por último; [áudio] já vem transcrito):
 ${cortaInicio(conversaEmTexto(params.mensagens, 60), L.conversa) || '(sem mensagens)'}
@@ -270,7 +321,7 @@ ${params.pedido ? `\nPEDIDO DO CORRETOR PARA ESTA RESPOSTA: ${params.pedido}` : 
       .slice(0, 3)
       .map((s: any) => ({ texto: s.texto.trim(), porque: String(s.porque ?? '').trim() }));
     if (!sugestoes.length) throw new ErroExt(502, 'A IA respondeu num formato inesperado. Tente de novo.');
-    return { analise: String(j.analise ?? '').trim(), sugestoes };
+    return { analise: String(j.analise ?? '').trim(), sugestoes, produto };
   }
   throw new ErroExt(413, 'A conversa ficou grande demais para o limite da IA. Tente com um pedido mais curto.');
 }

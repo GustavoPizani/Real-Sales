@@ -517,9 +517,13 @@
     return est.msgsWa;
   }
 
-  async function sugerir(pedido) {
+  async function sugerir(pedido, produtoId, produtoTexto) {
     const mensagens = await mensagensAgora();
-    est.sugestao = await naFila(() => api("ia/sugestao", { vinculo_id: est.vinculo.id, pedido: pedido || undefined, mensagens }));
+    // o produto escolhido fica salvo na conversa; vazio = a RIA detecta pelo que você escreveu
+    est.vinculo.oferta = { property_id: produtoId || null, texto: produtoId ? null : produtoTexto || null };
+    est.sugestao = await naFila(() =>
+      api("ia/sugestao", { vinculo_id: est.vinculo.id, pedido: pedido || undefined, mensagens, produto_id: produtoId, produto_texto: produtoTexto }),
+    );
     est.stats.pending = (est.stats.pending || 0) + 1;
   }
 
@@ -1618,11 +1622,23 @@
            )
            .join("")}</div>`
       : "";
+    const oferta = est.vinculo?.oferta || {};
+    const opcoesProduto = `<option value="">Detectar pela conversa</option>${est.imoveis
+      .map((i) => `<option value="${esc(i.id)}" ${oferta.property_id === i.id ? "selected" : ""}>${esc(i.title)}</option>`)
+      .join("")}`;
+    const produtoUsado = s?.produto
+      ? `<p class="mudo">Produto considerado: <b>${esc(s.produto.titulo)}</b>${s.produto.origem === "detectado" ? " (detectado nas suas mensagens)" : ""}</p>`
+      : s
+        ? `<p class="mudo">Nenhum produto em oferta identificado; a RIA usou o imóvel de interesse da ficha.</p>`
+        : "";
     return `<details class="cartao" id="d-ria" open><summary><span>${ic("ria", true)} RIA</span></summary>
       <form id="f-ria" data-form="ria">
+        <label>Produto que estou oferecendo<select name="produto">${opcoesProduto}</select></label>
+        <label>Ou descreva, se não está no CRM<input name="produto_texto" value="${esc(oferta.texto || "")}" placeholder="Ex.: Tarjab Praça da Árvore, 60 m², entrega em 1 ano" /></label>
         <label>Pedido para a RIA (opcional)<input name="pedido" placeholder="Ex.: convidar para visitar sábado" /></label>
         <button class="dourado largo" ${est.ocupado.ria ? "disabled" : ""}>${girando("ria", "Pensando…") || "Sugerir resposta"}</button>
       </form>
+      ${produtoUsado}
       ${lista}
       <div class="acoes"><button type="button" class="pequeno" data-acao="boa-resposta" ${est.ocupado.boa ? "disabled" : ""} title="Sua última mensagem vira exemplo para a RIA">${girando("boa", "Guardando…") || `${ic("joinha", true)} Minha última resposta foi boa`}</button></div>
     </details>`;
@@ -2102,7 +2118,7 @@
     if (tipo === "login") acao("login", () => entrar(f));
     else if (tipo === "busca") acao("buscar", () => abrirConversa(f.termo.value.trim() || undefined));
     else if (tipo === "novo") acao("novo", () => clienteNovo(f));
-    else if (tipo === "ria") acao("ria", () => sugerir(f.pedido.value.trim()));
+    else if (tipo === "ria") acao("ria", () => sugerir(f.pedido.value.trim(), f.produto.value, f.produto_texto.value.trim()));
     else if (tipo === "nota") acao("nota", () => salvarNota(f.texto.value));
     else if (tipo === "visita") acao("visita", () => registrarVisita(f));
     else if (tipo === "etiqueta") {
