@@ -1635,7 +1635,7 @@
       <form id="f-ria" data-form="ria">
         <label>Produto que estou oferecendo<select name="produto">${opcoesProduto}</select></label>
         <label>Ou descreva, se não está no CRM<input name="produto_texto" value="${esc(oferta.texto || "")}" placeholder="Ex.: Tarjab Praça da Árvore, 60 m², entrega em 1 ano" /></label>
-        <label>Pedido para a RIA (opcional)<input name="pedido" placeholder="Ex.: convidar para visitar sábado" /></label>
+        <label>Pedido para a RIA (opcional)<textarea name="pedido" rows="3" maxlength="1200" placeholder="Ex.: retomar contato, entender o momento dele; ignore o Smart Home"></textarea></label>
         <button class="dourado largo" ${est.ocupado.ria ? "disabled" : ""}>${girando("ria", "Pensando…") || "Sugerir resposta"}</button>
       </form>
       ${produtoUsado}

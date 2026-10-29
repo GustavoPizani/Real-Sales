@@ -103,6 +103,44 @@ async function itensDaBase(accountId: string): Promise<{ playbook: string[]; exe
   return { playbook, exemplos };
 }
 
+/** Imóveis citados no pedido logo depois de "ignore", "esqueça", "não fale"... */
+function imoveisRecusados(imoveis: ImovelCatalogo[], pedido: string | undefined): ImovelCatalogo[] {
+  if (!pedido) return [];
+  const p = norm(pedido);
+  return imoveis.filter((i) => {
+    const nome = norm(i.titulo);
+    const at = nome ? p.indexOf(nome) : -1;
+    if (at < 0) return false;
+    const antes = p.slice(Math.max(0, at - 40), at);
+    return /(ignor|esquec|deix\w* de lado|nao (fal|ofere|cit|mencion|use)|sem falar|fora o|menos o)/.test(antes);
+  });
+}
+
+/** Percentuais, valores e prazos da sugestão cujo número não aparece no contexto dado à IA. */
+function numerosInventados(texto: string, contexto: string): string[] {
+  const ctx = norm(contexto);
+  // o mesmo número com a mesma unidade tem que estar no contexto ("20%" não vale por um "20/07")
+  const UNIDADES: [RegExp, string][] = [
+    [/%|por cento/, '(%|por cento)'],
+    [/mes/, '(mes|meses)'],
+    [/ano/, 'anos?'],
+    [/m²|m2/, '(m²|m2|metros)'],
+    [/vezes|x/, '(x|vezes|parcelas)'],
+    [/mil/, 'mil'],
+  ];
+  const soltos = (norm(texto).match(/r\$\s?\d[\d.,]*(?:\s?mil)?|\d+(?:[.,]\d+)?\s?(?:%|por cento|mil\b|meses\b|mes\b|anos?\b|m²|m2\b|vezes\b|x\b)/g) ?? []).filter((a) => {
+    const num = (a.match(/\d+(?:[.,]\d+)?/) ?? [''])[0];
+    if (!num) return false;
+    const n = num.replace(/[.,]/g, '[.,]?');
+    if (a.startsWith('r$')) return !new RegExp(`(^|[^\\d])${n}([^\\d]|$)`).test(ctx);
+    const unidade = UNIDADES.find(([re]) => re.test(a.slice(num.length)))?.[1] ?? '';
+    return !new RegExp(`(^|[^\\d])${n}\\s?${unidade}`).test(ctx);
+  });
+  // marcador esquecido ("bairro X", "[nome]")
+  const marcadores = texto.match(/\[[^\]]{1,30}\]|\b(?:bairro|empreendimento|imovel|imóvel|valor|unidade) X\b/gi) ?? [];
+  return Array.from(new Set([...soltos, ...marcadores].map((a) => a.trim())));
+}
+
 /**
  * Imóvel do catálogo que o corretor está oferecendo: procura o nome no pedido e,
  * se não achar, nas últimas mensagens dele (da mais recente para trás).
@@ -233,18 +271,24 @@ export async function sugerir(params: {
 
   // Produto em oferta: o escolhido na faixa; senão, o imóvel do catálogo citado
   // no pedido ou nas últimas mensagens do corretor (o mais recente vale).
+  // imóveis que o corretor mandou deixar de lado no pedido ("ignore o Smart Home")
+  const recusados = imoveisRecusados(imoveis, params.pedido);
   const escolhido = params.oferta?.propertyId ? imoveis.find((i) => i.id === params.oferta!.propertyId) : undefined;
   const textoOferta = params.oferta?.texto?.trim() || '';
-  const detectado = !escolhido && !textoOferta ? detectarProduto(imoveis, params.pedido, params.mensagens) : undefined;
+  const detectado = !escolhido && !textoOferta
+    ? detectarProduto(imoveis.filter((i) => !recusados.includes(i)), params.pedido, params.mensagens)
+    : undefined;
   const emOferta = escolhido ?? detectado;
   const produto = escolhido || textoOferta
     ? { titulo: escolhido?.titulo ?? textoOferta, origem: 'escolhido' as const }
     : detectado
       ? { titulo: detectado.titulo, origem: 'detectado' as const }
       : null;
-  const blocoOferta = escolhido || textoOferta || detectado
-    ? `\n\nPRODUTO QUE O CORRETOR ESTÁ OFERECENDO AGORA (${escolhido || textoOferta ? 'escolhido por ele' : 'detectado nas mensagens dele'}):\n${[emOferta?.linha, textoOferta].filter(Boolean).join('\n')}`
-    : '';
+  const blocoOferta =
+    (escolhido || textoOferta || detectado
+      ? `\n\nPRODUTO QUE O CORRETOR ESTÁ OFERECENDO AGORA (${escolhido || textoOferta ? 'escolhido por ele' : 'detectado nas mensagens dele'}):\n${[emOferta?.linha, textoOferta].filter(Boolean).join('\n')}`
+      : '') +
+    (recusados.length ? `\n\nNÃO MENCIONE (o corretor pediu para deixar de lado): ${recusados.map((i) => i.titulo).join(', ')}` : '');
 
   // Limite grátis do Groq: 8 mil tokens por minuto, entrada + resposta num pedido
   // só. Se mesmo assim passar (413), tenta de novo com menos de tudo.
@@ -259,7 +303,7 @@ export async function sugerir(params: {
     const catalogo = escolherAte(
       imoveis.map((l) => ({
         texto: l.linha,
-        peso: (emOferta?.id === l.id ? 1000 : 0) + (interesse && norm(l.titulo).includes(interesse) ? 100 : 0) + afinidade(l.linha, consulta),
+        peso: (recusados.includes(l) ? -1000 : 0) + (emOferta?.id === l.id ? 1000 : 0) + (interesse && norm(l.titulo).includes(interesse) ? 100 : 0) + afinidade(l.linha, consulta),
       })),
       L.catalogo,
     );
@@ -269,11 +313,12 @@ export async function sugerir(params: {
     const sistema = `${corta(perfil.texto, L.perfil)}
 
 REGRAS DESTA TAREFA
+0. Se houver PEDIDO DO CORRETOR, ele manda: siga o objetivo, o foco e o que ele mandou ignorar, mesmo que a ficha ou a conversa apontem outra coisa. O pedido é contexto interno: não conte ao cliente bastidores do corretor (arquivo apagado, anotação, "a RIA disse").
 1. Leia a conversa INTEIRA e a situação no tempo antes de escrever. Considere o que já foi enviado, prometido ou combinado (fluxo, planta, visita, documentos) e as transcrições de áudio. Não repita o que já foi dito.
 2. Se faz tempo que não se falam, reconheça isso com naturalidade e retome do ponto em que pararam; nada de "vi que recebeu" sobre algo antigo como se fosse recente.
 3. NUNCA INVENTE: unidade disponível, condição, desconto, valor de parcela, entrada, prazo, aprovação ou "consegui liberar". Só cite o que está na CONVERSA, na FICHA ou no CATÁLOGO (imóveis com o nome exato; valores só como referência, "a partir de"). Se não há novidade real, não crie uma: retome o ponto pendente, pergunte o que mudou para ele ou ofereça refazer/ajustar o fluxo e uma ligação.
 4. O imóvel de interesse da FICHA pode estar desatualizado. Se houver PRODUTO EM OFERTA, ou se na conversa o corretor passou a oferecer outro imóvel, as sugestões falam do mais recente.
-5. Escreva como o corretor (veja o tom e os EXEMPLOS reais dele). Use o nome do cliente. Nunca deixe marcadores como [seu nome] ou [cliente] no texto.
+5. Escreva como o corretor (veja o tom e os EXEMPLOS reais dele). Use o nome do cliente. Nunca deixe marcadores como [seu nome], [cliente] ou "bairro X" no texto; sem o dado real, não cite.
 6. As 3 sugestões devem ser abordagens DIFERENTES (ex.: retomar o ponto pendente, entender o que mudou para o cliente, propor ligação/visita com dois horários). Cada uma pronta para enviar, curta. Se faltar um dado que só o corretor sabe (uma condição nova, por exemplo), diga isso no "porque" em vez de inventar no texto.
 7. Responda só com JSON: {"analise":"2 a 3 frases: em que momento o cliente está, o que ficou pendente e qual o próximo passo","sugestoes":[{"texto":"mensagem pronta","porque":"motivo curto"}]}
 
@@ -293,7 +338,7 @@ ${exemplos || '(nenhum ainda)'}`;
         ? `
 ATENÇÃO: a conversa está parada há ${diasParado} dias. Não pergunte se ele "recebeu" ou "conseguiu ver" algo antigo. Reconheça o tempo em pelo menos duas sugestões ("faz um tempo que a gente não se fala", "sumi por aqui também") e reabra a conversa a partir do que ele buscava.`
         : '';
-    const usuario = `SITUAÇÃO NO TEMPO:
+    const usuario = `${params.pedido ? `PEDIDO DO CORRETOR (prioridade máxima): ${params.pedido}\n\n` : ''}SITUAÇÃO NO TEMPO:
 ${situacaoNoTempo(params.mensagens)}${avisoTempo}
 
 FICHA DO CLIENTE NO CRM:
@@ -301,7 +346,7 @@ ${ficha.texto}${blocoOferta}
 
 CONVERSA (mais recente por último; [áudio] já vem transcrito):
 ${cortaInicio(conversaEmTexto(params.mensagens, 60), L.conversa) || '(sem mensagens)'}
-${params.pedido ? `\nPEDIDO DO CORRETOR PARA ESTA RESPOSTA: ${params.pedido}` : ''}`;
+${params.pedido ? `\nLEMBRE DO PEDIDO DO CORRETOR: ${params.pedido}` : ''}`;
 
     let texto: string;
     try {
@@ -319,7 +364,14 @@ ${params.pedido ? `\nPEDIDO DO CORRETOR PARA ESTA RESPOSTA: ${params.pedido}` : 
     const sugestoes = (Array.isArray(j?.sugestoes) ? j.sugestoes : [])
       .filter((s: any) => typeof s?.texto === 'string' && s.texto.trim())
       .slice(0, 3)
-      .map((s: any) => ({ texto: s.texto.trim(), porque: String(s.porque ?? '').trim() }));
+      .map((s: any) => {
+        const texto = s.texto.trim();
+        let porque = String(s.porque ?? '').trim();
+        // condição com número que não está em lugar nenhum = provável invenção
+        const soltos = numerosInventados(texto, `${sistema} ${usuario}`);
+        if (soltos.length) porque = `⚠ Confira antes de enviar: ${soltos.join(', ')} não aparece na conversa nem no CRM. ${porque}`.trim();
+        return { texto, porque };
+      });
     if (!sugestoes.length) throw new ErroExt(502, 'A IA respondeu num formato inesperado. Tente de novo.');
     return { analise: String(j.analise ?? '').trim(), sugestoes, produto };
   }

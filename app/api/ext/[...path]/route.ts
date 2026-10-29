@@ -264,7 +264,7 @@ const ROTAS: Record<string, Handler> = {
   async 'ia/sugestao'(u, c) {
     const link = await linkDoUsuario(u, c.vinculo_id);
     const msgs = await gravarMensagens(link.id, mensagensDe(link), c.mensagens);
-    const pedido = texto(c.pedido, 300);
+    const pedido = texto(c.pedido, 1200);
     // produto em oferta: o que veio agora (e fica salvo) ou o que já estava salvo na conversa
     if (c.produto_id !== undefined || c.produto_texto !== undefined) await salvarOferta(link.id, c);
     const atual = await prisma.waLink.findUnique({ where: { id: link.id }, select: { offerPropertyId: true, offerText: true } });
