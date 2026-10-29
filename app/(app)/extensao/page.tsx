@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -286,6 +287,9 @@ export default function ExtensaoPage() {
   const { toast } = useToast();
   const [stats, setStats] = useState<Stats>({});
   const [registro, setRegistro] = useState<Registro[]>([]);
+  const [perfil, setPerfil] = useState<{ texto: string; padrao: boolean; textoPadrao: string } | null>(null);
+  const [perfilTexto, setPerfilTexto] = useState("");
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false);
   const [itens, setItens] = useState<Item[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
@@ -298,6 +302,10 @@ export default function ExtensaoPage() {
       const j = await r.json();
       setStats(j.stats ?? {});
       setRegistro(j.registro ?? []);
+      if (j.perfil) {
+        setPerfil(j.perfil);
+        setPerfilTexto(j.perfil.texto);
+      }
       setItens(j.itens ?? []);
     }
     setCarregando(false);
@@ -333,6 +341,26 @@ export default function ExtensaoPage() {
   const copiar = async (texto: string) => {
     await navigator.clipboard.writeText(texto);
     toast({ title: "Copiado" });
+  };
+
+  const salvarPerfil = async (texto: string | null) => {
+    setSalvandoPerfil(true);
+    try {
+      const r = await fetch("/api/extensao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "perfil", texto }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      setPerfil((p) => (p ? { ...p, ...j.perfil } : p));
+      setPerfilTexto(j.perfil.texto);
+      toast({ title: texto ? "Perfil da RIA salvo" : "Perfil da RIA voltou ao padrão" });
+    } catch (e: any) {
+      toast({ title: "Não foi possível salvar", description: e.message, variant: "destructive" });
+    } finally {
+      setSalvandoPerfil(false);
+    }
   };
 
   const alternar = async (item: Item) => {
@@ -441,6 +469,34 @@ export default function ExtensaoPage() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Bot className="h-5 w-5" /> Perfil da RIA</CardTitle>
+          <CardDescription>
+            Quem a RIA é, o seu método de venda e o seu tom de voz. Vai em toda sugestão de resposta, antes das regras e dos exemplos.
+            {perfil?.padrao ? " Está usando o perfil padrão (montado com a GIA, os playbooks, o guia verbal da Muvon e as suas mensagens)." : " Está usando o perfil que você editou."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={perfilTexto}
+            onChange={(e) => setPerfilTexto(e.target.value)}
+            rows={16}
+            className="font-mono text-xs leading-relaxed"
+            aria-label="Texto do perfil da RIA"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => salvarPerfil(perfilTexto)} disabled={salvandoPerfil || !perfilTexto.trim() || perfilTexto === perfil?.texto}>
+              {salvandoPerfil && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Salvar perfil
+            </Button>
+            {!perfil?.padrao && (
+              <Button variant="outline" onClick={() => salvarPerfil(null)} disabled={salvandoPerfil}>Voltar ao padrão</Button>
+            )}
+            <span className="text-xs text-muted-foreground">{perfilTexto.length} caracteres (o ideal é até ~3.500, por causa do limite grátis da IA)</span>
+          </div>
         </CardContent>
       </Card>
 

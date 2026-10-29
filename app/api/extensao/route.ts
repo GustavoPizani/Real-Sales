@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserFromToken } from '@/lib/auth';
 import { ErroExt } from '@/lib/ext/auth';
+import { PERFIL_PADRAO, perfilDaConta, salvarPerfil } from '@/lib/ext/perfil';
 import { analisarConversa, consolidar, registrarConversa, registroConversas, salvarPropostas } from '@/lib/ext/aprender';
 
 export const maxDuration = 60;
@@ -26,14 +27,15 @@ export async function GET() {
   const a = await admin();
   if ('erro' in a) return a.erro;
   const desde = new Date(Date.now() - 30 * 864e5);
-  const [grupos, itens, conversas, registro] = await Promise.all([
+  const [grupos, itens, conversas, registro, perfil] = await Promise.all([
     prisma.aiSuggestion.groupBy({ by: ['outcome'], where: { accountId: a.accountId, createdAt: { gte: desde } }, _count: true }),
-    prisma.knowledgeItem.findMany({ where: { accountId: a.accountId }, orderBy: { createdAt: 'desc' }, take: 300 }),
+    prisma.knowledgeItem.findMany({ where: { accountId: a.accountId, kind: { in: ['playbook', 'example'] } }, orderBy: { createdAt: 'desc' }, take: 400 }),
     prisma.waLink.count({ where: { accountId: a.accountId, notClient: false, clientId: { not: null } } }),
     registroConversas(a.accountId),
+    perfilDaConta(a.accountId),
   ]);
   const stats = Object.fromEntries(grupos.map((g) => [g.outcome, g._count]));
-  return NextResponse.json({ stats: { ...stats, conversas }, itens, registro });
+  return NextResponse.json({ stats: { ...stats, conversas }, itens, registro, perfil: { ...perfil, textoPadrao: PERFIL_PADRAO } });
 }
 
 /**
@@ -58,6 +60,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(r);
     }
     if (body.acao === 'consolidar') return NextResponse.json(await consolidar(a.accountId, body));
+    // perfil da RIA (quem ela é, método e tom de voz): texto livre, ou null para voltar ao padrão
+    if (body.acao === 'perfil') {
+      await salvarPerfil(a.accountId, a.user.id, typeof body.texto === 'string' && body.texto.trim() !== PERFIL_PADRAO.trim() ? body.texto : null);
+      return NextResponse.json({ perfil: await perfilDaConta(a.accountId) });
+    }
     if (body.acao === 'salvar') return NextResponse.json(await salvarPropostas(a.accountId, a.user.id, body, 'importacao'));
     return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 });
   } catch (e) {

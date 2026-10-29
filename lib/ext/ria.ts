@@ -4,7 +4,8 @@
 // e transcrição de áudio. Usa a GROQ_API_KEY do servidor.
 import { prisma } from '@/lib/prisma';
 import { GROQ_MODEL, reasoningOptions } from '@/lib/llm/models';
-import { conversaEmTexto, type MsgWa } from './conversa';
+import { conversaEmTexto, situacaoNoTempo, type MsgWa } from './conversa';
+import { perfilDaConta } from './perfil';
 import { ErroExt } from './auth';
 import { lerJsonTolerante } from './json-tolerante';
 
@@ -15,7 +16,6 @@ const GROQ = 'https://api.groq.com/openai/v1';
  * sozinho (entrada + max_tokens) não pode passar disso. Português dá uns 3,5
  * caracteres por token: cada pedido fica perto de 6 mil tokens.
  */
-export const LIMITE_CHARS = { catalogo: 6000, playbook: 3000, exemplos: 3000, conversa: 7000 };
 const corta = (s: string, max: number) => (s.length > max ? `${s.slice(0, max)}\n…` : s);
 /** Fica com o fim do texto (o mais recente) quando passa do limite. */
 const cortaInicio = (s: string, max: number) => (s.length > max ? `…\n${s.slice(-max)}` : s);
@@ -25,82 +25,108 @@ const STATUS = { LANCAMENTO: 'lançamento', EM_OBRAS: 'em obras', PRONTO: 'pront
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 // Catálogo: uma linha por imóvel. Muda pouco: guarda 10 min.
-let catalogo: { texto: string; ate: number } | null = null;
-async function catalogoTexto(): Promise<string> {
-  if (catalogo && catalogo.ate > Date.now()) return catalogo.texto;
+let catalogo: { linhas: string[]; ate: number } | null = null;
+async function catalogoLinhas(): Promise<string[]> {
+  if (catalogo && catalogo.ate > Date.now()) return catalogo.linhas;
   const imoveis = await prisma.property.findMany({
     orderBy: { updatedAt: 'desc' },
-    take: 80,
+    take: 120,
     select: {
       title: true, address: true, price: true, status: true, type: true,
       propertyTypes: { select: { name: true, value: true, area: true, dormitorios: true, suites: true, vagas: true } },
     },
   });
-  const texto = imoveis
-    .map((p) => {
-      const tipologias = p.propertyTypes
-        .map((t) => [t.name, t.area && `${t.area} m²`, t.dormitorios && `${t.dormitorios} dorm`, t.suites && `${t.suites} suíte`, t.vagas && `${t.vagas} vaga`, t.value > 0 && `a partir de ${reais(t.value)}`].filter(Boolean).join(' '))
-        .join('; ');
-      return [p.title, p.address, STATUS[p.status], p.type, !tipologias && p.price ? `a partir de ${reais(p.price)}` : '', tipologias].filter(Boolean).join(' | ');
-    })
-    .join('\n');
-  catalogo = { texto: texto || '(nenhum imóvel cadastrado)', ate: Date.now() + 10 * 60_000 };
-  return catalogo.texto;
+  const linhas = imoveis.map((p) => {
+    const tipologias = p.propertyTypes
+      .map((t) => [t.name, t.area && `${t.area} m²`, t.dormitorios && `${t.dormitorios} dorm`, t.suites && `${t.suites} suíte`, t.vagas && `${t.vagas} vaga`, t.value > 0 && `a partir de ${reais(t.value)}`].filter(Boolean).join(' '))
+      .join('; ');
+    return `- ${[p.title, p.address, STATUS[p.status], p.type, !tipologias && p.price ? `a partir de ${reais(p.price)}` : '', tipologias].filter(Boolean).join(' | ')}`;
+  });
+  catalogo = { linhas, ate: Date.now() + 10 * 60_000 };
+  return linhas;
 }
 
-/** Ficha do cliente no CRM, em texto. */
-async function fichaCliente(clientId: string | null): Promise<string> {
-  if (!clientId) return 'Cliente ainda não cadastrado no CRM.';
+/** Ficha do cliente no CRM, em texto (e o imóvel de interesse, para priorizar no catálogo). */
+async function fichaCliente(clientId: string | null): Promise<{ texto: string; imovel: string | null }> {
+  if (!clientId) return { texto: 'Cliente ainda não cadastrado no CRM.', imovel: null };
   const c = await prisma.client.findUnique({
     where: { id: clientId },
     select: {
-      fullName: true, campaignSource: true, createdAt: true,
+      fullName: true, campaignSource: true, createdAt: true, overallStatus: true,
       funnelStage: { select: { name: true } },
       propertyOfInterest: { select: { title: true } },
       notes: { orderBy: { createdAt: 'desc' }, take: 5, select: { content: true, createdAt: true } },
       tasks: { where: { isCompleted: false }, orderBy: { dateTime: 'asc' }, take: 3, select: { title: true, dateTime: true } },
+      sales: { select: { saleValue: true, propertyName: true, property: { select: { title: true } } } },
     },
   });
-  if (!c) return 'Cliente ainda não cadastrado no CRM.';
+  if (!c) return { texto: 'Cliente ainda não cadastrado no CRM.', imovel: null };
   const data = (d: Date) => d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  return [
-    `Nome: ${c.fullName}`,
-    `Etapa no funil: ${c.funnelStage.name}`,
+  const texto = [
+    `Nome: ${c.fullName.trim()}`,
+    `Etapa no funil: ${c.funnelStage.name}${c.overallStatus === 'WON' ? ' (cliente que já comprou)' : c.overallStatus === 'LOST' ? ' (marcado como perdido)' : ''}`,
     c.propertyOfInterest && `Imóvel de interesse: ${c.propertyOfInterest.title}`,
+    c.sales.length && `Já comprou com o corretor: ${c.sales.map((s) => `${s.property?.title ?? s.propertyName} (${reais(s.saleValue)})`).join('; ')}`,
     c.campaignSource && `Origem: ${c.campaignSource}`,
     `Cliente desde: ${data(c.createdAt)}`,
-    c.notes.length && `Anotações recentes:\n${c.notes.map((n) => `- (${data(n.createdAt)}) ${n.content.slice(0, 400)}`).join('\n')}`,
+    c.notes.length && `Anotações (mais recentes primeiro):\n${c.notes.map((n) => `- (${data(n.createdAt)}) ${n.content.replace(/\s+/g, ' ').slice(0, 300)}`).join('\n')}`,
     c.tasks.length && `Tarefas abertas:\n${c.tasks.map((t) => `- ${t.title} (${data(t.dateTime)})`).join('\n')}`,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return { texto, imovel: c.propertyOfInterest?.title ?? null };
 }
 
-/** Playbook e exemplos (os seus e as sugestões que você corrigiu antes de enviar). */
-async function baseConhecimento(accountId: string): Promise<{ playbook: string; exemplos: string }> {
+/** Regras e exemplos ativos, mais as sugestões que você corrigiu antes de enviar. */
+async function itensDaBase(accountId: string): Promise<{ playbook: string[]; exemplos: string[] }> {
   const [itens, corrigidas] = await Promise.all([
     prisma.knowledgeItem.findMany({
-      where: { accountId, active: true },
+      where: { accountId, active: true, kind: { in: ['playbook', 'example'] } },
       orderBy: { updatedAt: 'desc' },
-      take: 60,
+      take: 300,
       select: { kind: true, situation: true, answer: true },
     }),
     prisma.aiSuggestion.findMany({
       where: { accountId, outcome: 'edited', sentText: { not: null } },
       orderBy: { resolvedAt: 'desc' },
-      take: 8,
+      take: 15,
       select: { context: true, sentText: true },
     }),
   ]);
-  const playbook = itens
-    .filter((i) => i.kind === 'playbook')
-    .map((i) => `- ${i.situation ? `${i.situation}: ` : ''}${i.answer}`)
-    .join('\n');
+  const playbook = itens.filter((i) => i.kind === 'playbook').map((i) => `- ${i.situation ? `${i.situation}: ` : ''}${i.answer}`);
   const exemplos = [
-    ...itens.filter((i) => i.kind === 'example').slice(0, 15).map((i) => ({ s: i.situation, r: i.answer })),
+    ...itens.filter((i) => i.kind === 'example').map((i) => ({ s: i.situation, r: i.answer })),
     ...corrigidas.map((c) => ({ s: c.context, r: c.sentText! })),
-  ]
-    .map((e) => `Cliente: ${(e.s ?? '').slice(0, 300)}\nVocê respondeu: ${e.r.slice(0, 600)}`)
-    .join('\n---\n');
+  ].map((e) => `Situação: ${(e.s ?? '').slice(0, 220)}\nEle escreveu: ${e.r.slice(0, 450)}`);
   return { playbook, exemplos };
+}
+
+// ── escolher o que entra no pedido (o limite é pequeno) ──
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const PALAVRAS_VAZIAS = new Set('para com que uma uns umas por mais como mas isso esse essa este esta aqui voce cliente sobre quando onde qual quais seu sua seus suas pelo pela pode tem ter vai vou estou esta muito bem tudo ainda agora entao'.split(' '));
+const palavras = (s: string) => new Set(norm(s).split(/[^a-z0-9]+/).filter((p) => p.length >= 4 && !PALAVRAS_VAZIAS.has(p)));
+
+/** Quantas palavras do texto aparecem na consulta (o que o cliente falou por último). */
+function afinidade(texto: string, consulta: string): number {
+  const c = palavras(consulta);
+  let n = 0;
+  palavras(texto).forEach((p) => {
+    if (c.has(p)) n++;
+  });
+  return n;
+}
+
+/** Os mais relevantes primeiro (empate: a ordem original, mais recente), até o limite de caracteres. */
+function escolherAte(itens: { texto: string; peso: number }[], max: number, sep = '\n'): string {
+  const ordenados = itens.map((x, i) => ({ ...x, i })).sort((a, b) => b.peso - a.peso || a.i - b.i);
+  const fora: string[] = [];
+  let total = 0;
+  for (const x of ordenados) {
+    if (total + x.texto.length + sep.length > max) continue;
+    fora.push(x.texto);
+    total += x.texto.length + sep.length;
+  }
+  return fora.join(sep);
 }
 
 // No Groq o limite (por minuto e por dia) é por modelo: quando o principal manda
@@ -163,59 +189,90 @@ export async function sugerir(params: {
   mensagens: MsgWa[];
   pedido?: string;
 }): Promise<{ analise: string; sugestoes: Sugestao[] }> {
-  const [catalogo, ficha, base] = await Promise.all([
-    catalogoTexto(),
+  const [perfil, ficha, base, imoveis] = await Promise.all([
+    perfilDaConta(params.accountId),
     fichaCliente(params.clientId),
-    baseConhecimento(params.accountId),
+    itensDaBase(params.accountId),
+    catalogoLinhas(),
   ]);
+  // o que o cliente disse por último (+ o pedido): guia a escolha do que entra
+  const consulta = [params.pedido ?? '', ...params.mensagens.slice(-8).map((m) => m.texto)].join(' ');
+  const interesse = ficha.imovel ? norm(ficha.imovel) : '';
 
-  const sistema = `Você é a RIA, assistente do corretor de imóveis dono deste CRM. Você escreve respostas de WhatsApp que ELE vai revisar e enviar ao cliente, com a voz dele.
+  // Limite grátis do Groq: 8 mil tokens por minuto, entrada + resposta num pedido
+  // só. Se mesmo assim passar (413), tenta de novo com menos de tudo.
+  for (const escala of [1, 0.6]) {
+    const L = {
+      perfil: Math.round(3400 * escala),
+      catalogo: Math.round(3000 * escala),
+      playbook: Math.round(2000 * escala),
+      exemplos: Math.round(2200 * escala),
+      conversa: Math.round(5200 * escala),
+    };
+    const catalogo = escolherAte(
+      imoveis.map((l) => ({ texto: l, peso: (interesse && norm(l).includes(interesse) ? 100 : 0) + afinidade(l, consulta) })),
+      L.catalogo,
+    );
+    const playbook = escolherAte(base.playbook.map((t) => ({ texto: t, peso: afinidade(t, consulta) })), L.playbook);
+    const exemplos = escolherAte(base.exemplos.map((t) => ({ texto: t, peso: afinidade(t, consulta) })), L.exemplos, '\n---\n');
 
-Objetivo do atendimento: entender o que o cliente procura e levar a conversa para uma VISITA AGENDADA (em lançamentos, visita ao estande/decorado; em imóveis do QuintoAndar, o agendamento é pelo link da vitrine do corretor).
+    const sistema = `${corta(perfil.texto, L.perfil)}
 
-Regras:
-1. Só cite imóveis do CATÁLOGO abaixo, com o nome exato. Nunca invente preço, metragem, disponibilidade ou condição.
-2. Leia na conversa: região, dormitórios, vagas, teto de preço, pronto ou lançamento, momento de compra. Priorize o que o cliente pediu.
-3. Valores só como referência ("a partir de"). Não ofereça acima do teto do cliente.
-4. Se nada do catálogo atende, diga com sinceridade e ofereça o mais próximo explicando a diferença.
-5. Mensagens curtas, naturais, em português do Brasil, como no WhatsApp. Uma pergunta por vez. Sem formalidade excessiva.
-6. Siga o PLAYBOOK e imite o tom dos EXEMPLOS do corretor.
-7. Responda só com JSON: {"analise":"1 a 2 frases sobre o momento do cliente e o próximo passo","sugestoes":[{"texto":"mensagem pronta","porque":"motivo curto"}]} com exatamente 3 sugestões diferentes entre si.
+REGRAS DESTA TAREFA
+1. Leia a conversa INTEIRA e a situação no tempo antes de escrever. Considere o que já foi enviado, prometido ou combinado (fluxo, planta, visita, documentos) e as transcrições de áudio. Não repita o que já foi dito.
+2. Se faz tempo que não se falam, reconheça isso com naturalidade e retome do ponto em que pararam; nada de "vi que recebeu" sobre algo antigo como se fosse recente.
+3. NUNCA INVENTE: unidade disponível, condição, desconto, valor de parcela, entrada, prazo, aprovação ou "consegui liberar". Só cite o que está na CONVERSA, na FICHA ou no CATÁLOGO (imóveis com o nome exato; valores só como referência, "a partir de"). Se não há novidade real, não crie uma: retome o ponto pendente, pergunte o que mudou para ele ou ofereça refazer/ajustar o fluxo e uma ligação.
+4. Escreva como o corretor (veja o tom e os EXEMPLOS reais dele). Use o nome do cliente. Nunca deixe marcadores como [seu nome] ou [cliente] no texto.
+5. As 3 sugestões devem ser abordagens DIFERENTES (ex.: retomar o ponto pendente, entender o que mudou para o cliente, propor ligação/visita com dois horários). Cada uma pronta para enviar, curta. Se faltar um dado que só o corretor sabe (uma condição nova, por exemplo), diga isso no "porque" em vez de inventar no texto.
+6. Responda só com JSON: {"analise":"2 a 3 frases: em que momento o cliente está, o que ficou pendente e qual o próximo passo","sugestoes":[{"texto":"mensagem pronta","porque":"motivo curto"}]}
 
-CATÁLOGO:
-${corta(catalogo, LIMITE_CHARS.catalogo)}
+CATÁLOGO (imóveis do CRM):
+${catalogo || '(nenhum imóvel cadastrado)'}
 
-PLAYBOOK DO CORRETOR:
-${corta(base.playbook, LIMITE_CHARS.playbook) || '(vazio)'}
+PLAYBOOK DO CORRETOR (o que vale para esta situação):
+${playbook || '(vazio)'}
 
-EXEMPLOS DE COMO O CORRETOR RESPONDE:
-${corta(base.exemplos, LIMITE_CHARS.exemplos) || '(nenhum ainda)'}`;
+EXEMPLOS REAIS DO CORRETOR (o que ele escreveu e funcionou):
+${exemplos || '(nenhum ainda)'}`;
 
-  const usuario = `FICHA DO CLIENTE NO CRM:
-${ficha}
+    const ultimaTs = params.mensagens.length ? params.mensagens[params.mensagens.length - 1].ts : 0;
+    const diasParado = ultimaTs ? Math.floor((Date.now() / 1000 - ultimaTs) / 86400) : 0;
+    const avisoTempo =
+      diasParado >= 21
+        ? `
+ATENÇÃO: a conversa está parada há ${diasParado} dias. Não pergunte se ele "recebeu" ou "conseguiu ver" algo antigo. Reconheça o tempo em pelo menos duas sugestões ("faz um tempo que a gente não se fala", "sumi por aqui também") e reabra a conversa a partir do que ele buscava.`
+        : '';
+    const usuario = `SITUAÇÃO NO TEMPO:
+${situacaoNoTempo(params.mensagens)}${avisoTempo}
 
-CONVERSA (mais recente por último):
-${cortaInicio(conversaEmTexto(params.mensagens, 30), 3500) || '(sem mensagens)'}
+FICHA DO CLIENTE NO CRM:
+${ficha.texto}
+
+CONVERSA (mais recente por último; [áudio] já vem transcrito):
+${cortaInicio(conversaEmTexto(params.mensagens, 60), L.conversa) || '(sem mensagens)'}
 ${params.pedido ? `\nPEDIDO DO CORRETOR PARA ESTA RESPOSTA: ${params.pedido}` : ''}`;
 
-  const texto = await groq({
-    messages: [{ role: 'system', content: sistema }, { role: 'user', content: usuario }],
-    temperature: 0.6,
-    max_tokens: 1200,
-    response_format: { type: 'json_object' },
-  });
-  try {
+    let texto: string;
+    try {
+      texto = await groq({
+        messages: [{ role: 'system', content: sistema }, { role: 'user', content: usuario }],
+        temperature: 0.4, // mais baixo: inventa menos
+        max_tokens: 1000,
+        response_format: { type: 'json_object' },
+      });
+    } catch (e) {
+      if (e instanceof ErroExt && e.status === 413 && escala === 1) continue;
+      throw e;
+    }
     const j = lerJsonTolerante(texto);
-    if (!j) throw new Error('formato');
-    const sugestoes = (Array.isArray(j.sugestoes) ? j.sugestoes : [])
+    const sugestoes = (Array.isArray(j?.sugestoes) ? j.sugestoes : [])
       .filter((s: any) => typeof s?.texto === 'string' && s.texto.trim())
       .slice(0, 3)
       .map((s: any) => ({ texto: s.texto.trim(), porque: String(s.porque ?? '').trim() }));
-    if (!sugestoes.length) throw new Error('vazio');
+    if (!sugestoes.length) throw new ErroExt(502, 'A IA respondeu num formato inesperado. Tente de novo.');
     return { analise: String(j.analise ?? '').trim(), sugestoes };
-  } catch {
-    throw new ErroExt(502, 'A IA respondeu num formato inesperado. Tente de novo.');
   }
+  throw new ErroExt(413, 'A conversa ficou grande demais para o limite da IA. Tente com um pedido mais curto.');
 }
 
 /** Resumo da conversa para salvar nas anotações do cliente. */

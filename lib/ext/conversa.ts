@@ -54,13 +54,42 @@ export function resumoTempos(msgs: MsgWa[]) {
 }
 
 /** Conversa em texto para o prompt (últimas n). */
+const FUSO = 'America/Sao_Paulo';
+const diasDesde = (ts: number) => Math.floor((Date.now() / 1000 - ts) / 86400);
+const quando = (ts: number) => {
+  const d = diasDesde(ts);
+  return d <= 0 ? 'hoje' : d === 1 ? 'ontem' : `há ${d} dias`;
+};
+
+/**
+ * Onde a conversa está no tempo: a data de hoje e há quanto tempo cada lado
+ * falou por último. Sem isso a IA trata uma conversa parada há meses como se
+ * fosse de ontem.
+ */
+export function situacaoNoTempo(msgs: MsgWa[]): string {
+  const hoje = new Date().toLocaleString('pt-BR', { timeZone: FUSO, weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const data = (ts: number) => new Date(ts * 1000).toLocaleDateString('pt-BR', { timeZone: FUSO });
+  const cli = [...msgs].reverse().find((m) => m.lado === '<');
+  const eu = [...msgs].reverse().find((m) => m.lado === '>');
+  const primeira = msgs[0];
+  return [
+    `Hoje é ${hoje} (horário de Brasília).`,
+    primeira ? `Conversa começou em ${data(primeira.ts)}.` : '',
+    cli ? `Última mensagem do cliente: ${quando(cli.ts)} (${data(cli.ts)}).` : 'O cliente ainda não respondeu nada.',
+    eu ? `Última mensagem sua: ${quando(eu.ts)} (${data(eu.ts)}).` : '',
+    msgs.length && msgs[msgs.length - 1].lado === '<' ? 'Quem está esperando resposta é você.' : msgs.length ? 'Quem está devendo resposta é o cliente.' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export function conversaEmTexto(msgs: MsgWa[], n = 30): string {
   const rotulo = { a: 'áudio', i: 'imagem', v: 'vídeo', d: 'documento' } as const;
   return msgs
     .slice(-n)
     .map((m) => {
       const quem = m.lado === '>' ? 'Você' : 'Cliente';
-      const data = new Date(m.ts * 1000).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const data = new Date(m.ts * 1000).toLocaleString('pt-BR', { timeZone: FUSO, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
       const tipo = m.tipo ? `[${rotulo[m.tipo]}${m.tipo === 'a' && !m.texto ? ' sem transcrição' : ''}] ` : '';
       return `[${data}] ${quem}: ${tipo}${m.texto.replace(/\n+/g, ' ')}`;
     })

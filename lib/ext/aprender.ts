@@ -66,9 +66,17 @@ function anonimizar(texto: string, nome?: string): string {
 
 const lista = (v: unknown, max: number): Proposta[] =>
   (Array.isArray(v) ? v : [])
-    .filter((x: any) => typeof x?.resposta === 'string' && x.resposta.trim())
+    // respostas de uma ou duas palavras ("Pode sim", "Isso") não ensinam nada
+    .filter((x: any) => typeof x?.resposta === 'string' && x.resposta.trim().length >= 12)
     .slice(0, max)
-    .map((x: any) => ({ situacao: String(x.situacao ?? '').trim().slice(0, 600), resposta: String(x.resposta).trim().slice(0, 1500) }));
+    .map((x: any) => {
+      const resultado = String(x.resultado ?? '').trim();
+      const situacao = String(x.situacao ?? '').trim();
+      return {
+        situacao: (resultado ? `${situacao} (deu certo: ${resultado})` : situacao).slice(0, 600),
+        resposta: String(x.resposta).trim().slice(0, 1500),
+      };
+    });
 
 function lerJson(texto: string) {
   const j = lerJsonTolerante(texto);
@@ -93,8 +101,9 @@ export async function analisarConversa(c: ConversaExport): Promise<Propostas & {
 
 Extraia:
 1. "historico": resumo da conversa para o CRM (interesse, perfil — região, dormitórios, vagas, faixa de preço, momento de compra, forma de pagamento —, objeções, o que foi combinado e em que pé ficou). Até 6 frases curtas, numa string só.
-2. "regras": como o corretor trabalha, de forma geral e reaproveitável para outros clientes: como abre a conversa, que perguntas faz para qualificar e em que ordem, como conduz para a visita, como responde objeções, informações do negócio que ele afirma (condições, regiões, documentos, processo). Cada regra: {"situacao": "quando…", "resposta": "o que ele faz/diz"}. Até 8. Não invente: só o que a conversa mostra.
-3. "exemplos": até 4 trechos em que a resposta do corretor foi boa (fez o cliente avançar). {"situacao": "o que o cliente disse", "resposta": "o texto do corretor, copiado como ele escreveu"}.
+2. "regras": o que o corretor faz que FUNCIONA, de forma geral e reaproveitável para OUTROS clientes: como abre a conversa, que perguntas faz para qualificar e em que ordem, como conduz para a visita, como responde objeções, como retoma cliente parado. Cada regra: {"situacao": "quando…", "resposta": "o que ele faz/diz e por que funciona"}. Até 6. Só o que a conversa mostra.
+   NÃO são regras: datas, valores, pendências, nomes de unidades ou detalhes que só valem para este cliente; respostas de uma palavra ("Pode sim", "Isso"); logística pontual.
+3. "exemplos": até 4 mensagens do corretor DEPOIS DAS QUAIS O CLIENTE AVANÇOU (respondeu com interesse, marcou visita ou ligação, mandou documento, aceitou proposta, fechou). Só mensagens com conteúdo (não "ok", "pode sim"). {"situacao": "o que estava acontecendo / o que o cliente disse", "resposta": "o texto do corretor, copiado como ele escreveu", "resultado": "o que o cliente fez em seguida"}.
 
 Nunca inclua nome, telefone, e-mail ou documento do cliente: use [cliente]. Escreva em português do Brasil.
 Responda só com JSON: {"historico": "...", "regras": [...], "exemplos": [...]}`,
